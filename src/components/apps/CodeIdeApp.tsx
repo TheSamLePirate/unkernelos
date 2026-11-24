@@ -221,6 +221,14 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     }
   }, [wm.activeWorkspaceDir]);
 
+  useEffect(() => {
+    if (wm.ideOpenFilePath) {
+      const target = wm.ideOpenFilePath;
+      wmStore.clearIdeOpenFile();
+      void openFile(target);
+    }
+  }, [wm.ideOpenFilePath]);
+
   const toggleDir = (dir: string) => {
     const next = !expandedDirs[dir];
     setExpandedDirs((prev) => ({ ...prev, [dir]: next }));

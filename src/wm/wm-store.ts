@@ -7,7 +7,10 @@ export type AppId =
   | "terminal"
   | "explorer"
   | "api-client"
+  | "database"
+  | "services"
   | "notes"
+  | "whiteboard"
   | "dev-utils"
   | "processes"
   | "shader-synth"
@@ -103,6 +106,28 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minHeight: 420,
     accent: "from-teal-400 to-cyan-600",
   },
+  database: {
+    id: "database",
+    title: "SQL & Database Studio",
+    shortTitle: "SQL",
+    description: "Interactive SQLite3 studio on Linux disk — schema browser, SQL editor & CSV export",
+    defaultWidth: 1000,
+    defaultHeight: 640,
+    minWidth: 620,
+    minHeight: 420,
+    accent: "from-cyan-500 to-blue-600",
+  },
+  services: {
+    id: "services",
+    title: "Service & Daemon Runner",
+    shortTitle: "Services",
+    description: "Launch, monitor & tail logs for background Bun/Python/Vite servers inside Linux",
+    defaultWidth: 940,
+    defaultHeight: 600,
+    minWidth: 580,
+    minHeight: 380,
+    accent: "from-emerald-500 to-green-600",
+  },
   notes: {
     id: "notes",
     title: "Notes & Markdown Studio",
@@ -113,6 +138,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minWidth: 580,
     minHeight: 400,
     accent: "from-amber-500 to-rose-500",
+  },
+  whiteboard: {
+    id: "whiteboard",
+    title: "Architecture Whiteboard",
+    shortTitle: "Sketch",
+    description: "Dark glass infinite-feel canvas for diagrams, UI sketches & PNG export",
+    defaultWidth: 980,
+    defaultHeight: 640,
+    minWidth: 580,
+    minHeight: 400,
+    accent: "from-pink-500 to-violet-600",
   },
   "dev-utils": {
     id: "dev-utils",
@@ -268,12 +304,17 @@ interface WmState {
   readonly githubModalOpen: boolean;
   readonly missionControlOpen: boolean;
   readonly controlCenterOpen: boolean;
+  readonly launcherOpen: boolean;
+  readonly notificationCenterOpen: boolean;
   readonly locked: boolean;
   readonly contextMenu: ContextMenuState | null;
   readonly previewPort: number;
   readonly previewPath: string;
   readonly activeWorkspaceDir: string;
+  readonly ideOpenFilePath: string | null;
   readonly toasts: readonly ToastItem[];
+  readonly notificationHistory: readonly ToastItem[];
+  readonly unreadNotifications: number;
 }
 
 const TOP_BAR_H = 36;
@@ -289,12 +330,17 @@ class WindowManagerStore {
     githubModalOpen: false,
     missionControlOpen: false,
     controlCenterOpen: false,
+    launcherOpen: false,
+    notificationCenterOpen: false,
     locked: false,
     contextMenu: null,
     previewPort: 3000,
     previewPath: "/",
     activeWorkspaceDir: "/home/user/workspace",
+    ideOpenFilePath: null,
     toasts: [],
+    notificationHistory: [],
+    unreadNotifications: 0,
   };
 
   private zCounter = 10;
@@ -573,11 +619,61 @@ class WindowManagerStore {
 
   public setControlCenter(open: boolean): void {
     if (open) uiSounds.playClick();
-    this.setState((s) => ({ ...s, controlCenterOpen: open, contextMenu: null }));
+    this.setState((s) => ({
+      ...s,
+      controlCenterOpen: open,
+      notificationCenterOpen: false,
+      contextMenu: null,
+    }));
   }
 
   public toggleControlCenter(): void {
     this.setControlCenter(!this.state.controlCenterOpen);
+  }
+
+  public setLauncher(open: boolean): void {
+    if (open) uiSounds.playWorkspaceSwitch();
+    this.setState((s) => ({
+      ...s,
+      launcherOpen: open,
+      missionControlOpen: false,
+      controlCenterOpen: false,
+      notificationCenterOpen: false,
+      contextMenu: null,
+    }));
+  }
+
+  public toggleLauncher(): void {
+    this.setLauncher(!this.state.launcherOpen);
+  }
+
+  public setNotificationCenter(open: boolean): void {
+    if (open) uiSounds.playClick();
+    this.setState((s) => ({
+      ...s,
+      notificationCenterOpen: open,
+      controlCenterOpen: false,
+      contextMenu: null,
+      unreadNotifications: open ? 0 : s.unreadNotifications,
+    }));
+  }
+
+  public toggleNotificationCenter(): void {
+    this.setNotificationCenter(!this.state.notificationCenterOpen);
+  }
+
+  public clearNotifications(): void {
+    this.setState((s) => ({ ...s, notificationHistory: [], unreadNotifications: 0 }));
+  }
+
+  public openFileInIde(filePath: string): void {
+    const parent = filePath.split("/").slice(0, -1).join("/") || "/home/user";
+    this.setState((s) => ({ ...s, activeWorkspaceDir: parent, ideOpenFilePath: filePath }));
+    this.openApp("ide", { filePath });
+  }
+
+  public clearIdeOpenFile(): void {
+    this.setState((s) => ({ ...s, ideOpenFilePath: null }));
   }
 
   public setLocked(locked: boolean): void {
@@ -587,6 +683,8 @@ class WindowManagerStore {
       ...s,
       locked,
       controlCenterOpen: false,
+      notificationCenterOpen: false,
+      launcherOpen: false,
       missionControlOpen: false,
       commandPaletteOpen: false,
       contextMenu: null,
@@ -615,7 +713,12 @@ class WindowManagerStore {
     uiSounds.playNotify();
     const id = Math.random().toString(36).slice(2, 9);
     const toast: ToastItem = { id, title, message, level, createdAt: Date.now(), action };
-    this.setState((s) => ({ ...s, toasts: [...s.toasts.slice(-4), toast] }));
+    this.setState((s) => ({
+      ...s,
+      toasts: [...s.toasts.slice(-4), toast],
+      notificationHistory: [toast, ...s.notificationHistory].slice(0, 40),
+      unreadNotifications: s.notificationCenterOpen ? 0 : s.unreadNotifications + 1,
+    }));
     setTimeout(() => this.dismissToast(id), action ? 15000 : 5200);
   }
 

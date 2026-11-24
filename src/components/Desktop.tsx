@@ -14,6 +14,7 @@ import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
 import { uiSounds } from "../core/ui-sounds.ts";
 import { WebGpuBackdrop } from "../gpu/webgpu-backdrop.ts";
 import { useWm, wmStore, type AppId, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
+import { AppLauncherOverlay } from "./AppLauncherOverlay.tsx";
 import { BootOverlay } from "./BootOverlay.tsx";
 import { CommandPalette } from "./CommandPalette.tsx";
 import { ContextMenu } from "./ContextMenu.tsx";
@@ -23,12 +24,15 @@ import { Dock } from "./Dock.tsx";
 import { GithubConnectModal } from "./GithubConnectModal.tsx";
 import { LockScreen } from "./LockScreen.tsx";
 import { MissionControlOverlay } from "./MissionControlOverlay.tsx";
+import { NotificationCenter } from "./NotificationCenter.tsx";
 import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
 import { WindowFrame } from "./WindowFrame.tsx";
+import { WindowSwitcherHud } from "./WindowSwitcherHud.tsx";
 import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
 import { ApiClientApp } from "./apps/ApiClientApp.tsx";
 import { CodeIdeApp } from "./apps/CodeIdeApp.tsx";
+import { DatabaseStudioApp } from "./apps/DatabaseStudioApp.tsx";
 import { DevUtilitiesApp } from "./apps/DevUtilitiesApp.tsx";
 import { FileExplorerApp } from "./apps/FileExplorerApp.tsx";
 import { GitApp } from "./apps/GitApp.tsx";
@@ -37,10 +41,12 @@ import { NotesStudioApp } from "./apps/NotesStudioApp.tsx";
 import { PreviewBrowserApp } from "./apps/PreviewBrowserApp.tsx";
 import { ProcessManagerApp } from "./apps/ProcessManagerApp.tsx";
 import { ScreenDisplayApp } from "./apps/ScreenDisplayApp.tsx";
+import { ServiceRunnerApp } from "./apps/ServiceRunnerApp.tsx";
 import { SettingsApp } from "./apps/SettingsApp.tsx";
 import { ShaderSynthApp } from "./apps/ShaderSynthApp.tsx";
 import { SystemMonitorApp } from "./apps/SystemMonitorApp.tsx";
 import { ToolchainInstallerApp } from "./apps/ToolchainInstallerApp.tsx";
+import { WhiteboardApp } from "./apps/WhiteboardApp.tsx";
 
 const renderWindowApp = (win: WindowInstance, focused: boolean): React.ReactNode => {
   switch (win.appId) {
@@ -54,8 +60,14 @@ const renderWindowApp = (win: WindowInstance, focused: boolean): React.ReactNode
       return <FileExplorerApp />;
     case "api-client":
       return <ApiClientApp />;
+    case "database":
+      return <DatabaseStudioApp />;
+    case "services":
+      return <ServiceRunnerApp />;
     case "notes":
       return <NotesStudioApp />;
+    case "whiteboard":
+      return <WhiteboardApp />;
     case "dev-utils":
       return <DevUtilitiesApp />;
     case "processes":
@@ -177,6 +189,11 @@ export const Desktop: React.FC = () => {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F4") {
+        e.preventDefault();
+        wmStore.toggleLauncher();
+        return;
+      }
       // Ctrl+1..4 switches virtual desktop workspaces
       if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && ["1", "2", "3", "4"].includes(e.key)) {
         e.preventDefault();
@@ -257,6 +274,15 @@ export const Desktop: React.FC = () => {
 
       {/* Control Center Popover */}
       <ControlCenter />
+
+      {/* Notification Center Drawer */}
+      <NotificationCenter />
+
+      {/* Full-Screen App Launcher / Launchpad */}
+      <AppLauncherOverlay />
+
+      {/* Alt+Tab Window Switcher HUD */}
+      <WindowSwitcherHud />
 
       {/* Mission Control / Exposé */}
       <MissionControlOverlay />

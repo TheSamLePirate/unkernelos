@@ -387,6 +387,15 @@ export const FileExplorerApp: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
+                  onClick={() => wmStore.openFileInIde(selectedFile.path)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/35 text-sky-200 transition"
+                  title="Open in Code IDE with syntax highlighting"
+                >
+                  <FileCode2 className="w-3 h-3" />
+                  Code IDE
+                </button>
+                <button
+                  type="button"
                   disabled={!dirty || saving}
                   onClick={handleSave}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white transition"

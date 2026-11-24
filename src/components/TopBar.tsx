@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import {
+  Bell,
   Command,
   Cpu,
   GitBranch,
@@ -209,6 +210,24 @@ export const TopBar: React.FC = () => {
           title="Toggle Guest Audio"
         >
           {vm.audioMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => wmStore.toggleNotificationCenter()}
+          className={`relative p-1 rounded-md transition ${
+            wm.notificationCenterOpen
+              ? "bg-violet-500/30 text-white"
+              : "text-zinc-300 hover:text-white hover:bg-white/10"
+          }`}
+          title="Notification Center"
+        >
+          <Bell className="w-3.5 h-3.5" />
+          {wm.unreadNotifications > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[13px] h-[13px] px-0.5 rounded-full bg-rose-500 text-[8px] font-mono font-bold text-white flex items-center justify-center">
+              {wm.unreadNotifications > 9 ? "9+" : wm.unreadNotifications}
+            </span>
+          )}
         </button>
 
         <button
