@@ -1,17 +1,43 @@
 import { Maximize2, Minimize2, PanelLeft, PanelRight, X } from "lucide-react";
 import React, { useRef } from "react";
-import { APP_CATALOG, wmStore, type WindowInstance } from "../wm/wm-store.ts";
+import { APP_CATALOG, wmStore, type SnapZone, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
+import { getSnapZoneStyle } from "./SnapPreviewOverlay.tsx";
 
 interface WindowFrameProps {
   win: WindowInstance;
   focused: boolean;
+  visible: boolean;
   children: React.ReactNode;
 }
 
-const TOP_BAR_H = 34;
-const DOCK_H = 74;
+const TOP_BAR_H = 36;
+const DOCK_H = 78;
 
-export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, children }) => {
+function detectSnapZone(clientX: number, clientY: number): SnapZone | null {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const edge = 20;
+  const cornerH = vh * 0.28;
+
+  if (clientY <= TOP_BAR_H + 14) {
+    if (clientX <= edge * 3) return "top-left";
+    if (clientX >= vw - edge * 3) return "top-right";
+    return "maximize";
+  }
+  if (clientX <= edge) {
+    if (clientY <= TOP_BAR_H + cornerH) return "top-left";
+    if (clientY >= vh - DOCK_H - cornerH) return "bottom-left";
+    return "left";
+  }
+  if (clientX >= vw - edge) {
+    if (clientY <= TOP_BAR_H + cornerH) return "top-right";
+    if (clientY >= vh - DOCK_H - cornerH) return "bottom-right";
+    return "right";
+  }
+  return null;
+}
+
+export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible, children }) => {
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizeRef = useRef<{
     startX: number;
@@ -20,32 +46,49 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, children
     origH: number;
   } | null>(null);
 
-  if (win.minimized) return null;
-
   const def = APP_CATALOG[win.appId];
 
   const onHeaderMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest("button")) return;
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
     wmStore.focusWindow(win.id);
-    if (win.maximized || win.snap !== "none") return;
+
+    // If maximized or snapped, unsnap smoothly centered under cursor
+    let origX = win.x;
+    let origY = win.y;
+    if (win.maximized || win.snap !== "none") {
+      origX = Math.max(12, Math.round(e.clientX - win.width / 2));
+      origY = Math.max(TOP_BAR_H + 4, e.clientY - 18);
+      wmStore.moveResize(win.id, { x: origX, y: origY });
+    }
 
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      origX: win.x,
-      origY: win.y,
+      origX,
+      origY,
     };
+
+    let activePreview: SnapZone | null = null;
 
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
       const nx = dragRef.current.origX + (ev.clientX - dragRef.current.startX);
       const ny = Math.max(TOP_BAR_H, dragRef.current.origY + (ev.clientY - dragRef.current.startY));
       wmStore.moveResize(win.id, { x: nx, y: ny });
+
+      activePreview = detectSnapZone(ev.clientX, ev.clientY);
+      wmStore.setDragSnapPreview(activePreview);
     };
+
     const onUp = () => {
       dragRef.current = null;
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      if (activePreview) {
+        wmStore.snapWindow(win.id, activePreview);
+      } else {
+        wmStore.setDragSnapPreview(null);
+      }
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -76,43 +119,28 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, children
     window.addEventListener("mouseup", onUp);
   };
 
-  const style: React.CSSProperties = win.maximized
-    ? {
-        left: 8,
-        top: TOP_BAR_H + 6,
-        width: "calc(100vw - 16px)",
-        height: `calc(100vh - ${TOP_BAR_H + DOCK_H + 12}px)`,
-        zIndex: win.zIndex,
-      }
-    : win.snap === "left"
-    ? {
-        left: 8,
-        top: TOP_BAR_H + 6,
-        width: "calc(50vw - 12px)",
-        height: `calc(100vh - ${TOP_BAR_H + DOCK_H + 12}px)`,
-        zIndex: win.zIndex,
-      }
-    : win.snap === "right"
-    ? {
-        left: "calc(50vw + 4px)",
-        top: TOP_BAR_H + 6,
-        width: "calc(50vw - 12px)",
-        height: `calc(100vh - ${TOP_BAR_H + DOCK_H + 12}px)`,
-        zIndex: win.zIndex,
-      }
-    : {
-        left: win.x,
-        top: win.y,
-        width: win.width,
-        height: win.height,
-        zIndex: win.zIndex,
-      };
+  const snapStyle = win.maximized
+    ? getSnapZoneStyle("maximize")
+    : win.snap !== "none"
+    ? getSnapZoneStyle(win.snap)
+    : null;
+
+  const style: React.CSSProperties = {
+    ...(snapStyle ?? {
+      left: win.x,
+      top: win.y,
+      width: win.width,
+      height: win.height,
+    }),
+    zIndex: win.zIndex,
+    display: !visible || win.minimized ? "none" : "flex",
+  };
 
   return (
     <div
       style={style}
       onMouseDown={() => wmStore.focusWindow(win.id)}
-      className={`fixed flex flex-col rounded-2xl overflow-hidden animate-window-in transition-shadow ${
+      className={`fixed flex-col rounded-2xl overflow-hidden animate-window-in transition-shadow ${
         focused ? "glass-surface-focused" : "glass-surface opacity-95"
       }`}
     >
@@ -120,7 +148,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, children
       <div
         onMouseDown={onHeaderMouseDown}
         onDoubleClick={() => wmStore.toggleMaximize(win.id)}
-        className="flex items-center justify-between h-9 px-3 bg-white/[0.03] border-b border-white/8 shrink-0 cursor-grab active:cursor-grabbing"
+        className="flex items-center justify-between h-9 px-3 bg-gradient-to-b from-white/[0.06] to-white/[0.015] border-b border-white/8 shrink-0 cursor-grab active:cursor-grabbing select-none"
       >
         {/* macOS-inspired traffic lights */}
         <div className="flex items-center gap-2 group">
@@ -128,7 +156,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, children
             type="button"
             onClick={() => wmStore.closeWindow(win.id)}
             title="Close"
-            className="w-3 h-3 rounded-full bg-rose-500/85 hover:bg-rose-400 flex items-center justify-center transition"
+            className="w-3 h-3 rounded-full bg-rose-500/90 hover:bg-rose-400 flex items-center justify-center transition shadow-inner"
           >
             <X className="w-2 h-2 text-rose-950 opacity-0 group-hover:opacity-100" />
           </button>
@@ -136,7 +164,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, children
             type="button"
             onClick={() => wmStore.minimizeWindow(win.id)}
             title="Minimize"
-            className="w-3 h-3 rounded-full bg-amber-400/85 hover:bg-amber-300 flex items-center justify-center transition"
+            className="w-3 h-3 rounded-full bg-amber-400/90 hover:bg-amber-300 flex items-center justify-center transition shadow-inner"
           >
             <Minimize2 className="w-2 h-2 text-amber-950 opacity-0 group-hover:opacity-100" />
           </button>
@@ -144,7 +172,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, children
             type="button"
             onClick={() => wmStore.toggleMaximize(win.id)}
             title="Maximize"
-            className="w-3 h-3 rounded-full bg-emerald-500/85 hover:bg-emerald-400 flex items-center justify-center transition"
+            className="w-3 h-3 rounded-full bg-emerald-500/90 hover:bg-emerald-400 flex items-center justify-center transition shadow-inner"
           >
             <Maximize2 className="w-2 h-2 text-emerald-950 opacity-0 group-hover:opacity-100" />
           </button>
@@ -155,8 +183,25 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, children
           <span className="truncate">{win.title}</span>
         </div>
 
-        {/* Snap controls */}
-        <div className="flex items-center gap-0.5">
+        {/* Workspace & Snap controls */}
+        <div className="flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-0.5 mr-1 px-1 py-0.5 rounded-md bg-white/[0.03] border border-white/6">
+            {([1, 2, 3, 4] as WorkspaceId[]).map((ws) => (
+              <button
+                key={ws}
+                type="button"
+                title={`Move to Desktop ${ws}`}
+                onClick={() => wmStore.moveWindowToWorkspace(win.id, ws)}
+                className={`w-4 h-4 rounded text-[9px] font-mono transition ${
+                  win.workspace === ws
+                    ? "bg-white/16 text-white font-semibold"
+                    : "text-zinc-500 hover:text-zinc-200 hover:bg-white/8"
+                }`}
+              >
+                {ws}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => wmStore.snapWindow(win.id, win.snap === "left" ? "none" : "left")}

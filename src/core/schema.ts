@@ -15,6 +15,24 @@ export type KittyThemeId = typeof KittyThemeSchema.Type;
 export const FbScalingSchema = Schema.Literal("crisp", "smooth", "crt");
 export type FbScalingMode = typeof FbScalingSchema.Type;
 
+export const OsThemeSchema = Schema.Literal(
+  "obsidian-aurora",
+  "liquid-glass",
+  "cyberpunk-neon",
+  "nordic-frost",
+  "warm-amber"
+);
+export type OsThemeId = typeof OsThemeSchema.Type;
+
+export const WallpaperShaderSchema = Schema.Literal(
+  "aurora",
+  "liquid-prism",
+  "cyber-grid",
+  "nordic-borealis",
+  "solar-ember"
+);
+export type WallpaperShaderId = typeof WallpaperShaderSchema.Type;
+
 export const AgentKindSchema = Schema.Literal("claude", "pi");
 export type AgentKind = typeof AgentKindSchema.Type;
 
@@ -79,6 +97,13 @@ export const UnkernelConfigSchema = Schema.Struct({
   sound: Schema.Boolean,
 
   // Host Renderer & Desktop UX
+  osTheme: OsThemeSchema,
+  wallpaperShader: WallpaperShaderSchema,
+  glassBlur: Schema.Number, // 8 .. 48
+  glassOpacity: Schema.Number, // 0.45 .. 0.95
+  dockMagnification: Schema.Boolean,
+  desktopWidgets: Schema.Boolean,
+  uiSounds: Schema.Boolean,
   webgpuTerminal: Schema.Boolean,
   webgpuFb0: Schema.Boolean,
   webgpuWallpaper: Schema.Boolean,
@@ -149,6 +174,13 @@ export const DEFAULT_UNKERNEL_CONFIG: UnkernelConfig = {
   wayland: true,
   sound: true,
 
+  osTheme: "obsidian-aurora",
+  wallpaperShader: "aurora",
+  glassBlur: 28,
+  glassOpacity: 0.74,
+  dockMagnification: true,
+  desktopWidgets: true,
+  uiSounds: true,
   webgpuTerminal: true,
   webgpuFb0: true,
   webgpuWallpaper: true,

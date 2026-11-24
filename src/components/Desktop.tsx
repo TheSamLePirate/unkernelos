@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { X } from "lucide-react";
 import React, { useCallback, useEffect, useRef } from "react";
+import { applyOsThemeToDocument } from "../core/os-themes.ts";
 import {
   appRuntime,
   GithubAuthService,
@@ -10,12 +11,19 @@ import {
   VmService,
 } from "../core/runtime.ts";
 import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
+import { uiSounds } from "../core/ui-sounds.ts";
 import { WebGpuBackdrop } from "../gpu/webgpu-backdrop.ts";
-import { useWm, wmStore, type AppId, type WindowInstance } from "../wm/wm-store.ts";
+import { useWm, wmStore, type AppId, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
 import { BootOverlay } from "./BootOverlay.tsx";
 import { CommandPalette } from "./CommandPalette.tsx";
+import { ContextMenu } from "./ContextMenu.tsx";
+import { ControlCenter } from "./ControlCenter.tsx";
+import { DesktopWidgets } from "./DesktopWidgets.tsx";
 import { Dock } from "./Dock.tsx";
 import { GithubConnectModal } from "./GithubConnectModal.tsx";
+import { LockScreen } from "./LockScreen.tsx";
+import { MissionControlOverlay } from "./MissionControlOverlay.tsx";
+import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
 import { WindowFrame } from "./WindowFrame.tsx";
 import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
@@ -50,7 +58,14 @@ const renderWindowApp = (win: WindowInstance, focused: boolean): React.ReactNode
       return (
         <SettingsApp
           initialTab={
-            win.props?.tab as "compute" | "network" | "graphics" | "storage" | "credentials" | undefined
+            win.props?.tab as
+              | "appearance"
+              | "compute"
+              | "network"
+              | "graphics"
+              | "storage"
+              | "credentials"
+              | undefined
           }
         />
       );
@@ -65,21 +80,35 @@ export const Desktop: React.FC = () => {
   );
 
   const wallpaperRef = useRef<HTMLCanvasElement>(null);
+  const backdropInstanceRef = useRef<WebGpuBackdrop | null>(null);
 
-  // WebGPU Animated Aurora Wallpaper
+  // Sync live OS theme, blur, opacity & UI sound preference
+  useEffect(() => {
+    applyOsThemeToDocument(cfg.osTheme, cfg.glassBlur, cfg.glassOpacity);
+    uiSounds.setEnabled(cfg.uiSounds);
+  }, [cfg.osTheme, cfg.glassBlur, cfg.glassOpacity, cfg.uiSounds]);
+
+  // WebGPU Animated Live Shader Wallpaper (5 selectable shaders!)
   useEffect(() => {
     const canvas = wallpaperRef.current;
     if (!canvas || !cfg.webgpuWallpaper) return;
-    const bg = new WebGpuBackdrop(canvas);
+    const bg = new WebGpuBackdrop(canvas, cfg.wallpaperShader);
+    backdropInstanceRef.current = bg;
     const onResize = () => bg.resize(window.innerWidth, window.innerHeight);
     onResize();
     void bg.init();
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("resize", onResize);
+      backdropInstanceRef.current = null;
       bg.dispose();
     };
   }, [cfg.webgpuWallpaper]);
+
+  // Hot-switch WebGPU shader mode without recreating GPUDevice
+  useEffect(() => {
+    backdropInstanceRef.current?.setShader(cfg.wallpaperShader);
+  }, [cfg.wallpaperShader]);
 
   // Boot unkernel automatically on first mount & open Agent Studio
   useEffect(() => {
@@ -114,7 +143,7 @@ export const Desktop: React.FC = () => {
   }, []);
   useOsEvents(handleOsEvent);
 
-  // Global OS Keyboard Shortcuts (⌘K, ⌘1..8, ⌘,)
+  // Global OS Keyboard Shortcuts (⌘K, ⌘E, ⌘L, ⌃1..4, ⌘1..8, ⌘,)
   useEffect(() => {
     const shortcutMap: Record<string, AppId> = {
       "1": "agent-studio",
@@ -129,6 +158,13 @@ export const Desktop: React.FC = () => {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+1..4 switches virtual desktop workspaces
+      if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && ["1", "2", "3", "4"].includes(e.key)) {
+        e.preventDefault();
+        wmStore.switchWorkspace(Number(e.key) as WorkspaceId);
+        return;
+      }
+
       if (!(e.metaKey || e.ctrlKey)) return;
       const k = e.key.toLowerCase();
       if (k === "k") {
@@ -136,8 +172,18 @@ export const Desktop: React.FC = () => {
         wmStore.toggleCommandPalette();
         return;
       }
+      if (k === "e" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        wmStore.toggleMissionControl();
+        return;
+      }
+      if (k === "l" && e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        wmStore.setLocked(true);
+        return;
+      }
       const appId = shortcutMap[k];
-      if (appId && !e.shiftKey && !e.altKey) {
+      if (appId && !e.shiftKey && !e.altKey && e.metaKey) {
         e.preventDefault();
         wmStore.openApp(appId);
       }
@@ -147,8 +193,15 @@ export const Desktop: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden wallpaper-fallback">
-      {/* WebGPU Ambient Dark Glass Shader */}
+    <div
+      onContextMenu={(e) => {
+        if ((e.target as HTMLElement).closest("[data-window-surface], nav, header, aside")) return;
+        e.preventDefault();
+        wmStore.setContextMenu({ x: e.clientX, y: e.clientY, kind: "desktop" });
+      }}
+      className="relative w-screen h-screen overflow-hidden wallpaper-fallback"
+    >
+      {/* WebGPU Live Selectable Shader Backdrop */}
       {cfg.webgpuWallpaper && (
         <canvas
           ref={wallpaperRef}
@@ -156,23 +209,41 @@ export const Desktop: React.FC = () => {
         />
       )}
 
+      {/* Desktop Ambient Widgets (Behind Windows, Toggleable) */}
+      <DesktopWidgets />
+
       {/* Top Glass Menu Bar */}
       <TopBar />
 
-      {/* Floating Glass Window Layer */}
-      <main className="relative z-10 w-full h-full">
+      {/* Magnetic Drag Snap Zone Preview Overlay */}
+      <SnapPreviewOverlay />
+
+      {/* Floating Glass Window Layer (all workspaces kept mounted so PTYs/agents stay alive!) */}
+      <main className="relative z-10 w-full h-full pointer-events-none">
         {wm.windows.map((win) => {
-          const focused = win.id === wm.activeWindowId;
+          const visible = win.workspace === wm.activeWorkspace;
+          const focused = visible && win.id === wm.activeWindowId && !wm.missionControlOpen && !wm.locked;
           return (
-            <WindowFrame key={win.id} win={win} focused={focused}>
-              {renderWindowApp(win, focused)}
-            </WindowFrame>
+            <div key={win.id} data-window-surface="true" className="pointer-events-auto">
+              <WindowFrame win={win} focused={focused} visible={visible}>
+                {renderWindowApp(win, focused)}
+              </WindowFrame>
+            </div>
           );
         })}
       </main>
 
-      {/* Bottom Floating Glass Dock */}
+      {/* Bottom Floating AAA Magnification Dock */}
       <Dock />
+
+      {/* Control Center Popover */}
+      <ControlCenter />
+
+      {/* Mission Control / Exposé */}
+      <MissionControlOverlay />
+
+      {/* Desktop & Dock Right-Click Context Menu */}
+      <ContextMenu />
 
       {/* Raycast-style ⌘K Command Palette */}
       <CommandPalette />
@@ -180,11 +251,14 @@ export const Desktop: React.FC = () => {
       {/* 1-Click GitHub OAuth Device Flow Modal */}
       <GithubConnectModal />
 
+      {/* Animated WebGPU Lock Screen */}
+      <LockScreen />
+
       {/* Boot / Recovery Overlay */}
       <BootOverlay />
 
       {/* Toast Notification Stack */}
-      <div className="fixed top-11 right-3 z-[95] flex flex-col gap-2 w-80 pointer-events-none">
+      <div className="fixed top-12 right-3 z-[95] flex flex-col gap-2 w-80 pointer-events-none">
         {wm.toasts.map((t) => (
           <div
             key={t.id}

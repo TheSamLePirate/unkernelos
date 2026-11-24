@@ -4,9 +4,8 @@ import {
   Cpu,
   GitBranch,
   Globe,
-  Pause,
-  Play,
-  RotateCcw,
+  Layers,
+  SlidersHorizontal,
   Volume2,
   VolumeX,
   Wifi,
@@ -14,7 +13,9 @@ import {
 import React, { useEffect, useState } from "react";
 import { INITIAL_GITHUB_AUTH } from "../core/github-auth-service.ts";
 import { appRuntime, GithubAuthService, useSubscriptionRef, VmService } from "../core/runtime.ts";
-import { APP_CATALOG, useWm, wmStore } from "../wm/wm-store.ts";
+import { APP_CATALOG, useWm, wmStore, type WorkspaceId } from "../wm/wm-store.ts";
+
+const WORKSPACES: readonly WorkspaceId[] = [1, 2, 3, 4];
 
 export const TopBar: React.FC = () => {
   const wm = useWm();
@@ -72,26 +73,65 @@ export const TopBar: React.FC = () => {
       : "bg-rose-400";
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[34px] z-50 glass-bar px-3 flex items-center justify-between text-xs">
-      {/* Left: Brand & Active App */}
-      <div className="flex items-center gap-3">
+    <header className="fixed top-0 left-0 right-0 h-[36px] z-50 glass-bar px-3 flex items-center justify-between text-xs select-none">
+      {/* Left: Brand, Active App & Workspaces */}
+      <div className="flex items-center gap-2.5">
         <button
           type="button"
           onClick={() => wmStore.toggleCommandPalette()}
           className="flex items-center gap-2 font-semibold text-white hover:opacity-90 transition"
         >
-          <span className="w-4 h-4 rounded-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 flex items-center justify-center text-[10px] font-bold shadow">
+          <span className="w-4.5 h-4.5 rounded-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 flex items-center justify-center text-[10px] font-bold shadow">
             U
           </span>
           <span className="tracking-tight">unkernelOS</span>
         </button>
 
         <span className="text-white/20">/</span>
-        <span className="font-medium text-zinc-200">{activeTitle}</span>
+        <span className="font-medium text-zinc-200 max-w-[110px] truncate">{activeTitle}</span>
+
+        {/* Workspaces 1–4 Switcher */}
+        <div className="hidden sm:flex items-center gap-0.5 ml-1 p-0.5 rounded-full bg-white/[0.05] border border-white/10">
+          {WORKSPACES.map((ws) => {
+            const active = wm.activeWorkspace === ws;
+            const hasWins = wm.windows.some((w) => w.workspace === ws);
+            return (
+              <button
+                key={ws}
+                type="button"
+                onClick={() => wmStore.switchWorkspace(ws)}
+                title={`Desktop ${ws} (⌃${ws})`}
+                className={`relative px-2 py-0.5 rounded-full text-[10px] font-mono transition ${
+                  active
+                    ? "bg-white/18 text-white font-semibold shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-white/8"
+                }`}
+              >
+                {ws}
+                {hasWins && !active && (
+                  <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-cyan-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => wmStore.toggleMissionControl()}
+          title="Mission Control (⌘E)"
+          className={`hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] transition ${
+            wm.missionControlOpen
+              ? "bg-violet-500/25 border-violet-400/45 text-white"
+              : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          <Layers className="w-3 h-3" />
+        </button>
 
         {/* Live Detected Ports Pill */}
         {vm.detectedPorts.length > 0 && (
-          <div className="hidden md:flex items-center gap-1 ml-2">
+          <div className="hidden lg:flex items-center gap-1 ml-1">
             {vm.detectedPorts.slice(0, 3).map((p) => (
               <button
                 key={p.port}
@@ -107,12 +147,12 @@ export const TopBar: React.FC = () => {
         )}
       </div>
 
-      {/* Right: Live VM Telemetry Pills + Quick Controls */}
-      <div className="flex items-center gap-2">
+      {/* Right: Live VM Telemetry Pills + Quick Controls + Control Center */}
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           onClick={() => wmStore.openApp("monitor")}
-          className="hidden sm:flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 text-[11px] font-mono text-zinc-300 transition"
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 text-[11px] font-mono text-zinc-300 transition"
           title="Open System Monitor"
         >
           <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
@@ -147,7 +187,7 @@ export const TopBar: React.FC = () => {
           ) : (
             <GitBranch className="w-3 h-3 text-violet-300" />
           )}
-          <span className="max-w-[100px] truncate font-mono">
+          <span className="max-w-[96px] truncate font-mono">
             {ghAuth.status === "authenticated" && ghAuth.user ? `@${ghAuth.user.login}` : "GitHub"}
           </span>
         </button>
@@ -155,51 +195,33 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => wmStore.openApp("settings", { tab: "network" })}
-          className="hidden lg:flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.04] hover:bg-white/10 border border-white/10 text-[10px] font-mono text-zinc-400 transition"
+          className="hidden xl:flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.04] hover:bg-white/10 border border-white/10 text-[10px] font-mono text-zinc-400 transition"
           title={`Wisp Relay: ${vm.wispActiveUrl}`}
         >
           <Wifi className={`w-3 h-3 ${vm.wispActiveUrl !== "offline" ? "text-emerald-400" : "text-zinc-500"}`} />
-          <span className="max-w-[110px] truncate">
-            {vm.wispActiveUrl === "offline" ? "offline" : "wisp"}
-          </span>
+          <span>{vm.wispActiveUrl === "offline" ? "off" : "wisp"}</span>
         </button>
 
         <button
           type="button"
           onClick={() => appRuntime.runFork(Effect.flatMap(VmService, (v) => v.toggleMute()))}
           className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition"
-          title="Toggle Audio"
+          title="Toggle Guest Audio"
         >
           {vm.audioMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5" />}
         </button>
 
-        {vm.phase === "suspended" ? (
-          <button
-            type="button"
-            onClick={() => appRuntime.runFork(Effect.flatMap(VmService, (v) => v.resume()).pipe(Effect.ignore))}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[11px]"
-          >
-            <Play className="w-3 h-3" />
-            Resume
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => appRuntime.runFork(Effect.flatMap(VmService, (v) => v.suspend()).pipe(Effect.ignore))}
-            className="p-1 rounded-md text-zinc-400 hover:text-amber-300 hover:bg-white/10 transition"
-            title="Suspend VM Snapshot"
-          >
-            <Pause className="w-3.5 h-3.5" />
-          </button>
-        )}
-
         <button
           type="button"
-          onClick={() => appRuntime.runFork(Effect.flatMap(VmService, (v) => v.reboot()).pipe(Effect.ignore))}
-          className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition"
-          title="Reboot Linux Kernel"
+          onClick={() => wmStore.toggleControlCenter()}
+          className={`p-1 rounded-md transition ${
+            wm.controlCenterOpen
+              ? "bg-violet-500/30 text-white"
+              : "text-zinc-300 hover:text-white hover:bg-white/10"
+          }`}
+          title="Control Center (Themes, Shaders, Widgets, Lock)"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
+          <SlidersHorizontal className="w-3.5 h-3.5" />
         </button>
 
         <button
@@ -211,7 +233,14 @@ export const TopBar: React.FC = () => {
           <Command className="w-3 h-3" />K
         </button>
 
-        <span className="font-mono text-[11px] text-zinc-300 pl-1">{clock}</span>
+        <button
+          type="button"
+          onClick={() => wmStore.setLocked(true)}
+          title="Lock Screen (⌘L)"
+          className="font-mono text-[11px] text-zinc-200 hover:text-white pl-1 tabular-nums transition"
+        >
+          {clock}
+        </button>
       </div>
     </header>
   );

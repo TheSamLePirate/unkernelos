@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { uiSounds } from "../core/ui-sounds.ts";
 
 export type AppId =
   | "agent-studio"
@@ -10,6 +11,18 @@ export type AppId =
   | "toolchain"
   | "monitor"
   | "settings";
+
+export type WorkspaceId = 1 | 2 | 3 | 4;
+
+export type SnapZone =
+  | "none"
+  | "left"
+  | "right"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "maximize";
 
 export interface AppDefinition {
   readonly id: AppId;
@@ -125,9 +138,9 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "settings",
     title: "unkernelOS Settings",
     shortTitle: "Settings",
-    description: "Distro, RAM, vCPUs, Wisp URL, GL/FB0, WebGPU, Disk & API Credentials",
-    defaultWidth: 900,
-    defaultHeight: 640,
+    description: "Themes, WebGPU Shaders, Distro, RAM, vCPUs, Wisp URL, GL/FB0 & API Keys",
+    defaultWidth: 920,
+    defaultHeight: 650,
     minWidth: 580,
     minHeight: 440,
     accent: "from-zinc-400 to-zinc-600",
@@ -139,6 +152,7 @@ export interface WindowInstance {
   readonly id: string;
   readonly appId: AppId;
   readonly title: string;
+  readonly workspace: WorkspaceId;
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -146,7 +160,7 @@ export interface WindowInstance {
   readonly zIndex: number;
   readonly minimized: boolean;
   readonly maximized: boolean;
-  readonly snap: "none" | "left" | "right";
+  readonly snap: SnapZone;
   readonly props?: Record<string, unknown>;
 }
 
@@ -165,26 +179,45 @@ export interface ToastItem {
   readonly action?: ToastAction;
 }
 
+export interface ContextMenuState {
+  readonly x: number;
+  readonly y: number;
+  readonly kind: "desktop" | "dock";
+  readonly appId?: AppId;
+}
+
 interface WmState {
   readonly windows: readonly WindowInstance[];
   readonly activeWindowId: string | null;
+  readonly activeWorkspace: WorkspaceId;
+  readonly dragSnapPreview: SnapZone | null;
   readonly commandPaletteOpen: boolean;
   readonly githubModalOpen: boolean;
+  readonly missionControlOpen: boolean;
+  readonly controlCenterOpen: boolean;
+  readonly locked: boolean;
+  readonly contextMenu: ContextMenuState | null;
   readonly previewPort: number;
   readonly previewPath: string;
   readonly activeWorkspaceDir: string;
   readonly toasts: readonly ToastItem[];
 }
 
-const TOP_BAR_H = 34;
-const DOCK_RESERVE = 78;
+const TOP_BAR_H = 36;
+const DOCK_RESERVE = 82;
 
 class WindowManagerStore {
   private state: WmState = {
     windows: [],
     activeWindowId: null,
+    activeWorkspace: 1,
+    dragSnapPreview: null,
     commandPaletteOpen: false,
     githubModalOpen: false,
+    missionControlOpen: false,
+    controlCenterOpen: false,
+    locked: false,
+    contextMenu: null,
     previewPort: 3000,
     previewPath: "/",
     activeWorkspaceDir: "/home/user/workspace",
@@ -211,12 +244,22 @@ class WindowManagerStore {
   }
 
   public openApp(appId: AppId, props?: Record<string, unknown>, forceNew = false): string {
-    const existing = !forceNew ? this.state.windows.find((w) => w.appId === appId) : undefined;
+    const existing = !forceNew
+      ? this.state.windows.find(
+          (w) => w.appId === appId && w.workspace === this.state.activeWorkspace
+        ) ?? this.state.windows.find((w) => w.appId === appId)
+      : undefined;
+
     if (existing) {
+      if (existing.workspace !== this.state.activeWorkspace) {
+        this.switchWorkspace(existing.workspace);
+      }
       this.focusWindow(existing.id);
       if (props) {
         this.setState((s) => ({
           ...s,
+          missionControlOpen: false,
+          contextMenu: null,
           windows: s.windows.map((w) =>
             w.id === existing.id ? { ...w, minimized: false, props: { ...w.props, ...props } } : w
           ),
@@ -230,7 +273,8 @@ class WindowManagerStore {
     const vh = typeof window !== "undefined" ? window.innerHeight : 900;
     const w = Math.min(def.defaultWidth, vw - 40);
     const h = Math.min(def.defaultHeight, vh - TOP_BAR_H - DOCK_RESERVE - 24);
-    const offset = (this.state.windows.length % 6) * 26;
+    const wsWins = this.state.windows.filter((win) => win.workspace === this.state.activeWorkspace);
+    const offset = (wsWins.length % 6) * 26;
     const x = Math.max(20, Math.round((vw - w) / 2) + offset - 40);
     const y = Math.max(TOP_BAR_H + 12, Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 20);
     const id = `${appId}-${Math.random().toString(36).slice(2, 7)}`;
@@ -240,6 +284,7 @@ class WindowManagerStore {
       id,
       appId,
       title: def.title,
+      workspace: this.state.activeWorkspace,
       x,
       y,
       width: w,
@@ -251,8 +296,12 @@ class WindowManagerStore {
       props,
     };
 
+    uiSounds.playWindowOpen();
     this.setState((s) => ({
       ...s,
+      missionControlOpen: false,
+      controlCenterOpen: false,
+      contextMenu: null,
       windows: [...s.windows, win],
       activeWindowId: id,
     }));
@@ -260,10 +309,11 @@ class WindowManagerStore {
   }
 
   public closeWindow(id: string): void {
+    uiSounds.playWindowClose();
     this.setState((s) => {
       const remaining = s.windows.filter((w) => w.id !== id);
       const top = remaining
-        .filter((w) => !w.minimized)
+        .filter((w) => w.workspace === s.activeWorkspace && !w.minimized)
         .sort((a, b) => b.zIndex - a.zIndex)[0];
       return {
         ...s,
@@ -273,19 +323,47 @@ class WindowManagerStore {
     });
   }
 
+  public closeAppWindows(appId: AppId): void {
+    uiSounds.playWindowClose();
+    this.setState((s) => {
+      const remaining = s.windows.filter((w) => w.appId !== appId);
+      const top = remaining
+        .filter((w) => w.workspace === s.activeWorkspace && !w.minimized)
+        .sort((a, b) => b.zIndex - a.zIndex)[0];
+      return {
+        ...s,
+        contextMenu: null,
+        windows: remaining,
+        activeWindowId: remaining.some((w) => w.id === s.activeWindowId)
+          ? s.activeWindowId
+          : (top?.id ?? null),
+      };
+    });
+  }
+
   public focusWindow(id: string): void {
     const zIndex = ++this.zCounter;
-    this.setState((s) => ({
-      ...s,
-      activeWindowId: id,
-      windows: s.windows.map((w) => (w.id === id ? { ...w, minimized: false, zIndex } : w)),
-    }));
+    this.setState((s) => {
+      const target = s.windows.find((w) => w.id === id);
+      const activeWorkspace = target ? target.workspace : s.activeWorkspace;
+      return {
+        ...s,
+        activeWorkspace,
+        activeWindowId: id,
+        contextMenu: null,
+        controlCenterOpen: false,
+        windows: s.windows.map((w) => (w.id === id ? { ...w, minimized: false, zIndex } : w)),
+      };
+    });
   }
 
   public minimizeWindow(id: string): void {
+    uiSounds.playClick();
     this.setState((s) => {
       const next = s.windows.map((w) => (w.id === id ? { ...w, minimized: true } : w));
-      const top = next.filter((w) => !w.minimized).sort((a, b) => b.zIndex - a.zIndex)[0];
+      const top = next
+        .filter((w) => w.workspace === s.activeWorkspace && !w.minimized)
+        .sort((a, b) => b.zIndex - a.zIndex)[0];
       return {
         ...s,
         windows: next,
@@ -294,29 +372,57 @@ class WindowManagerStore {
     });
   }
 
+  public minimizeAllInWorkspace(): void {
+    uiSounds.playClick();
+    this.setState((s) => ({
+      ...s,
+      activeWindowId: null,
+      contextMenu: null,
+      windows: s.windows.map((w) =>
+        w.workspace === s.activeWorkspace ? { ...w, minimized: true } : w
+      ),
+    }));
+  }
+
   public toggleMaximize(id: string): void {
+    uiSounds.playSnap();
     const zIndex = ++this.zCounter;
     this.setState((s) => ({
       ...s,
       activeWindowId: id,
       windows: s.windows.map((w) =>
-        w.id === id ? { ...w, maximized: !w.maximized, snap: "none", zIndex } : w
+        w.id === id
+          ? { ...w, maximized: !w.maximized, snap: "none", zIndex }
+          : w
       ),
     }));
   }
 
-  public snapWindow(id: string, snap: "left" | "right" | "none"): void {
+  public snapWindow(id: string, snap: SnapZone): void {
+    uiSounds.playSnap();
     const zIndex = ++this.zCounter;
+    const isMax = snap === "maximize";
     this.setState((s) => ({
       ...s,
       activeWindowId: id,
+      dragSnapPreview: null,
       windows: s.windows.map((w) =>
-        w.id === id ? { ...w, snap, maximized: false, zIndex } : w
+        w.id === id
+          ? { ...w, snap: isMax ? "none" : snap, maximized: isMax, zIndex }
+          : w
       ),
     }));
   }
 
-  public moveResize(id: string, rect: Partial<Pick<WindowInstance, "x" | "y" | "width" | "height">>): void {
+  public setDragSnapPreview(zone: SnapZone | null): void {
+    if (this.state.dragSnapPreview === zone) return;
+    this.setState((s) => ({ ...s, dragSnapPreview: zone }));
+  }
+
+  public moveResize(
+    id: string,
+    rect: Partial<Pick<WindowInstance, "x" | "y" | "width" | "height">>
+  ): void {
     this.setState((s) => ({
       ...s,
       windows: s.windows.map((w) =>
@@ -325,16 +431,97 @@ class WindowManagerStore {
     }));
   }
 
-  public setCommandPalette(open: boolean): void {
-    this.setState((s) => ({ ...s, commandPaletteOpen: open }));
+  public switchWorkspace(ws: WorkspaceId): void {
+    if (this.state.activeWorkspace === ws) return;
+    uiSounds.playWorkspaceSwitch();
+    this.setState((s) => {
+      const top = s.windows
+        .filter((w) => w.workspace === ws && !w.minimized)
+        .sort((a, b) => b.zIndex - a.zIndex)[0];
+      return {
+        ...s,
+        activeWorkspace: ws,
+        activeWindowId: top?.id ?? null,
+        contextMenu: null,
+      };
+    });
   }
 
-  public setGithubModal(open: boolean): void {
-    this.setState((s) => ({ ...s, githubModalOpen: open }));
+  public moveWindowToWorkspace(id: string, ws: WorkspaceId): void {
+    uiSounds.playWorkspaceSwitch();
+    this.setState((s) => {
+      const updated = s.windows.map((w) => (w.id === id ? { ...w, workspace: ws } : w));
+      const top = updated
+        .filter((w) => w.workspace === s.activeWorkspace && !w.minimized)
+        .sort((a, b) => b.zIndex - a.zIndex)[0];
+      return {
+        ...s,
+        windows: updated,
+        activeWindowId:
+          s.activeWindowId === id && ws !== s.activeWorkspace
+            ? (top?.id ?? null)
+            : s.activeWindowId,
+      };
+    });
+  }
+
+  public setCommandPalette(open: boolean): void {
+    if (open) uiSounds.playClick();
+    this.setState((s) => ({
+      ...s,
+      commandPaletteOpen: open,
+      controlCenterOpen: false,
+      contextMenu: null,
+    }));
   }
 
   public toggleCommandPalette(): void {
-    this.setState((s) => ({ ...s, commandPaletteOpen: !s.commandPaletteOpen }));
+    this.setCommandPalette(!this.state.commandPaletteOpen);
+  }
+
+  public setGithubModal(open: boolean): void {
+    if (open) uiSounds.playClick();
+    this.setState((s) => ({ ...s, githubModalOpen: open, controlCenterOpen: false, contextMenu: null }));
+  }
+
+  public setMissionControl(open: boolean): void {
+    if (open) uiSounds.playWorkspaceSwitch();
+    this.setState((s) => ({
+      ...s,
+      missionControlOpen: open,
+      controlCenterOpen: false,
+      contextMenu: null,
+    }));
+  }
+
+  public toggleMissionControl(): void {
+    this.setMissionControl(!this.state.missionControlOpen);
+  }
+
+  public setControlCenter(open: boolean): void {
+    if (open) uiSounds.playClick();
+    this.setState((s) => ({ ...s, controlCenterOpen: open, contextMenu: null }));
+  }
+
+  public toggleControlCenter(): void {
+    this.setControlCenter(!this.state.controlCenterOpen);
+  }
+
+  public setLocked(locked: boolean): void {
+    if (locked) uiSounds.playLock();
+    else uiSounds.playUnlock();
+    this.setState((s) => ({
+      ...s,
+      locked,
+      controlCenterOpen: false,
+      missionControlOpen: false,
+      commandPaletteOpen: false,
+      contextMenu: null,
+    }));
+  }
+
+  public setContextMenu(menu: ContextMenuState | null): void {
+    this.setState((s) => ({ ...s, contextMenu: menu, controlCenterOpen: false }));
   }
 
   public openPreview(port: number, path = "/"): void {
@@ -352,6 +539,7 @@ class WindowManagerStore {
     level: ToastItem["level"] = "info",
     action?: ToastAction
   ): void {
+    uiSounds.playNotify();
     const id = Math.random().toString(36).slice(2, 9);
     const toast: ToastItem = { id, title, message, level, createdAt: Date.now(), action };
     this.setState((s) => ({ ...s, toasts: [...s.toasts.slice(-4), toast] }));

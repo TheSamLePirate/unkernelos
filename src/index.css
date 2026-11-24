@@ -4,14 +4,23 @@
   :root {
     --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", ui-monospace, monospace;
-    --glass-bg: rgba(13, 15, 22, 0.74);
-    --glass-bg-elevated: rgba(18, 21, 31, 0.84);
-    --glass-border: rgba(255, 255, 255, 0.09);
-    --glass-border-active: rgba(255, 255, 255, 0.18);
-    --glass-highlight: rgba(255, 255, 255, 0.05);
+    --glass-bg: rgba(12, 14, 22, 0.74);
+    --glass-bg-elevated: rgba(17, 20, 31, 0.84);
+    --glass-bar-bg: rgba(9, 11, 18, 0.72);
+    --glass-dock-bg: rgba(14, 17, 27, 0.78);
+    --glass-blur: 28px;
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-border-active: rgba(255, 255, 255, 0.2);
+    --glass-highlight: rgba(255, 255, 255, 0.06);
     --accent-primary: #8b5cf6;
     --accent-cyan: #22d3ee;
     --accent-rose: #f43f5e;
+    --window-glow: rgba(139, 92, 246, 0.24);
+    --wallpaper-fallback-bg:
+      radial-gradient(ellipse 80% 60% at 15% 15%, rgba(99, 102, 241, 0.28), transparent 55%),
+      radial-gradient(ellipse 70% 55% at 85% 20%, rgba(14, 165, 233, 0.22), transparent 50%),
+      radial-gradient(ellipse 75% 65% at 50% 90%, rgba(217, 70, 239, 0.18), transparent 55%),
+      linear-gradient(160deg, #06070c 0%, #0b0e18 48%, #070911 100%);
   }
 
   * {
@@ -27,53 +36,87 @@
     padding: 0;
     overflow: hidden;
     font-family: var(--font-sans);
-    background: #07080c;
+    background: #06070b;
     color: #f4f4f5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-/* AAA Dark Glass Surfaces */
+/* AAA Liquid Dark Glass Surfaces */
 .glass-surface {
   background: var(--glass-bg);
-  backdrop-filter: blur(28px) saturate(165%);
-  -webkit-backdrop-filter: blur(28px) saturate(165%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
   border: 1px solid var(--glass-border);
   box-shadow:
-    0 24px 60px -12px rgba(0, 0, 0, 0.75),
+    0 24px 60px -12px rgba(0, 0, 0, 0.72),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 0 rgba(255, 255, 255, 0.08) inset;
+    0 1px 0 0 rgba(255, 255, 255, 0.1) inset;
 }
 
 .glass-surface-focused {
   background: var(--glass-bg-elevated);
-  backdrop-filter: blur(32px) saturate(180%);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(190%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(190%);
   border: 1px solid var(--glass-border-active);
   box-shadow:
-    0 32px 80px -12px rgba(0, 0, 0, 0.85),
-    0 0 40px -15px rgba(139, 92, 246, 0.18),
-    0 1px 0 0 rgba(255, 255, 255, 0.12) inset;
+    0 34px 85px -12px rgba(0, 0, 0, 0.85),
+    0 0 48px -12px var(--window-glow),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.16) inset;
+}
+
+.glass-widget {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(165%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(165%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 18px 42px -10px rgba(0, 0, 0, 0.55),
+    0 1px 0 0 rgba(255, 255, 255, 0.11) inset;
 }
 
 .glass-bar {
-  background: rgba(9, 11, 17, 0.68);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--glass-bar-bg);
+  backdrop-filter: blur(24px) saturate(185%);
+  -webkit-backdrop-filter: blur(24px) saturate(185%);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.05);
 }
 
 .glass-dock {
-  background: rgba(14, 17, 26, 0.72);
-  backdrop-filter: blur(30px) saturate(190%);
-  -webkit-backdrop-filter: blur(30px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--glass-dock-bg);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid var(--glass-border-active);
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.7),
-    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+    0 24px 60px rgba(0, 0, 0, 0.75),
+    0 0 32px -12px var(--window-glow),
+    0 1px 0 0 rgba(255, 255, 255, 0.16) inset;
+}
+
+.snap-zone-preview {
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 2px solid color-mix(in srgb, var(--accent-primary) 72%, white 28%);
+  box-shadow:
+    0 0 40px var(--window-glow),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
 }
 
 .font-mono {
   font-family: var(--font-mono);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Custom sleek scrollbars */
@@ -99,7 +142,7 @@
 @keyframes window-in {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(8px);
+    transform: scale(0.955) translateY(10px);
   }
   to {
     opacity: 1;
@@ -108,7 +151,22 @@
 }
 
 .animate-window-in {
-  animation: window-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: window-in 190ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-overlay-fade {
+  animation: overlay-fade 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes pulse-glow {
@@ -120,11 +178,7 @@
   animation: pulse-glow 2.4s ease-in-out infinite;
 }
 
-/* Fallback wallpaper gradient if WebGPU is off */
+/* Dynamic theme fallback wallpaper if WebGPU is disabled */
 .wallpaper-fallback {
-  background:
-    radial-gradient(ellipse 80% 60% at 15% 15%, rgba(99, 102, 241, 0.24), transparent 55%),
-    radial-gradient(ellipse 70% 55% at 85% 20%, rgba(14, 165, 233, 0.18), transparent 50%),
-    radial-gradient(ellipse 75% 65% at 50% 90%, rgba(217, 70, 239, 0.16), transparent 55%),
-    linear-gradient(160deg, #06070b 0%, #0b0e18 48%, #070911 100%);
+  background: var(--wallpaper-fallback-bg);
 }

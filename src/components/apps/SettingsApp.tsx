@@ -7,15 +7,18 @@ import {
   KeyRound,
   Monitor,
   Network,
+  Palette,
   Pause,
   Play,
   RotateCcw,
   Save,
+  Sparkles,
   Trash2,
   Upload,
   Wifi,
 } from "lucide-react";
 import React, { useRef, useState } from "react";
+import { OS_THEMES, WALLPAPER_SHADERS } from "../../core/os-themes.ts";
 import {
   appRuntime,
   SettingsService,
@@ -26,10 +29,12 @@ import {
   DEFAULT_CREDENTIALS,
   DEFAULT_UNKERNEL_CONFIG,
   type DistroKind,
+  type OsThemeId,
+  type WallpaperShaderId,
 } from "../../core/schema.ts";
 import { wmStore } from "../../wm/wm-store.ts";
 
-type SettingsTab = "compute" | "network" | "graphics" | "storage" | "credentials";
+type SettingsTab = "appearance" | "compute" | "network" | "graphics" | "storage" | "credentials";
 
 const RESOLUTIONS = [
   { label: "640 × 480 (VGA)", w: 640, h: 480 },
@@ -73,7 +78,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
     }
   );
 
-  const [tab, setTab] = useState<SettingsTab>(initialTab ?? "compute");
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? "appearance");
   const [wispPing, setWispPing] = useState<string | null>(null);
   const [needsReboot, setNeedsReboot] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
@@ -169,6 +174,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
   };
 
   const tabs: readonly { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: "appearance", label: "Appearance & WebOS", icon: Palette },
     { id: "compute", label: "Linux & Compute", icon: Cpu },
     { id: "network", label: "Network (Wisp)", icon: Network },
     { id: "graphics", label: "FB0, GL & WebGPU", icon: Monitor },
@@ -221,6 +227,143 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
 
       {/* Right Content */}
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        {tab === "appearance" && (
+          <div className="space-y-5 max-w-2xl">
+            <h2 className="text-sm font-semibold text-white">WebOS Themes, Live WebGPU Shaders &amp; Glass Engine</h2>
+
+            {/* 5 OS Theme Cards */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-300">WebOS Theme Preset</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {(Object.keys(OS_THEMES) as OsThemeId[]).map((id) => {
+                  const t = OS_THEMES[id];
+                  const active = cfg.osTheme === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => patchCfg({ osTheme: id, wallpaperShader: t.defaultShader }, false)}
+                      className={`text-left p-3 rounded-2xl border transition ${
+                        active
+                          ? "bg-violet-500/20 border-violet-400/55 text-white shadow-lg"
+                          : "bg-white/[0.03] border-white/10 text-zinc-300 hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-semibold">{t.name}</span>
+                        <span className="flex items-center gap-1">
+                          {t.swatches.map((hex) => (
+                            <span
+                              key={hex}
+                              className="w-2.5 h-2.5 rounded-full border border-white/25"
+                              style={{ background: hex }}
+                            />
+                          ))}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 leading-snug">{t.tagline}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 5 Live WebGPU Shaders */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                Live WebGPU Background Shader
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {(Object.keys(WALLPAPER_SHADERS) as WallpaperShaderId[]).map((id) => {
+                  const s = WALLPAPER_SHADERS[id];
+                  const active = cfg.wallpaperShader === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => patchCfg({ wallpaperShader: id, webgpuWallpaper: true }, false)}
+                      className={`text-left rounded-2xl overflow-hidden border transition ${
+                        active
+                          ? "border-cyan-400/70 ring-1 ring-cyan-400/40"
+                          : "border-white/10 hover:border-white/25"
+                      }`}
+                    >
+                      <div className="h-14 w-full" style={{ background: s.previewGradient }} />
+                      <div className="p-2.5 bg-black/45">
+                        <div className="text-xs font-semibold text-white">{s.name}</div>
+                        <p className="text-[10px] text-zinc-400 mt-0.5 leading-snug">{s.description}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Glass Sliders */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="font-medium text-zinc-200">Liquid Glass Blur</span>
+                  <span className="font-mono text-violet-300">{cfg.glassBlur} px</span>
+                </div>
+                <input
+                  type="range"
+                  min={8}
+                  max={48}
+                  step={2}
+                  value={cfg.glassBlur}
+                  onChange={(e) => patchCfg({ glassBlur: Number(e.target.value) }, false)}
+                  className="w-full accent-violet-500"
+                />
+              </div>
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="font-medium text-zinc-200">Window Surface Opacity</span>
+                  <span className="font-mono text-cyan-300">{Math.round(cfg.glassOpacity * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={45}
+                  max={95}
+                  step={2}
+                  value={Math.round(cfg.glassOpacity * 100)}
+                  onChange={(e) => patchCfg({ glassOpacity: Number(e.target.value) / 100 }, false)}
+                  className="w-full accent-cyan-400"
+                />
+              </div>
+            </div>
+
+            {/* UX Toggles */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {(
+                [
+                  ["dockMagnification", "Dock Spring Magnification", "Fluid macOS-style zoom on hover across Dock icons"],
+                  ["desktopWidgets", "Desktop Ambient Widgets", "Show clock, live Linux telemetry & quick scratchpad on desktop"],
+                  ["uiSounds", "Subtle Studio UI Sounds", "Whisper-quiet WebAudio glass ticks & chimes"],
+                  ["webgpuWallpaper", "WebGPU Live Shader Engine", "Render real-time WGSL wallpapers on the GPU"],
+                ] as const
+              ).map(([key, title, desc]) => (
+                <label
+                  key={key}
+                  className="flex items-start justify-between gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/10 cursor-pointer"
+                >
+                  <div>
+                    <div className="text-xs font-medium text-zinc-200">{title}</div>
+                    <div className="text-[11px] text-zinc-500">{desc}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={cfg[key]}
+                    onChange={(e) => patchCfg({ [key]: e.target.checked }, false)}
+                    className="mt-0.5 accent-violet-500"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         {tab === "compute" && (
           <div className="space-y-5 max-w-2xl">
             <h2 className="text-sm font-semibold text-white">Distribution, RAM &amp; vCPU Architecture</h2>

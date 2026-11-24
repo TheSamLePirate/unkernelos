@@ -1,7 +1,9 @@
 import { Effect } from "effect";
-import { Globe, Pause, RotateCcw, Search, Sparkles } from "lucide-react";
+import { Globe, Layers, Lock, Palette, Pause, RotateCcw, Search, Sparkles } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { appRuntime, useSubscriptionRef, VmService } from "../core/runtime.ts";
+import { OS_THEMES } from "../core/os-themes.ts";
+import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../core/runtime.ts";
+import type { OsThemeId } from "../core/schema.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
 
 export const CommandPalette: React.FC = () => {
@@ -51,10 +53,14 @@ export const CommandPalette: React.FC = () => {
         a.id.includes(q)
     );
 
+  const matchingThemes = (Object.keys(OS_THEMES) as OsThemeId[])
+    .map((id) => OS_THEMES[id])
+    .filter((t) => !q || t.name.toLowerCase().includes(q) || "theme".includes(q));
+
   return (
     <div
       onClick={() => wmStore.setCommandPalette(false)}
-      className="fixed inset-0 z-[100] bg-black/55 backdrop-blur-sm flex items-start justify-center pt-[14vh] px-4"
+      className="fixed inset-0 z-[100] bg-black/55 backdrop-blur-sm flex items-start justify-center pt-[12vh] px-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -73,13 +79,13 @@ export const CommandPalette: React.FC = () => {
                 wmStore.setCommandPalette(false);
               }
             }}
-            placeholder="Launch app, open guest port, or run VM command..."
+            placeholder="Launch app, switch WebOS theme, open port, or run VM command..."
             className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
           />
           <kbd className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-mono text-zinc-400">ESC</kbd>
         </div>
 
-        <div className="max-h-80 overflow-y-auto p-2 space-y-1">
+        <div className="max-h-96 overflow-y-auto p-2 space-y-1">
           {vm.detectedPorts.length > 0 && (
             <div className="pb-1 mb-1 border-b border-white/8">
               <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
@@ -133,10 +139,91 @@ export const CommandPalette: React.FC = () => {
             </button>
           ))}
 
+          {matchingThemes.length > 0 && (
+            <div className="pt-1 mt-1 border-t border-white/8">
+              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                WebOS Themes
+              </div>
+              <div className="grid grid-cols-2 gap-1 px-1">
+                {matchingThemes.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => {
+                      appRuntime.runFork(
+                        Effect.flatMap(SettingsService, (s) =>
+                          s.updateConfig({ osTheme: t.id, wallpaperShader: t.defaultShader })
+                        )
+                      );
+                      wmStore.setCommandPalette(false);
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-xs text-zinc-200 transition"
+                  >
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ background: `linear-gradient(135deg, ${t.swatches[0]}, ${t.swatches[1]})` }}
+                    />
+                    <span className="truncate">{t.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="pt-1 mt-1 border-t border-white/8">
             <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-              Kernel Actions
+              Desktop &amp; Kernel Actions
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.toggleMissionControl();
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <span className="flex items-center gap-2">
+                <Layers className="w-3.5 h-3.5 text-fuchsia-400" />
+                Mission Control / Workspaces
+              </span>
+              <kbd className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-mono text-zinc-400">⌘E</kbd>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.setLocked(true);
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <span className="flex items-center gap-2">
+                <Lock className="w-3.5 h-3.5 text-sky-400" />
+                Lock Screen
+              </span>
+              <kbd className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-mono text-zinc-400">⌘L</kbd>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.setGithubModal(true);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              Connect GitHub Account (1-Click OAuth / Token)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.openApp("settings", { tab: "appearance" });
+                wmStore.setCommandPalette(false);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <Palette className="w-3.5 h-3.5 text-violet-400" />
+              Appearance, Themes &amp; WebGPU Shaders
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -158,28 +245,6 @@ export const CommandPalette: React.FC = () => {
             >
               <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
               Reboot Linux Kernel
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                wmStore.setCommandPalette(false);
-                wmStore.setGithubModal(true);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              Connect GitHub Account (1-Click OAuth / Token)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                wmStore.openApp("settings", { tab: "network" });
-                wmStore.setCommandPalette(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-              Configure Wisp Server &amp; API Keys
             </button>
           </div>
         </div>
