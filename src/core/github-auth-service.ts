@@ -180,7 +180,7 @@ export const GithubAuthLive = Layer.effect(
 
         // Ensure gh is available
         const hasGh = yield* vm
-          .execShell(`export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"; command -v gh`)
+          .execShell(`export PATH="/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin:$PATH"; command -v gh`)
           .pipe(Effect.either);
 
         if (hasGh._tag === "Left" || hasGh.right.exitCode !== 0) {
@@ -197,14 +197,15 @@ export const GithubAuthLive = Layer.effect(
             "/bin/sh",
             [
               "-c",
-              `export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"; export BROWSER=/bin/true; unset GH_TOKEN GITHUB_TOKEN; gh auth login --hostname github.com --git-protocol https --scopes repo,workflow,read:org --web`,
+              `export PATH="/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin:$PATH"; export BROWSER=/bin/true; export GH_PROMPT_DISABLED=1; unset GH_TOKEN GITHUB_TOKEN; gh auth login --hostname github.com --git-protocol https --scopes repo,workflow,read:org --web </dev/null 2>&1`,
             ],
             {
-              cols: 100,
+              cols: 120,
               rows: 24,
               env: {
                 TERM: "xterm-256color",
                 BROWSER: "/bin/true",
+                GH_PROMPT_DISABLED: "1",
               },
             }
           )
@@ -231,6 +232,19 @@ export const GithubAuthLive = Layer.effect(
             let sentEnter = false;
             let gotCode = false;
 
+            const codeTimeout = setTimeout(() => {
+              if (!gotCode && activePty === pty) {
+                Effect.runFork(
+                  SubscriptionRef.update(stateRef, (s) => ({
+                    ...s,
+                    output:
+                      fullLog.trim() ||
+                      "Still waiting for github.com over Wisp... If this takes too long, check Settings → Network (Wisp) or use the Personal Access Token tab.",
+                  }))
+                );
+              }
+            }, 12000);
+
             try {
               while (activePty === pty) {
                 const { done, value } = await reader.read();
@@ -239,27 +253,38 @@ export const GithubAuthLive = Layer.effect(
 
                 fullLog += stripAnsi(decoder.decode(value, { stream: true }));
 
-                const codeMatch = /([A-Z0-9]{4}-[A-Z0-9]{4})/.exec(fullLog);
+                const codeMatch = /\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/.exec(fullLog);
                 if (codeMatch && !gotCode) {
                   gotCode = true;
+                  clearTimeout(codeTimeout);
                   const code = codeMatch[1]!;
+                  const urlMatch = /(https:\/\/github\.com\/login\/device\S*)/.exec(fullLog);
                   await Effect.runPromise(
                     SubscriptionRef.update(stateRef, (s) => ({
                       ...s,
                       status: "awaiting_user" as const,
                       userCode: code,
+                      verificationUri: urlMatch ? urlMatch[1]! : "https://github.com/login/device",
+                      output: fullLog.trim(),
+                    }))
+                  );
+                } else if (!gotCode && fullLog.trim()) {
+                  await Effect.runPromise(
+                    SubscriptionRef.update(stateRef, (s) => ({
+                      ...s,
                       output: fullLog.trim(),
                     }))
                   );
                 }
 
-                // Auto-press Enter when gh asks "Press Enter to open github.com in your browser..."
+                // Fallback: if gh ever runs interactively and prompts for Enter
                 if (!sentEnter && /Press Enter/i.test(fullLog)) {
                   sentEnter = true;
                   await pty.write("\r").catch(() => {});
                 }
               }
 
+              clearTimeout(codeTimeout);
               const ended = await pty.ended;
               if (activePty !== pty) return;
               activePty = null;
@@ -275,7 +300,7 @@ export const GithubAuthLive = Layer.effect(
 
                 const tok = await Effect.runPromise(
                   vm
-                    .execShell(`export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"; gh auth setup-git 2>/dev/null || true; gh auth token`)
+                    .execShell(`export PATH="/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin:$PATH"; gh auth setup-git 2>/dev/null || true; gh auth token`)
                     .pipe(Effect.either)
                 );
 
@@ -297,13 +322,14 @@ export const GithubAuthLive = Layer.effect(
                   ...s,
                   status: "error" as const,
                   error:
-                    fullLog.includes("network") || fullLog.includes("lookup") || fullLog.includes("dial")
+                    fullLog.includes("network") || fullLog.includes("lookup") || fullLog.includes("dial") || fullLog.includes("TLS")
                       ? "Cannot reach github.com from the VM. Check your Wisp server URL in Settings → Network (Wisp)."
                       : fullLog.trim().split("\n").slice(-3).join(" ") || "GitHub authentication cancelled or failed.",
                   output: fullLog.trim(),
                 }))
               );
             } catch (err) {
+              clearTimeout(codeTimeout);
               if (activePty === pty) {
                 activePty = null;
                 await Effect.runPromise(
@@ -315,6 +341,7 @@ export const GithubAuthLive = Layer.effect(
                 );
               }
             } finally {
+              clearTimeout(codeTimeout);
               reader.cancel().catch(() => {});
             }
           })

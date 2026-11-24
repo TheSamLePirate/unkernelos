@@ -1,9 +1,9 @@
 import { Terminal as HeadlessTerminal } from "@xterm/headless";
 import { Effect } from "effect";
-import { ExternalLink, Sparkles } from "lucide-react";
+import { ExternalLink, Sparkles, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import type { Pty } from "unkernel";
-import { appRuntime, VmService } from "../../core/runtime.ts";
+import { appRuntime, GithubAuthService, VmService } from "../../core/runtime.ts";
 import type { KittyThemeId } from "../../core/schema.ts";
 import { KITTY_THEMES, KittyWebGpuRenderer } from "../../gpu/webgpu-terminal.ts";
 import { wmStore } from "../../wm/wm-store.ts";
@@ -121,6 +121,9 @@ function encodeSgrMouse(
 }
 
 const LOCAL_URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})(\/[^\s"'<>)]*)?/i;
+const EXTERNAL_AUTH_URL_RE = /https:\/\/(?:github\.com\/login\/device|claude\.ai\/[^\s"'<>)]+|console\.anthropic\.com\/[^\s"'<>)]+|accounts\.google\.com\/[^\s"'<>)]+|auth\.openai\.com\/[^\s"'<>)]+)[^\s"'<>)]*/i;
+const DEVICE_CODE_RE = /\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/;
+const ANSI_STRIP_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
 
 export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   themeId,
@@ -143,7 +146,10 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   const [backend, setBackend] = useState<"webgpu" | "canvas2d">("canvas2d");
   const [status, setStatus] = useState<"connecting" | "connected" | "exited">("connecting");
   const [detectedUrl, setDetectedUrl] = useState<{ port: number; path: string } | null>(null);
+  const [externalLink, setExternalLink] = useState<{ url: string; code?: string } | null>(null);
   const [hasDomFocus, setHasDomFocus] = useState(false);
+  const recentDeviceCodeRef = useRef<string | null>(null);
+  const recentTextRef = useRef<string>("");
 
   const focusInput = () => {
     const el = inputRef.current;
@@ -206,6 +212,36 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
       }
     };
 
+    // Forward @xterm/headless terminal query responses (DSR \x1b[6n], DA1/DA2, etc.) back to the Linux PTY.
+    // Required by interactive TUI apps like `gh auth login`, `claude`, `pi`, `fzf`, `nvim`.
+    term.onData((data) => writeToPty(data));
+
+    // Host browser bridge: `$BROWSER <url>` / `xdg-open <url>` inside Linux emits OSC 9999;open;<url>
+    term.parser.registerOscHandler(9999, (data) => {
+      if (data.startsWith("open;")) {
+        const url = data.slice(5).trim();
+        if (/^https?:\/\//i.test(url)) {
+          const code = recentDeviceCodeRef.current ?? undefined;
+          if (code) {
+            navigator.clipboard.writeText(code).catch(() => {});
+          }
+          setExternalLink({ url, code });
+          window.open(url, "_blank", "noopener,noreferrer");
+          wmStore.pushToast(
+            code ? `Open GitHub (${code} copied)` : "Open URL in Browser",
+            url,
+            "info",
+            {
+              label: code ? `Copy ${code} & Open` : "Open Link",
+              url,
+              copyText: code,
+            }
+          );
+        }
+      }
+      return true;
+    });
+
     const apiHandle: KittyTerminalHandle = {
       write: writeToPty,
       focus: () => inputRef.current?.focus(),
@@ -241,6 +277,7 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
               env: {
                 TERM: "xterm-256color",
                 COLORTERM: "truecolor",
+                BROWSER: "/tmp/unkernel-open",
               },
             });
           })
@@ -279,12 +316,35 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
           if (done) break;
           if (value && value.byteLength > 0) {
             const text = decoder.decode(value, { stream: true });
-            const urlMatch = LOCAL_URL_RE.exec(text);
+            const cleanText = text.replace(ANSI_STRIP_RE, "");
+            recentTextRef.current = (recentTextRef.current + cleanText).slice(-512);
+            const rolling = recentTextRef.current;
+
+            const urlMatch = LOCAL_URL_RE.exec(cleanText);
             if (urlMatch) {
               const port = Number(urlMatch[1]);
               if (port > 0 && port < 65536) {
                 setDetectedUrl({ port, path: urlMatch[2] || "/" });
               }
+            }
+            const codeMatch = DEVICE_CODE_RE.exec(rolling);
+            if (codeMatch && /one-time code|login\/device/i.test(rolling)) {
+              recentDeviceCodeRef.current = codeMatch[1]!;
+            }
+            const extMatch = EXTERNAL_AUTH_URL_RE.exec(rolling);
+            if (extMatch) {
+              const url = extMatch[0]!.replace(/[.,;:]+$/, "");
+              setExternalLink((prev) =>
+                prev?.url === url && prev?.code === (recentDeviceCodeRef.current ?? undefined)
+                  ? prev
+                  : { url, code: recentDeviceCodeRef.current ?? undefined }
+              );
+            }
+            if (/Authentication complete|Logged in as|Logged in to github\.com/i.test(rolling)) {
+              recentDeviceCodeRef.current = null;
+              recentTextRef.current = "";
+              setExternalLink(null);
+              appRuntime.runFork(Effect.flatMap(GithubAuthService, (g) => g.checkAuth()));
             }
             term.write(value, () => renderer.markDirty());
           }
@@ -588,6 +648,37 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
 
       {/* WebGPU / Kitty HUD badge */}
       <div className="pointer-events-none absolute bottom-2 right-2.5 flex items-center gap-1.5 text-[10px] font-mono">
+        {externalLink && (
+          <div className="pointer-events-auto flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full bg-violet-600/90 border border-violet-300/40 text-white shadow-lg shadow-violet-950/50 backdrop-blur-md">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (externalLink.code) {
+                  navigator.clipboard.writeText(externalLink.code).catch(() => {});
+                }
+                window.open(externalLink.url, "_blank", "noopener,noreferrer");
+              }}
+              className="flex items-center gap-1 hover:underline cursor-pointer"
+            >
+              <ExternalLink className="w-2.5 h-2.5" />
+              {externalLink.code
+                ? `Copy ${externalLink.code} & Open GitHub`
+                : `Open ${externalLink.url.replace(/^https?:\/\//, "").slice(0, 28)}`}
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExternalLink(null);
+              }}
+              className="p-0.5 rounded-full hover:bg-white/20 cursor-pointer"
+              title="Dismiss"
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          </div>
+        )}
         {detectedUrl && (
           <button
             type="button"

@@ -150,12 +150,19 @@ export interface WindowInstance {
   readonly props?: Record<string, unknown>;
 }
 
+export interface ToastAction {
+  readonly label: string;
+  readonly url: string;
+  readonly copyText?: string;
+}
+
 export interface ToastItem {
   readonly id: string;
   readonly title: string;
   readonly message: string;
   readonly level: "info" | "success" | "warn" | "error";
   readonly createdAt: number;
+  readonly action?: ToastAction;
 }
 
 interface WmState {
@@ -339,11 +346,16 @@ class WindowManagerStore {
     this.setState((s) => ({ ...s, activeWorkspaceDir: dir }));
   }
 
-  public pushToast(title: string, message: string, level: ToastItem["level"] = "info"): void {
+  public pushToast(
+    title: string,
+    message: string,
+    level: ToastItem["level"] = "info",
+    action?: ToastAction
+  ): void {
     const id = Math.random().toString(36).slice(2, 9);
-    const toast: ToastItem = { id, title, message, level, createdAt: Date.now() };
+    const toast: ToastItem = { id, title, message, level, createdAt: Date.now(), action };
     this.setState((s) => ({ ...s, toasts: [...s.toasts.slice(-4), toast] }));
-    setTimeout(() => this.dismissToast(id), 5200);
+    setTimeout(() => this.dismissToast(id), action ? 15000 : 5200);
   }
 
   public dismissToast(id: string): void {

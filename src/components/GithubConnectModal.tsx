@@ -202,9 +202,24 @@ export const GithubConnectModal: React.FC = () => {
                       </div>
                     </div>
                   ) : auth.status === "requesting" || auth.status === "verifying" ? (
-                    <div className="py-8 flex flex-col items-center gap-3 text-center">
+                    <div className="py-6 flex flex-col items-center gap-3 text-center">
                       <Loader2 className="w-7 h-7 text-violet-400 animate-spin" />
-                      <p className="text-xs text-zinc-300">{auth.output || "Contacting GitHub..."}</p>
+                      <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words max-h-28 overflow-y-auto">
+                        {auth.output || "Contacting GitHub..."}
+                      </p>
+                      {auth.status === "requesting" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            appRuntime.runFork(
+                              Effect.flatMap(GithubAuthService, (g) => g.cancelDeviceFlow())
+                            )
+                          }
+                          className="px-3 py-1 rounded-lg text-[11px] bg-white/8 hover:bg-white/15 border border-white/12 text-zinc-300 transition"
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3">

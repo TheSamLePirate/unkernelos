@@ -233,6 +233,7 @@ export const VmLive = Layer.effect(
           'export PATH="$HOME/.bun/bin:$HOME/.local/bin:/usr/local/bin:$PATH"',
           'export TERM="xterm-256color"',
           'export COLORTERM="truecolor"',
+          'export BROWSER="$HOME/.local/bin/unkernel-open"',
         ];
         if (creds.anthropicApiKey) lines.push(`export ANTHROPIC_API_KEY=${shellQuote(creds.anthropicApiKey)}`);
         if (creds.openaiApiKey) lines.push(`export OPENAI_API_KEY=${shellQuote(creds.openaiApiKey)}`);
@@ -259,6 +260,19 @@ export const VmLive = Layer.effect(
 
         const script = [
           `mkdir -p "$HOME/workspace" "$HOME/.local/bin"`,
+          `cat <<'UNKERNEL_OPEN_EOF' > "$HOME/.local/bin/unkernel-open"`,
+          `#!/bin/sh`,
+          `URL="$1"`,
+          `[ -z "$URL" ] && exit 0`,
+          `if [ -w /dev/tty ]; then`,
+          `  printf '\\033]9999;open;%s\\007' "$URL" > /dev/tty 2>/dev/null || printf '\\033]9999;open;%s\\007' "$URL"`,
+          `else`,
+          `  printf '\\033]9999;open;%s\\007' "$URL"`,
+          `fi`,
+          `UNKERNEL_OPEN_EOF`,
+          `chmod +x "$HOME/.local/bin/unkernel-open"`,
+          `cp -f "$HOME/.local/bin/unkernel-open" /tmp/unkernel-open 2>/dev/null && chmod +x /tmp/unkernel-open 2>/dev/null || true`,
+          `ln -sf "$HOME/.local/bin/unkernel-open" "$HOME/.local/bin/xdg-open"`,
           `cat <<'UNKERNEL_ENV_EOF' > "$HOME/.unkernelos_env"`,
           envContent,
           `UNKERNEL_ENV_EOF`,

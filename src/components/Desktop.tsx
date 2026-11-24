@@ -198,9 +198,23 @@ export const Desktop: React.FC = () => {
                 : "border-white/15"
             }`}
           >
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-white">{t.title}</div>
               <div className="text-[11px] text-zinc-300 mt-0.5 break-words">{t.message}</div>
+              {t.action && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (t.action?.copyText) {
+                      navigator.clipboard.writeText(t.action.copyText).catch(() => {});
+                    }
+                    window.open(t.action!.url, "_blank", "noopener,noreferrer");
+                  }}
+                  className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:brightness-110 transition cursor-pointer"
+                >
+                  {t.action.label} ↗
+                </button>
+              )}
             </div>
             <button
               type="button"
