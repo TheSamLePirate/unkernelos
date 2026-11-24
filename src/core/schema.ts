@@ -18,6 +18,31 @@ export type FbScalingMode = typeof FbScalingSchema.Type;
 export const AgentKindSchema = Schema.Literal("claude", "pi");
 export type AgentKind = typeof AgentKindSchema.Type;
 
+export const ClaudeEffortSchema = Schema.Literal("default", "low", "medium", "high", "xhigh", "max");
+export type ClaudeEffort = typeof ClaudeEffortSchema.Type;
+
+export const ClaudePermissionModeSchema = Schema.Literal(
+  "default",
+  "auto",
+  "acceptEdits",
+  "plan",
+  "dontAsk",
+  "bypassPermissions"
+);
+export type ClaudePermissionMode = typeof ClaudePermissionModeSchema.Type;
+
+export const PiThinkingSchema = Schema.Literal(
+  "default",
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max"
+);
+export type PiThinking = typeof PiThinkingSchema.Type;
+
 export const UnkernelConfigSchema = Schema.Struct({
   // Distribution & Boot
   distro: DistroSchema,
@@ -75,6 +100,15 @@ export const CredentialsSchema = Schema.Struct({
   gitUserName: Schema.String,
   gitUserEmail: Schema.String,
   defaultAgent: AgentKindSchema,
+  claudeModel: Schema.String,
+  claudeEffort: ClaudeEffortSchema,
+  claudePermissionMode: ClaudePermissionModeSchema,
+  claudeContinue: Schema.Boolean,
+  piProvider: Schema.String,
+  piModel: Schema.String,
+  piThinking: PiThinkingSchema,
+  piContinue: Schema.Boolean,
+  piApprove: Schema.Boolean,
 });
 
 export type CredentialsConfig = typeof CredentialsSchema.Type;
@@ -134,4 +168,13 @@ export const DEFAULT_CREDENTIALS: CredentialsConfig = {
   gitUserName: "",
   gitUserEmail: "",
   defaultAgent: "claude",
+  claudeModel: "",
+  claudeEffort: "default",
+  claudePermissionMode: "default",
+  claudeContinue: false,
+  piProvider: "",
+  piModel: "",
+  piThinking: "default",
+  piContinue: false,
+  piApprove: false,
 };

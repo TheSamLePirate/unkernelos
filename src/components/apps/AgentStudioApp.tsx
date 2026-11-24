@@ -1,6 +1,9 @@
 import { Effect } from "effect";
 import {
+  Activity,
   Bot,
+  Brain,
+  Cpu,
   ExternalLink,
   FolderPlus,
   GitBranch,
@@ -8,11 +11,13 @@ import {
   Play,
   RefreshCw,
   Rocket,
+  RotateCcw,
   Send,
+  Shield,
   Sparkles,
   Wrench,
 } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   appRuntime,
   GitService,
@@ -24,6 +29,10 @@ import {
   DEFAULT_CREDENTIALS,
   DEFAULT_UNKERNEL_CONFIG,
   type AgentKind,
+  type ClaudeEffort,
+  type ClaudePermissionMode,
+  type CredentialsConfig,
+  type PiThinking,
 } from "../../core/schema.ts";
 import { wmStore } from "../../wm/wm-store.ts";
 import { KittyTerminalPane, type KittyTerminalHandle } from "./KittyTerminalPane.tsx";
@@ -50,6 +59,111 @@ const PROMPT_TEMPLATES = [
       "Design and build a static AAA developer portfolio website ready for GitHub Pages (index.html, styles.css, app.js) with dark glass cards, project showcase and animations. Start a dev server on port 3000.",
   },
 ];
+
+const CLAUDE_MODELS: readonly { value: string; label: string }[] = [
+  { value: "", label: "Default (Auto)" },
+  { value: "sonnet", label: "Claude Sonnet (latest)" },
+  { value: "opus", label: "Claude Opus (latest)" },
+  { value: "haiku", label: "Claude Haiku (fast)" },
+  { value: "__custom__", label: "Custom model ID..." },
+];
+
+const CLAUDE_EFFORTS: readonly { value: ClaudeEffort; label: string }[] = [
+  { value: "default", label: "Thinking: Default" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "XHigh" },
+  { value: "max", label: "Max" },
+];
+
+const CLAUDE_PERMISSIONS: readonly { value: ClaudePermissionMode; label: string }[] = [
+  { value: "default", label: "Perms: Default" },
+  { value: "auto", label: "Auto" },
+  { value: "acceptEdits", label: "Accept Edits" },
+  { value: "plan", label: "Plan Only" },
+  { value: "dontAsk", label: "Don't Ask" },
+  { value: "bypassPermissions", label: "Bypass All" },
+];
+
+const PI_PROVIDERS: readonly { value: string; label: string }[] = [
+  { value: "", label: "Provider: Auto" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "openai", label: "OpenAI" },
+  { value: "google", label: "Google Gemini" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "xai", label: "xAI" },
+  { value: "groq", label: "Groq" },
+];
+
+const PI_MODELS: readonly { value: string; label: string }[] = [
+  { value: "", label: "Model: Default" },
+  { value: "claude-sonnet-4-6", label: "claude-sonnet-4-6" },
+  { value: "claude-opus-4-6", label: "claude-opus-4-6" },
+  { value: "claude-haiku-4-5", label: "claude-haiku-4-5" },
+  { value: "gpt-5.4", label: "gpt-5.4" },
+  { value: "gpt-5", label: "gpt-5" },
+  { value: "o3", label: "o3" },
+  { value: "gemini-2.5-pro", label: "gemini-2.5-pro" },
+  { value: "gemini-2.5-flash", label: "gemini-2.5-flash" },
+  { value: "__custom__", label: "Custom model..." },
+];
+
+const PI_THINKING_LEVELS: readonly { value: PiThinking; label: string }[] = [
+  { value: "default", label: "Thinking: Default" },
+  { value: "off", label: "Off" },
+  { value: "minimal", label: "Minimal" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "XHigh" },
+  { value: "max", label: "Max" },
+];
+
+const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+function buildAgentCliCommand(agent: AgentKind, creds: CredentialsConfig, promptText?: string): string {
+  const parts: string[] = [];
+
+  if (agent === "claude") {
+    parts.push("claude");
+    if (creds.claudeModel.trim()) {
+      parts.push("--model", sq(creds.claudeModel.trim()));
+    }
+    if (creds.claudeEffort !== "default") {
+      parts.push("--effort", creds.claudeEffort);
+    }
+    if (creds.claudePermissionMode !== "default") {
+      parts.push("--permission-mode", creds.claudePermissionMode);
+    }
+    if (creds.claudeContinue) {
+      parts.push("--continue");
+    }
+  } else {
+    parts.push("pi");
+    if (creds.piProvider.trim()) {
+      parts.push("--provider", sq(creds.piProvider.trim()));
+    }
+    if (creds.piModel.trim()) {
+      parts.push("--model", sq(creds.piModel.trim()));
+    }
+    if (creds.piThinking !== "default") {
+      parts.push("--thinking", creds.piThinking);
+    }
+    if (creds.piContinue) {
+      parts.push("--continue");
+    }
+    if (creds.piApprove) {
+      parts.push("--approve");
+    }
+  }
+
+  if (promptText && promptText.trim()) {
+    parts.push(sq(promptText.trim()));
+  }
+
+  return parts.join(" ");
+}
 
 export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocused = true }) => {
   const cfg = useSubscriptionRef(
@@ -94,11 +208,33 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [deploying, setDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
+  const [deployedActionsUrl, setDeployedActionsUrl] = useState<string | null>(null);
   const [deployError, setDeployError] = useState<string | null>(null);
+
+  const isCustomClaudeModel =
+    Boolean(creds.claudeModel) &&
+    !CLAUDE_MODELS.some((m) => m.value !== "__custom__" && m.value === creds.claudeModel);
+  const isCustomPiModel =
+    Boolean(creds.piModel) &&
+    !PI_MODELS.some((m) => m.value !== "__custom__" && m.value === creds.piModel);
+
+  const [customClaudeInput, setCustomClaudeInput] = useState(isCustomClaudeModel);
+  const [customPiInput, setCustomPiInput] = useState(isCustomPiModel);
 
   const termHandleRef = useRef<KittyTerminalHandle | null>(null);
 
   const workspaceDir = `/home/user/workspace/${projectName.replace(/[^a-zA-Z0-9._-]/g, "-") || "my-ai-app"}`;
+
+  const updateCreds = (patch: Partial<CredentialsConfig>) => {
+    appRuntime.runFork(Effect.flatMap(SettingsService, (s) => s.updateCredentials(patch)));
+  };
+
+  const cliPreview = useMemo(() => buildAgentCliCommand(agent, creds), [agent, creds]);
+
+  // Keep active workspace synced for File Explorer & Git app
+  useEffect(() => {
+    wmStore.setWorkspaceDir(workspaceDir);
+  }, [workspaceDir]);
 
   // Auto-select first detected listening port from the guest VM!
   useEffect(() => {
@@ -143,16 +279,12 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
     if (!text || !termHandleRef.current) return;
 
     wmStore.setWorkspaceDir(workspaceDir);
-    const escaped = text.replace(/'/g, `'\\''`);
-    const agentCmd =
-      agent === "claude"
-        ? `claude '${escaped}'`
-        : `pi '${escaped}'`;
+    const agentCmd = buildAgentCliCommand(agent, creds, text);
 
     const fullCmd = [
-      `mkdir -p '${workspaceDir}' && cd '${workspaceDir}'`,
+      `mkdir -p ${sq(workspaceDir)} && cd ${sq(workspaceDir)}`,
       `[ -f "$HOME/.unkernelos_env" ] && . "$HOME/.unkernelos_env"`,
-      `export PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH"`,
+      `export PATH="$HOME/.bun/bin:$HOME/.local/bin:/usr/local/bin:$PATH"`,
       agentCmd,
     ].join(" && ");
 
@@ -163,11 +295,12 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
   const launchInteractiveAgent = () => {
     if (!termHandleRef.current) return;
     wmStore.setWorkspaceDir(workspaceDir);
+    const agentCmd = buildAgentCliCommand(agent, creds);
     const fullCmd = [
-      `mkdir -p '${workspaceDir}' && cd '${workspaceDir}'`,
+      `mkdir -p ${sq(workspaceDir)} && cd ${sq(workspaceDir)}`,
       `[ -f "$HOME/.unkernelos_env" ] && . "$HOME/.unkernelos_env"`,
-      `export PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH"`,
-      agent === "claude" ? "claude" : "pi",
+      `export PATH="$HOME/.bun/bin:$HOME/.local/bin:/usr/local/bin:$PATH"`,
+      agentCmd,
     ].join(" && ");
     termHandleRef.current.write(`${fullCmd}\n`);
     termHandleRef.current.focus();
@@ -194,7 +327,11 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
       wmStore.pushToast("GitHub Pages Deploy Failed", res.left.message, "error");
     } else {
       setDeployedUrl(res.right.pagesUrl);
-      wmStore.pushToast("GitHub Pages Deployed!", res.right.pagesUrl, "success");
+      setDeployedActionsUrl(res.right.actionsUrl);
+      wmStore.pushToast("GitHub Pages Deployed!", res.right.pagesUrl, "success", {
+        label: "Open Pages",
+        url: res.right.pagesUrl,
+      });
     }
   };
 
@@ -207,12 +344,15 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
     <div className="flex flex-col w-full h-full bg-[#0a0c13]/92">
       {/* Top Workflow Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-black/40 border-b border-white/10 shrink-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Agent Selector */}
           <div className="flex items-center bg-white/5 p-0.5 rounded-lg border border-white/10">
             <button
               type="button"
-              onClick={() => setAgent("claude")}
+              onClick={() => {
+                setAgent("claude");
+                updateCreds({ defaultAgent: "claude" });
+              }}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
                 agent === "claude"
                   ? "bg-gradient-to-r from-orange-500/80 to-amber-500/80 text-white shadow"
@@ -224,7 +364,10 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             </button>
             <button
               type="button"
-              onClick={() => setAgent("pi")}
+              onClick={() => {
+                setAgent("pi");
+                updateCreds({ defaultAgent: "pi" });
+              }}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
                 agent === "pi"
                   ? "bg-gradient-to-r from-violet-500/80 to-cyan-500/80 text-white shadow"
@@ -302,6 +445,202 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
         </div>
       </div>
 
+      {/* Harness Options Bar (Model, Thinking/Effort, Permissions, Provider, Session flags) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-black/25 border-b border-white/8 shrink-0">
+        {agent === "claude" ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Claude Model */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10">
+              <Cpu className="w-3 h-3 text-orange-400 shrink-0" />
+              <select
+                aria-label="Claude Model"
+                value={customClaudeInput ? "__custom__" : creds.claudeModel}
+                onChange={(e) => {
+                  if (e.target.value === "__custom__") {
+                    setCustomClaudeInput(true);
+                  } else {
+                    setCustomClaudeInput(false);
+                    updateCreds({ claudeModel: e.target.value });
+                  }
+                }}
+                className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
+              >
+                {CLAUDE_MODELS.map((m) => (
+                  <option key={m.value} value={m.value} className="bg-[#12141f] text-zinc-100">
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              {customClaudeInput && (
+                <input
+                  value={creds.claudeModel}
+                  onChange={(e) => updateCreds({ claudeModel: e.target.value })}
+                  placeholder="claude-opus-4-7"
+                  className="w-32 px-1.5 py-0.5 rounded bg-black/50 border border-white/15 text-[11px] font-mono text-zinc-100 outline-none"
+                />
+              )}
+            </div>
+
+            {/* Claude Thinking / Effort */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10">
+              <Brain className="w-3 h-3 text-fuchsia-400 shrink-0" />
+              <select
+                aria-label="Claude Thinking Effort"
+                value={creds.claudeEffort}
+                onChange={(e) => updateCreds({ claudeEffort: e.target.value as ClaudeEffort })}
+                className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
+              >
+                {CLAUDE_EFFORTS.map((ef) => (
+                  <option key={ef.value} value={ef.value} className="bg-[#12141f] text-zinc-100">
+                    {ef.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Claude Permission Mode */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10">
+              <Shield className="w-3 h-3 text-amber-400 shrink-0" />
+              <select
+                aria-label="Claude Permission Mode"
+                value={creds.claudePermissionMode}
+                onChange={(e) =>
+                  updateCreds({ claudePermissionMode: e.target.value as ClaudePermissionMode })
+                }
+                className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
+              >
+                {CLAUDE_PERMISSIONS.map((pm) => (
+                  <option key={pm.value} value={pm.value} className="bg-[#12141f] text-zinc-100">
+                    {pm.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Continue Session */}
+            <button
+              type="button"
+              onClick={() => updateCreds({ claudeContinue: !creds.claudeContinue })}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] border transition ${
+                creds.claudeContinue
+                  ? "bg-orange-500/20 border-orange-400/40 text-orange-200"
+                  : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200"
+              }`}
+              title="Continue most recent conversation (--continue)"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Continue
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Pi Provider */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10">
+              <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
+              <select
+                aria-label="Pi Provider"
+                value={creds.piProvider}
+                onChange={(e) => updateCreds({ piProvider: e.target.value })}
+                className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
+              >
+                {PI_PROVIDERS.map((p) => (
+                  <option key={p.value} value={p.value} className="bg-[#12141f] text-zinc-100">
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pi Model */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10">
+              <Cpu className="w-3 h-3 text-violet-400 shrink-0" />
+              <select
+                aria-label="Pi Model"
+                value={customPiInput ? "__custom__" : creds.piModel}
+                onChange={(e) => {
+                  if (e.target.value === "__custom__") {
+                    setCustomPiInput(true);
+                  } else {
+                    setCustomPiInput(false);
+                    updateCreds({ piModel: e.target.value });
+                  }
+                }}
+                className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
+              >
+                {PI_MODELS.map((m) => (
+                  <option key={m.value} value={m.value} className="bg-[#12141f] text-zinc-100">
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              {customPiInput && (
+                <input
+                  value={creds.piModel}
+                  onChange={(e) => updateCreds({ piModel: e.target.value })}
+                  placeholder="provider/model-id"
+                  className="w-36 px-1.5 py-0.5 rounded bg-black/50 border border-white/15 text-[11px] font-mono text-zinc-100 outline-none"
+                />
+              )}
+            </div>
+
+            {/* Pi Thinking Level */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10">
+              <Brain className="w-3 h-3 text-fuchsia-400 shrink-0" />
+              <select
+                aria-label="Pi Thinking Level"
+                value={creds.piThinking}
+                onChange={(e) => updateCreds({ piThinking: e.target.value as PiThinking })}
+                className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
+              >
+                {PI_THINKING_LEVELS.map((lv) => (
+                  <option key={lv.value} value={lv.value} className="bg-[#12141f] text-zinc-100">
+                    {lv.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pi Continue */}
+            <button
+              type="button"
+              onClick={() => updateCreds({ piContinue: !creds.piContinue })}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] border transition ${
+                creds.piContinue
+                  ? "bg-violet-500/20 border-violet-400/40 text-violet-200"
+                  : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200"
+              }`}
+              title="Continue most recent session (--continue)"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Continue
+            </button>
+
+            {/* Pi Approve */}
+            <button
+              type="button"
+              onClick={() => updateCreds({ piApprove: !creds.piApprove })}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] border transition ${
+                creds.piApprove
+                  ? "bg-cyan-500/20 border-cyan-400/40 text-cyan-200"
+                  : "bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200"
+              }`}
+              title="Trust project-local files for this run (--approve)"
+            >
+              <Shield className="w-3 h-3" />
+              Approve
+            </button>
+          </div>
+        )}
+
+        {/* Exact CLI Invocation Preview */}
+        <code
+          title={cliPreview}
+          className="hidden xl:inline-block max-w-[320px] truncate px-2 py-0.5 rounded bg-black/50 border border-white/8 text-[10px] font-mono text-zinc-400"
+        >
+          $ {cliPreview}
+        </code>
+      </div>
+
       {/* Prompt Composer Bar */}
       <div className="px-3 py-2.5 bg-white/[0.025] border-b border-white/8 shrink-0 space-y-2">
         <div className="flex items-center gap-2">
@@ -329,7 +668,7 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
           <button
             type="button"
             onClick={launchInteractiveAgent}
-            title="Start Interactive Agent Session"
+            title="Start Interactive Agent Session with selected options"
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-white/8 hover:bg-white/14 border border-white/12 text-zinc-200 transition"
           >
             <Play className="w-3.5 h-3.5 text-emerald-400" />
@@ -353,21 +692,34 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             ))}
           </div>
 
-          {deployedUrl && (
-            <a
-              href={deployedUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 hover:bg-emerald-500/25"
-            >
-              <Globe className="w-3 h-3" />
-              Live: {deployedUrl}
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
-          {deployError && (
-            <span className="text-[11px] text-rose-400 truncate max-w-md">{deployError}</span>
-          )}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {deployedUrl && (
+              <a
+                href={deployedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 hover:bg-emerald-500/25"
+              >
+                <Globe className="w-3 h-3" />
+                Live: {deployedUrl}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+            {deployedActionsUrl && (
+              <a
+                href={deployedActionsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-cyan-500/12 border border-cyan-400/30 text-cyan-300 hover:bg-cyan-500/20"
+              >
+                <Activity className="w-3 h-3" />
+                Actions
+              </a>
+            )}
+            {deployError && (
+              <span className="text-[11px] text-rose-400 truncate max-w-md">{deployError}</span>
+            )}
+          </div>
         </div>
       </div>
 

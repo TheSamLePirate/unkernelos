@@ -1,13 +1,19 @@
 import { Effect } from "effect";
 import {
+  Activity,
   CheckCircle2,
+  DownloadCloud,
   ExternalLink,
   FolderGit2,
   GitBranch,
   GitCommit,
   Globe,
+  Link2,
+  Lock,
+  PlusCircle,
   RefreshCw,
   Rocket,
+  Unlock,
   UploadCloud,
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
@@ -33,13 +39,16 @@ export const GitApp: React.FC = () => {
   const [diff, setDiff] = useState("");
   const [selectedDiffFile, setSelectedDiffFile] = useState<string | undefined>(undefined);
   const [commitMsg, setCommitMsg] = useState("Update app from unkernelOS");
-  const [repoName, setRepoName] = useState(() => repoDir.split("/").pop() || "unkernelos-app");
+  const [repoName, setRepoName] = useState(() => repoDir.split("/").filter(Boolean).pop() || "unkernelos-app");
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [remoteInput, setRemoteInput] = useState("");
   const [cloneUrl, setCloneUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
   const [pagesUrl, setPagesUrl] = useState<string | null>(null);
+  const [actionsUrl, setActionsUrl] = useState<string | null>(null);
 
-  const refresh = useCallback(async (dir = repoDir) => {
+  const refresh = useCallback(async (dir = repoDir, diffFile = selectedDiffFile) => {
     setBusy(true);
     const res = await appRuntime.runPromise(
       Effect.either(Effect.flatMap(GitService, (g) => g.getStatus(dir)))
@@ -48,20 +57,46 @@ export const GitApp: React.FC = () => {
     if (res._tag === "Right") {
       setState(res.right);
       if (res.right.pagesUrl) setPagesUrl(res.right.pagesUrl);
+      if (res.right.actionsUrl) setActionsUrl(res.right.actionsUrl);
       if (res.right.isRepo) {
         const d = await appRuntime.runPromise(
-          Effect.either(Effect.flatMap(GitService, (g) => g.getDiff(dir, selectedDiffFile)))
+          Effect.either(Effect.flatMap(GitService, (g) => g.getDiff(dir, diffFile)))
         );
         if (d._tag === "Right") setDiff(d.right);
+      } else {
+        setDiff("");
       }
     } else {
       setOutput(`Error: ${res.left.message}`);
     }
   }, [repoDir, selectedDiffFile]);
 
+  // Sync directory when user switches project in Agent Studio or File Explorer
   useEffect(() => {
-    void refresh(repoDir);
+    if (wm.activeWorkspaceDir && wm.activeWorkspaceDir !== repoDir) {
+      setRepoDir(wm.activeWorkspaceDir);
+      const name = wm.activeWorkspaceDir.split("/").filter(Boolean).pop();
+      if (name) setRepoName(name);
+      setSelectedDiffFile(undefined);
+      void refresh(wm.activeWorkspaceDir, undefined);
+    }
+  }, [wm.activeWorkspaceDir]);
+
+  useEffect(() => {
+    void refresh(repoDir, selectedDiffFile);
   }, []);
+
+  // Refresh diff whenever user selects a specific changed file
+  useEffect(() => {
+    if (!state?.isRepo) return;
+    void appRuntime
+      .runPromise(
+        Effect.either(Effect.flatMap(GitService, (g) => g.getDiff(repoDir, selectedDiffFile)))
+      )
+      .then((d) => {
+        if (d._tag === "Right") setDiff(d.right);
+      });
+  }, [selectedDiffFile, repoDir, state?.isRepo]);
 
   const runAction = async (label: string, eff: Effect.Effect<unknown, { message: string }, GitService>) => {
     setBusy(true);
@@ -73,7 +108,8 @@ export const GitApp: React.FC = () => {
       wmStore.pushToast(`Git ${label} Failed`, res.left.message, "error");
     } else {
       setOutput(typeof res.right === "string" ? res.right || `${label} succeeded.` : `${label} succeeded.`);
-      await refresh(repoDir);
+      wmStore.pushToast(`Git ${label}`, typeof res.right === "string" ? res.right.slice(0, 120) || "Success" : "Success", "success");
+      await refresh(repoDir, selectedDiffFile);
     }
   };
 
@@ -82,7 +118,9 @@ export const GitApp: React.FC = () => {
     setOutput("Initializing repo, adding GitHub Pages workflow, pushing & activating Pages...");
     const res = await appRuntime.runPromise(
       Effect.either(
-        Effect.flatMap(GitService, (g) => g.deployToGitHubPages(repoDir, repoName, commitMsg))
+        Effect.flatMap(GitService, (g) =>
+          g.deployToGitHubPages(repoDir, repoName, commitMsg, isPrivate)
+        )
       )
     );
     setBusy(false);
@@ -91,10 +129,15 @@ export const GitApp: React.FC = () => {
       wmStore.pushToast("GitHub Pages Error", res.left.message, "error");
     } else {
       setPagesUrl(res.right.pagesUrl);
-      setOutput(`Published!\nRepo: ${res.right.repoUrl}\nPages: ${res.right.pagesUrl}\n\n${res.right.output}`);
-      await refresh(repoDir);
+      setActionsUrl(res.right.actionsUrl);
+      setOutput(
+        `Published!\nRepo: ${res.right.repoUrl}\nPages: ${res.right.pagesUrl}\nActions: ${res.right.actionsUrl}\n\n${res.right.output}`
+      );
+      await refresh(repoDir, selectedDiffFile);
     }
   };
+
+  const isGithubConnected = ghAuth.status === "authenticated" || Boolean(creds.githubToken);
 
   return (
     <div className="flex flex-col w-full h-full bg-[#0a0c13]/94">
@@ -109,12 +152,12 @@ export const GitApp: React.FC = () => {
               const name = e.target.value.split("/").filter(Boolean).pop();
               if (name) setRepoName(name);
             }}
-            onKeyDown={(e) => e.key === "Enter" && refresh(repoDir)}
+            onKeyDown={(e) => e.key === "Enter" && refresh(repoDir, selectedDiffFile)}
             className="flex-1 px-2.5 py-1 rounded-lg bg-black/50 border border-white/12 text-xs font-mono text-zinc-100 outline-none"
           />
           <button
             type="button"
-            onClick={() => refresh(repoDir)}
+            onClick={() => refresh(repoDir, selectedDiffFile)}
             className="p-1.5 rounded-lg bg-white/8 hover:bg-white/14 text-zinc-300"
             title="Refresh Git Status"
           >
@@ -206,14 +249,61 @@ export const GitApp: React.FC = () => {
           ) : (
             <>
               {/* Branch & Remote */}
-              <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-white/[0.03] border border-white/10">
-                <span className="flex items-center gap-1.5 font-mono text-orange-300">
-                  <GitBranch className="w-3.5 h-3.5" />
-                  {state.branch}
-                </span>
-                <span className="text-[11px] text-zinc-400 truncate max-w-[200px]">
-                  {state.remoteUrl ?? "No remote yet"}
-                </span>
+              <div className="space-y-2 p-3 rounded-xl bg-white/[0.03] border border-white/10">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 font-mono text-orange-300">
+                    <GitBranch className="w-3.5 h-3.5" />
+                    {state.branch}
+                  </span>
+                  <span className="text-[11px] text-zinc-400 truncate max-w-[210px]" title={state.remoteUrl ?? ""}>
+                    {state.remoteUrl ?? "No origin remote"}
+                  </span>
+                </div>
+
+                {!state.remoteUrl && (
+                  <div className="pt-2 border-t border-white/8 space-y-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        if (!isGithubConnected) {
+                          wmStore.setGithubModal(true);
+                          return;
+                        }
+                        void runAction(
+                          "create-repo",
+                          Effect.flatMap(GitService, (g) => g.createGithubRepo(repoDir, repoName, isPrivate))
+                        );
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium bg-violet-500/20 hover:bg-violet-500/30 border border-violet-400/35 text-violet-200 transition"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      Create GitHub Repo &amp; Link origin ({repoName})
+                    </button>
+                    <div className="flex gap-1.5">
+                      <input
+                        value={remoteInput}
+                        onChange={(e) => setRemoteInput(e.target.value)}
+                        placeholder="or paste https://github.com/user/repo.git"
+                        className="flex-1 px-2 py-1 rounded-lg bg-black/50 border border-white/10 text-[11px] font-mono text-zinc-200 outline-none"
+                      />
+                      <button
+                        type="button"
+                        disabled={!remoteInput.trim() || busy}
+                        onClick={() =>
+                          runAction(
+                            "set-remote",
+                            Effect.flatMap(GitService, (g) => g.setRemote(repoDir, remoteInput))
+                          )
+                        }
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-white/10 hover:bg-white/15 text-white disabled:opacity-40"
+                      >
+                        <Link2 className="w-3 h-3" />
+                        Set
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Changed Files */}
@@ -246,15 +336,23 @@ export const GitApp: React.FC = () => {
                 )}
               </div>
 
-              {/* Commit & Push */}
+              {/* Commit, Push & Pull */}
               <div className="space-y-2 pt-2 border-t border-white/8">
                 <input
                   value={commitMsg}
                   onChange={(e) => setCommitMsg(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && commitMsg.trim() && !busy) {
+                      void runAction(
+                        "commit",
+                        Effect.flatMap(GitService, (g) => g.commit(repoDir, commitMsg))
+                      );
+                    }
+                  }}
                   placeholder="Commit message..."
                   className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/12 text-xs text-zinc-100 outline-none"
                 />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     disabled={busy || !commitMsg.trim()}
@@ -264,10 +362,10 @@ export const GitApp: React.FC = () => {
                         Effect.flatMap(GitService, (g) => g.commit(repoDir, commitMsg))
                       )
                     }
-                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/16 text-white disabled:opacity-40"
+                    className="flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/16 text-white disabled:opacity-40"
                   >
                     <GitCommit className="w-3.5 h-3.5" />
-                    Commit All
+                    Commit
                   </button>
                   <button
                     type="button"
@@ -275,10 +373,21 @@ export const GitApp: React.FC = () => {
                     onClick={() =>
                       runAction("push", Effect.flatMap(GitService, (g) => g.push(repoDir)))
                     }
-                    className="flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-medium bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/30 text-cyan-200 disabled:opacity-40"
+                    className="flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-medium bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/30 text-cyan-200 disabled:opacity-40"
                   >
                     <UploadCloud className="w-3.5 h-3.5" />
                     Push
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !state.remoteUrl}
+                    onClick={() =>
+                      runAction("pull", Effect.flatMap(GitService, (g) => g.pull(repoDir)))
+                    }
+                    className="flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-medium bg-white/6 hover:bg-white/12 border border-white/10 text-zinc-300 disabled:opacity-40"
+                  >
+                    <DownloadCloud className="w-3.5 h-3.5" />
+                    Pull
                   </button>
                 </div>
               </div>
@@ -287,12 +396,23 @@ export const GitApp: React.FC = () => {
 
           {/* 1-Click GitHub Pages Publisher */}
           <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/12 to-teal-500/5 border border-emerald-400/25 space-y-2.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
-              <Rocket className="w-4 h-4" />
-              GitHub Pages Hosting (1-Click)
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
+                <Rocket className="w-4 h-4" />
+                GitHub Pages Hosting (1-Click)
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPrivate((v) => !v)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-black/40 border border-white/12 text-zinc-300 hover:text-white transition"
+                title="Repository visibility"
+              >
+                {isPrivate ? <Lock className="w-2.5 h-2.5 text-amber-400" /> : <Unlock className="w-2.5 h-2.5 text-emerald-400" />}
+                {isPrivate ? "Private" : "Public"}
+              </button>
             </div>
             <p className="text-[11px] text-zinc-400 leading-relaxed">
-              Automatically creates a GitHub repository via <code>gh</code>, adds a GitHub Actions Pages workflow, commits, pushes, and activates GitHub Pages.
+              Automatically initializes git, writes <code>.gitignore</code> &amp; <code>pages.yml</code>, creates the GitHub repo, pushes <code>main</code>, and enables GitHub Pages.
             </p>
             <input
               value={repoName}
@@ -303,22 +423,46 @@ export const GitApp: React.FC = () => {
             <button
               type="button"
               disabled={busy}
-              onClick={handleDeployPages}
+              onClick={() => {
+                if (!isGithubConnected) {
+                  wmStore.setGithubModal(true);
+                  return;
+                }
+                void handleDeployPages();
+              }}
               className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:brightness-110 disabled:opacity-45 shadow-lg shadow-emerald-500/20 transition"
             >
               <Globe className="w-3.5 h-3.5" />
               {busy ? "Deploying..." : "Commit, Push & Host on GitHub Pages"}
             </button>
-            {pagesUrl && (
-              <a
-                href={pagesUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/40 border border-emerald-400/30 text-[11px] font-mono text-emerald-300 hover:bg-black/60"
-              >
-                <span className="truncate">{pagesUrl}</span>
-                <ExternalLink className="w-3 h-3 shrink-0 ml-2" />
-              </a>
+            {(pagesUrl || actionsUrl) && (
+              <div className="space-y-1.5">
+                {pagesUrl && (
+                  <a
+                    href={pagesUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/40 border border-emerald-400/30 text-[11px] font-mono text-emerald-300 hover:bg-black/60"
+                  >
+                    <span className="truncate">{pagesUrl}</span>
+                    <ExternalLink className="w-3 h-3 shrink-0 ml-2" />
+                  </a>
+                )}
+                {actionsUrl && (
+                  <a
+                    href={actionsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-black/30 border border-white/10 text-[10px] font-mono text-zinc-300 hover:text-white hover:bg-black/50"
+                  >
+                    <span className="flex items-center gap-1.5 truncate">
+                      <Activity className="w-3 h-3 text-cyan-400 shrink-0" />
+                      GitHub Actions Deploy Log
+                    </span>
+                    <ExternalLink className="w-2.5 h-2.5 shrink-0 ml-2" />
+                  </a>
+                )}
+              </div>
             )}
           </div>
 
@@ -370,7 +514,7 @@ export const GitApp: React.FC = () => {
                       ? "text-emerald-300 bg-emerald-500/10"
                       : line.startsWith("-") && !line.startsWith("---")
                       ? "text-rose-300 bg-rose-500/10"
-                      : line.startsWith("@@")
+                      : line.startsWith("@@") || line.startsWith("=== ")
                       ? "text-cyan-300"
                       : "text-zinc-400"
                   }
@@ -384,7 +528,7 @@ export const GitApp: React.FC = () => {
           </pre>
 
           {output && (
-            <div className="max-h-40 overflow-y-auto p-3 bg-black/60 border-t border-white/10 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap select-text">
+            <div className="max-h-44 overflow-y-auto p-3 bg-black/60 border-t border-white/10 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap select-text">
               {output}
             </div>
           )}
