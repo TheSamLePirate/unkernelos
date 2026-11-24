@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { DynamicAppDef } from "../core/dynamic-apps-store.ts";
 import { uiSounds } from "../core/ui-sounds.ts";
 import { waylandDesktopManager } from "../core/wayland-host.ts";
 
@@ -11,6 +12,8 @@ export type AppId =
   | "api-client"
   | "database"
   | "services"
+  | "automations"
+  | "custom-app"
   | "notes"
   | "whiteboard"
   | "media-studio"
@@ -143,6 +146,28 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minWidth: 580,
     minHeight: 380,
     accent: "from-emerald-500 to-green-600",
+  },
+  automations: {
+    id: "automations",
+    title: "Automations & App SDK",
+    shortTitle: "Automate",
+    description: "OS workflows, shortcuts & Self-Extending Agent-Built WebOS Apps (osctl app.install)",
+    defaultWidth: 980,
+    defaultHeight: 640,
+    minWidth: 580,
+    minHeight: 400,
+    accent: "from-amber-400 via-orange-500 to-violet-600",
+  },
+  "custom-app": {
+    id: "custom-app",
+    title: "Agent WebOS App",
+    shortTitle: "App",
+    description: "Dynamically installed Agent-Built WebOS application",
+    defaultWidth: 720,
+    defaultHeight: 540,
+    minWidth: 360,
+    minHeight: 280,
+    accent: "from-violet-500 to-cyan-500",
   },
   notes: {
     id: "notes",
@@ -597,6 +622,52 @@ class WindowManagerStore {
     );
     if (!win) return;
     this.closeWindow(win.id, false);
+  }
+
+  public openDynamicApp(app: DynamicAppDef): string {
+    const existing = this.state.windows.find(
+      (w) => w.appId === "custom-app" && w.props?.dynamicAppId === app.id
+    );
+    if (existing) {
+      this.focusWindow(existing.id);
+      return existing.id;
+    }
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1440;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 900;
+    const w = Math.min(760, vw - 40);
+    const h = Math.min(560, vh - TOP_BAR_H - DOCK_RESERVE - 24);
+    const wsWins = this.state.windows.filter((win) => win.workspace === this.state.activeWorkspace);
+    const offset = (wsWins.length % 6) * 24;
+    const x = Math.max(20, Math.round((vw - w) / 2) + offset - 30);
+    const y = Math.max(TOP_BAR_H + 12, Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 15);
+    const id = `dyn-${app.id}`;
+    const zIndex = ++this.zCounter;
+    const win: WindowInstance = {
+      id,
+      appId: "custom-app",
+      title: `${app.emoji} ${app.title}`,
+      workspace: this.state.activeWorkspace,
+      x,
+      y,
+      width: w,
+      height: h,
+      zIndex,
+      minimized: false,
+      maximized: false,
+      snap: "none",
+      props: { dynamicAppId: app.id },
+    };
+    uiSounds.playWindowOpen();
+    this.setState((s) => ({
+      ...s,
+      launcherOpen: false,
+      missionControlOpen: false,
+      controlCenterOpen: false,
+      contextMenu: null,
+      windows: [...s.windows, win],
+      activeWindowId: id,
+    }));
+    return id;
   }
 
   public closeWindow(id: string, notifyWayland = true): void {

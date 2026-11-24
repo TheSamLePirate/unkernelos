@@ -22,8 +22,10 @@ import {
   Terminal,
   Workflow,
   Wrench,
+  Zap,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { useDynamicApps } from "../core/dynamic-apps-store.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
 
 type CategoryId = "all" | "dev" | "system" | "creative";
@@ -40,6 +42,8 @@ const APP_META: Record<
   "api-client": { icon: Send, category: "dev" },
   database: { icon: Database, category: "dev" },
   services: { icon: PlayCircle, category: "dev" },
+  automations: { icon: Zap, category: "dev" },
+  "custom-app": { icon: Sparkles, category: "creative" },
   notes: { icon: FileText, category: "creative" },
   whiteboard: { icon: PenTool, category: "creative" },
   "media-studio": { icon: Film, category: "creative" },
@@ -65,6 +69,7 @@ const CATEGORIES: readonly { id: CategoryId; label: string }[] = [
 
 export const AppLauncherOverlay: React.FC = () => {
   const wm = useWm();
+  const customApps = useDynamicApps();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryId>("all");
 
@@ -85,7 +90,7 @@ export const AppLauncherOverlay: React.FC = () => {
 
   const q = query.trim().toLowerCase();
   const appIds = (Object.keys(APP_CATALOG) as AppId[]).filter((id) => {
-    if (id === "wayland-surface") return false;
+    if (id === "wayland-surface" || id === "custom-app") return false;
     const def = APP_CATALOG[id];
     const meta = APP_META[id];
     if (category !== "all" && meta?.category !== category) return false;
@@ -94,6 +99,15 @@ export const AppLauncherOverlay: React.FC = () => {
       def.title.toLowerCase().includes(q) ||
       def.shortTitle.toLowerCase().includes(q) ||
       def.description.toLowerCase().includes(q)
+    );
+  });
+
+  const matchingCustomApps = customApps.filter((a) => {
+    if (!q) return category === "all" || category === "creative";
+    return (
+      a.title.toLowerCase().includes(q) ||
+      a.description.toLowerCase().includes(q) ||
+      a.id.includes(q)
     );
   });
 
@@ -119,7 +133,7 @@ export const AppLauncherOverlay: React.FC = () => {
                 wmStore.setLauncher(false);
               }
             }}
-            placeholder="Search 21 WebOS apps..."
+            placeholder={`Search ${22 + customApps.length} WebOS & Agent-Built apps...`}
             className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
           />
           <kbd className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-mono text-zinc-400">
@@ -183,6 +197,33 @@ export const AppLauncherOverlay: React.FC = () => {
               </button>
             );
           })}
+
+          {matchingCustomApps.map((app) => (
+            <button
+              key={`dyn-${app.id}`}
+              type="button"
+              onClick={() => {
+                wmStore.openDynamicApp(app);
+                wmStore.setLauncher(false);
+              }}
+              className="group relative flex flex-col items-center gap-2.5 p-4 rounded-3xl glass-surface hover:glass-surface-focused hover:-translate-y-1 transition-all text-center cursor-pointer border border-violet-400/25"
+            >
+              <span className="absolute top-2 right-2 px-1.5 py-0.2 rounded-full bg-violet-500/25 text-[8px] font-mono text-violet-200">
+                AGENT
+              </span>
+              <div
+                className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${app.accent} flex items-center justify-center text-2xl shadow-lg group-hover:scale-110 transition-transform`}
+              >
+                {app.emoji}
+              </div>
+              <div className="space-y-0.5 w-full">
+                <div className="text-xs font-semibold text-white truncate">{app.shortTitle}</div>
+                <div className="text-[10px] text-zinc-400 line-clamp-2 leading-snug">
+                  {app.description}
+                </div>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
     </div>

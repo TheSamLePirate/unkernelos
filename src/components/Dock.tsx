@@ -24,6 +24,7 @@ import {
   Terminal,
   Workflow,
   Wrench,
+  Zap,
 } from "lucide-react";
 import React, { useRef, useState } from "react";
 import { SettingsService, useSubscriptionRef } from "../core/runtime.ts";
@@ -39,6 +40,8 @@ const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string }>> = {
   "api-client": Send,
   database: Database,
   services: PlayCircle,
+  automations: Zap,
+  "custom-app": Sparkles,
   notes: FileText,
   whiteboard: PenTool,
   "media-studio": Film,
@@ -127,7 +130,7 @@ export const Dock: React.FC = () => {
           className="group relative flex flex-col items-center justify-end shrink-0"
         >
           <span className="pointer-events-none absolute -top-11 px-2.5 py-1 rounded-lg bg-[#0d1018]/95 border border-white/15 text-[11px] font-medium text-white whitespace-nowrap opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-xl z-20">
-            All Apps (21) <span className="ml-1 text-zinc-500 font-mono">F4</span>
+            All Apps (22) <span className="ml-1 text-zinc-500 font-mono">F4</span>
           </span>
           <div
             style={{

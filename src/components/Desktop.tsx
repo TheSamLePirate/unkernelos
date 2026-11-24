@@ -38,9 +38,11 @@ import { WindowSwitcherHud } from "./WindowSwitcherHud.tsx";
 import { AgentApiApp } from "./apps/AgentApiApp.tsx";
 import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
 import { ApiClientApp } from "./apps/ApiClientApp.tsx";
+import { AutomationsApp } from "./apps/AutomationsApp.tsx";
 import { CodeIdeApp } from "./apps/CodeIdeApp.tsx";
 import { DatabaseStudioApp } from "./apps/DatabaseStudioApp.tsx";
 import { DevUtilitiesApp } from "./apps/DevUtilitiesApp.tsx";
+import { DynamicAppHost } from "./apps/DynamicAppHost.tsx";
 import { FileExplorerApp } from "./apps/FileExplorerApp.tsx";
 import { GitApp } from "./apps/GitApp.tsx";
 import { GlViewportWindow } from "./apps/GlViewportWindow.tsx";
@@ -76,6 +78,10 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
       return <DatabaseStudioApp />;
     case "services":
       return <ServiceRunnerApp />;
+    case "automations":
+      return <AutomationsApp />;
+    case "custom-app":
+      return <DynamicAppHost dynamicAppId={String(win.props?.dynamicAppId || "")} />;
     case "notes":
       return <NotesStudioApp />;
     case "whiteboard":

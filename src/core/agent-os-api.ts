@@ -2,9 +2,11 @@ import { Effect } from "effect";
 import { useSyncExternalStore } from "react";
 import type { HostCommandContext, KernelHandle } from "unkernel";
 import { clipboardStore } from "./clipboard-store.ts";
+import { dynamicAppsStore } from "./dynamic-apps-store.ts";
 import { hostMountManager } from "./host-mount.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "./os-themes.ts";
 import { pwaStore } from "./pwa-service.ts";
+import { workflowsStore } from "./workflows-store.ts";
 import {
   appRuntime,
   GithubAuthService,
@@ -649,6 +651,75 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
     },
     example: { path: "/home/user/workspace/demo.pdf" },
   },
+  // ─── SELF-EXTENDING APP SDK & WORKFLOWS ──────────────────────────────
+  {
+    method: "app.list",
+    category: "wm",
+    summary: "List all Agent-Built custom WebOS apps installed in Launchpad.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "app.install",
+    category: "wm",
+    summary: "Dynamically create & install a new native WebOS app into Launchpad (inline html or Linux guestPath) with window.unkernelOS bridge!",
+    paramsSchema: {
+      type: "object",
+      required: ["id", "title"],
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        shortTitle: { type: "string" },
+        description: { type: "string" },
+        emoji: { type: "string" },
+        accent: { type: "string" },
+        html: { type: "string" },
+        guestPath: { type: "string" },
+        open: { type: "boolean" },
+      },
+    },
+    example: { id: "pulse-hud", title: "Pulse HUD", emoji: "⚡", html: "<html><body style='background:#080a12;color:#22d3ee;display:grid;place-items:center;height:100vh;font-family:monospace'><h1>Agent App Live!</h1></body></html>", open: true },
+  },
+  {
+    method: "app.open",
+    category: "wm",
+    summary: "Launch an installed Agent-Built custom WebOS app by ID.",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } },
+    },
+    example: { id: "quantum-calc" },
+  },
+  {
+    method: "app.uninstall",
+    category: "wm",
+    summary: "Uninstall a custom Agent-Built WebOS app by ID.",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } },
+    },
+    example: { id: "pulse-hud" },
+  },
+  {
+    method: "workflow.list",
+    category: "services",
+    summary: "List all registered OS automation workflows.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "workflow.run",
+    category: "services",
+    summary: "Execute an OS automation workflow by ID and return full step output.",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } },
+    },
+    example: { id: "wf-env-audit" },
+  },
 ];
 
 const AGENT_KV_PREFIX = "unkernelos:agent-kv:";
@@ -702,6 +773,9 @@ class AgentApiStore {
 }
 
 export const agentApiStore = new AgentApiStore();
+
+// Connect workflows engine to OS API executor cleanly without circular imports
+workflowsStore.setOsExecutor((method, params, meta) => executeOsAction(method, params, meta));
 
 export function useAgentApi(): AgentApiState {
   return useSyncExternalStore(agentApiStore.subscribe, agentApiStore.getSnapshot);
@@ -1332,6 +1406,55 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       if (!filePath) throw new Error("path is required");
       wmStore.openFileInMedia(filePath);
       return { openedInMedia: filePath };
+    }
+
+    case "app.list": {
+      return { apps: dynamicAppsStore.getSnapshot() };
+    }
+
+    case "app.install": {
+      const id = String(p.id ?? "").trim();
+      const title = String(p.title ?? "").trim();
+      if (!id || !title) throw new Error("id and title are required");
+      const installed = dynamicAppsStore.install({
+        id,
+        title,
+        shortTitle: String(p.shortTitle || title.slice(0, 12)),
+        description: String(p.description || "Agent-built WebOS application"),
+        emoji: String(p.emoji || "✨"),
+        accent: String(p.accent || "from-violet-500 to-cyan-500"),
+        html: typeof p.html === "string" ? p.html : undefined,
+        guestPath: typeof p.guestPath === "string" ? p.guestPath : undefined,
+        createdBy: "Agent OS API",
+      });
+      wmStore.pushToast("New WebOS App Installed", `${installed.emoji} ${installed.title}`, "success");
+      if (p.open !== false) {
+        wmStore.openDynamicApp(installed);
+      }
+      return { installed };
+    }
+
+    case "app.open": {
+      const id = String(p.id ?? "").trim();
+      const app = dynamicAppsStore.getById(id);
+      if (!app) throw new Error(`Custom app '${id}' not found`);
+      const windowId = wmStore.openDynamicApp(app);
+      return { windowId, id };
+    }
+
+    case "app.uninstall": {
+      const id = String(p.id ?? "").trim();
+      return { id, removed: dynamicAppsStore.uninstall(id) };
+    }
+
+    case "workflow.list": {
+      return { workflows: workflowsStore.getSnapshot() };
+    }
+
+    case "workflow.run": {
+      const id = String(p.id ?? "").trim();
+      if (!id) throw new Error("id is required");
+      return await workflowsStore.run(id);
     }
 
     default:

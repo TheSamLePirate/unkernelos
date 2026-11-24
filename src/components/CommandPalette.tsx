@@ -44,7 +44,7 @@ export const CommandPalette: React.FC = () => {
 
   const q = query.trim().toLowerCase();
   const apps = (Object.keys(APP_CATALOG) as AppId[])
-    .filter((id) => id !== "wayland-surface")
+    .filter((id) => id !== "wayland-surface" && id !== "custom-app")
     .map((id) => APP_CATALOG[id])
     .filter(
       (a) =>
