@@ -4,6 +4,7 @@ import { waylandDesktopManager } from "../core/wayland-host.ts";
 
 export type AppId =
   | "agent-studio"
+  | "agent-api"
   | "ide"
   | "terminal"
   | "explorer"
@@ -61,6 +62,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minHeight: 460,
     accent: "from-violet-500 to-fuchsia-500",
     shortcut: "⌘1",
+  },
+  "agent-api": {
+    id: "agent-api",
+    title: "Agent OS API & Bridge",
+    shortTitle: "OS API",
+    description: "Full Agent-Native OS control bridge (osctl, MCP server, 43+ host APIs & live audit log)",
+    defaultWidth: 1020,
+    defaultHeight: 650,
+    minWidth: 620,
+    minHeight: 420,
+    accent: "from-emerald-400 via-cyan-500 to-violet-500",
   },
   ide: {
     id: "ide",

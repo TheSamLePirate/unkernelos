@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { X } from "lucide-react";
 import React, { useCallback, useEffect, useRef } from "react";
+import { attachAgentOsBridge, detachAgentOsBridge } from "../core/agent-os-api.ts";
 import { applyOsThemeToDocument } from "../core/os-themes.ts";
 import {
   appRuntime,
@@ -31,6 +32,7 @@ import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
 import { WindowFrame } from "./WindowFrame.tsx";
 import { WindowSwitcherHud } from "./WindowSwitcherHud.tsx";
+import { AgentApiApp } from "./apps/AgentApiApp.tsx";
 import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
 import { ApiClientApp } from "./apps/ApiClientApp.tsx";
 import { CodeIdeApp } from "./apps/CodeIdeApp.tsx";
@@ -56,6 +58,8 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
   switch (win.appId) {
     case "agent-studio":
       return <AgentStudioApp windowFocused={focused} />;
+    case "agent-api":
+      return <AgentApiApp />;
     case "ide":
       return <CodeIdeApp windowFocused={focused} />;
     case "terminal":
@@ -196,6 +200,32 @@ export const Desktop: React.FC = () => {
       }).pipe(Effect.ignore)
     );
   }, []);
+
+  // Attach Full Agent OS API host bridge (`osctl`, `pbcopy`, `pbpaste`, `os-open`, `os-notify`, `os-download` + MCP)
+  useEffect(() => {
+    if (vmState.phase !== "running") {
+      detachAgentOsBridge();
+      return;
+    }
+    const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+    if (!vm) return;
+
+    let cancelled = false;
+    void attachAgentOsBridge(vm).then((cmds) => {
+      if (!cancelled && cmds.length > 0) {
+        wmStore.pushToast(
+          "Agent OS API Online",
+          `Native host bridge ready (${cmds.join(", ")}) + MCP server (osctl mcp)`,
+          "success"
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      detachAgentOsBridge();
+    };
+  }, [vmState.phase]);
 
   // Attach Desktop-level Wayland compositor (wland) so Linux GUI apps open directly as OS windows!
   useEffect(() => {

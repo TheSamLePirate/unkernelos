@@ -19,6 +19,7 @@ import {
   Settings,
   Sparkles,
   Terminal,
+  Workflow,
   Wrench,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
@@ -31,6 +32,7 @@ const APP_META: Record<
   { icon: React.ComponentType<{ className?: string }>; category: Exclude<CategoryId, "all"> }
 > = {
   "agent-studio": { icon: Bot, category: "dev" },
+  "agent-api": { icon: Workflow, category: "dev" },
   ide: { icon: Code2, category: "dev" },
   terminal: { icon: Terminal, category: "dev" },
   explorer: { icon: FolderOpen, category: "system" },
@@ -115,7 +117,7 @@ export const AppLauncherOverlay: React.FC = () => {
                 wmStore.setLauncher(false);
               }
             }}
-            placeholder="Search 19 WebOS apps..."
+            placeholder="Search 20 WebOS apps..."
             className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
           />
           <kbd className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-mono text-zinc-400">
