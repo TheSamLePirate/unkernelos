@@ -1,26 +1,82 @@
+import { useSyncExternalStore } from "react";
 import type { KernelHandle, ShmFile } from "unkernel";
-import { createStreamLink, createWland, type BufferHandle, type HandleSource, type Wland } from "wland/client";
+import {
+  createStreamLink,
+  createWland,
+  type BufferHandle,
+  type HandleSource,
+  type ViewWindow,
+  type Wland,
+} from "wland/client";
 
 const WAYLAND_VSOCK_PORT = 1023;
 
+export interface WaylandWindowInfo {
+  readonly key: string;
+  readonly conn: number;
+  readonly surface: number;
+  readonly title: string;
+  readonly appId: string;
+  readonly decorated: boolean;
+}
+
+export interface WaylandDesktopCallbacks {
+  readonly onMountWindow: (info: WaylandWindowInfo) => void;
+  readonly onUnmountWindow: (key: string) => void;
+  readonly onUpdateWindow: (info: WaylandWindowInfo) => void;
+}
+
 /**
- * Hosts the wland Wayland compositor inside a DOM container, reading guest
- * window buffers directly from unkernel's /dev/kwshm over vsock:1023.
+ * Desktop-level Wayland compositor (wland) bridging guest /dev/kwshm & VirGL dmabuf
+ * directly into native unkernelOS floating <WindowFrame> windows on the Desktop.
  */
-export class WaylandDesktopHost {
+class WaylandDesktopManager {
   private wl: Wland | null = null;
   private listenerClose: (() => void) | null = null;
-  private disposed = false;
+  private viewWindows = new Map<string, ViewWindow>();
+  private snapshot: { ready: boolean; windows: readonly WaylandWindowInfo[] } = {
+    ready: false,
+    windows: [],
+  };
+  private listeners = new Set<() => void>();
+  private callbacks: WaylandDesktopCallbacks | null = null;
 
-  public async attach(vm: KernelHandle, container: HTMLElement): Promise<boolean> {
+  public subscribe = (fn: () => void): (() => void) => {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  };
+
+  public getSnapshot = () => this.snapshot;
+
+  private emit(): void {
+    const windows: WaylandWindowInfo[] = Array.from(this.viewWindows.values()).map((w) => ({
+      key: w.key,
+      conn: w.conn,
+      surface: w.surface,
+      title: w.title || w.appId || "Wayland App",
+      appId: w.appId || "",
+      decorated: w.decorated,
+    }));
+    this.snapshot = { ready: Boolean(this.wl), windows };
+    for (const fn of this.listeners) fn();
+  }
+
+  public getViewWindow(key: string): ViewWindow | undefined {
+    return this.viewWindows.get(key);
+  }
+
+  public async attach(
+    vm: KernelHandle,
+    container: HTMLElement,
+    callbacks: WaylandDesktopCallbacks
+  ): Promise<boolean> {
     this.dispose();
     if (!vm.vsock) return false;
-    this.disposed = false;
+    this.callbacks = callbacks;
 
     const listener = vm.vsock.listen(WAYLAND_VSOCK_PORT);
     this.listenerClose = () => listener.close();
 
-    // Bridge guest /dev/kwshm handles for zero-copy / fast Wayland surface presentation
     const shm = vm.shm;
     const buffers: HandleSource<ShmFile> | undefined = shm
       ? {
@@ -78,21 +134,126 @@ export class WaylandDesktopHost {
         link,
         buffers,
         gpu,
-        decorations: "client",
+        decorations: "server",
         clipboard: true,
-        autoFocus: true,
-        shortcuts: true,
+        autoFocus: false,
+        manageDisplay: false,
+        shortcuts: false,
+        mount: (win: ViewWindow) => {
+          this.viewWindows.set(win.key, win);
+          const info: WaylandWindowInfo = {
+            key: win.key,
+            conn: win.conn,
+            surface: win.surface,
+            title: win.title || win.appId || "Linux Wayland App",
+            appId: win.appId || "",
+            decorated: win.decorated,
+          };
+          this.emit();
+          this.callbacks?.onMountWindow(info);
+        },
+        unmount: (win: ViewWindow) => {
+          this.viewWindows.delete(win.key);
+          try {
+            win.element.remove();
+          } catch {
+            // ignore
+          }
+          this.emit();
+          this.callbacks?.onUnmountWindow(win.key);
+        },
+        onWindowsChange: () => {
+          for (const win of this.viewWindows.values()) {
+            this.callbacks?.onUpdateWindow({
+              key: win.key,
+              conn: win.conn,
+              surface: win.surface,
+              title: win.title || win.appId || "Linux Wayland App",
+              appId: win.appId || "",
+              decorated: win.decorated,
+            });
+          }
+          this.emit();
+        },
       });
+      this.emit();
       return true;
     } catch (err) {
-      console.warn("[unkernelOS] wland Wayland compositor init skipped:", err);
+      console.warn("[unkernelOS] Desktop wland Wayland compositor init skipped:", err);
       this.dispose();
       return false;
     }
   }
 
+  public focusWindow(key: string): void {
+    const win = this.viewWindows.get(key);
+    if (!win || !this.wl) return;
+    try {
+      this.wl.input.focus(win.conn, win.surface);
+    } catch {
+      // ignore
+    }
+  }
+
+  public blur(): void {
+    try {
+      this.wl?.input.blur();
+    } catch {
+      // ignore
+    }
+  }
+
+  public resizeWindow(key: string, width: number, height: number): void {
+    const win = this.viewWindows.get(key);
+    if (!win || !this.wl) return;
+    const w = Math.max(120, Math.round(width));
+    const h = Math.max(80, Math.round(height));
+    try {
+      this.wl.engine.requestResize(win.conn, win.surface, w, h);
+    } catch {
+      // ignore
+    }
+  }
+
+  public setWindowPosition(key: string, x: number, y: number): void {
+    const win = this.viewWindows.get(key);
+    if (!win || !this.wl) return;
+    try {
+      this.wl.engine.setWindowPosition(win.conn, win.surface, Math.round(x), Math.round(y));
+    } catch {
+      // ignore
+    }
+  }
+
+  public setVisible(key: string, visible: boolean): void {
+    const win = this.viewWindows.get(key);
+    if (!win || !this.wl) return;
+    try {
+      this.wl.engine.setVisible(win.conn, win.surface, visible);
+    } catch {
+      // ignore
+    }
+  }
+
+  public closeWindow(key: string): void {
+    const win = this.viewWindows.get(key);
+    if (!win || !this.wl) return;
+    try {
+      this.wl.engine.close(win.conn, win.surface);
+    } catch {
+      // ignore
+    }
+  }
+
   public dispose(): void {
-    this.disposed = true;
+    for (const w of this.viewWindows.values()) {
+      try {
+        w.element.remove();
+      } catch {
+        // ignore
+      }
+    }
+    this.viewWindows.clear();
     try {
       this.wl?.dispose();
     } catch {
@@ -105,5 +266,13 @@ export class WaylandDesktopHost {
       // ignore
     }
     this.listenerClose = null;
+    this.callbacks = null;
+    this.emit();
   }
+}
+
+export const waylandDesktopManager = new WaylandDesktopManager();
+
+export function useWaylandDesktop() {
+  return useSyncExternalStore(waylandDesktopManager.subscribe, waylandDesktopManager.getSnapshot);
 }

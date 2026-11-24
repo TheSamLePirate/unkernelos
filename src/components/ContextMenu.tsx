@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import {
   Bot,
+  Box,
   Layers,
   LayoutGrid,
   Lock,
@@ -156,6 +157,14 @@ export const ContextMenu: React.FC = () => {
             >
               <Bot className="w-3.5 h-3.5 text-violet-400" />
               Open Agent Studio
+            </button>
+            <button
+              type="button"
+              onClick={() => wmStore.openApp("gl-window")}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200 transition"
+            >
+              <Box className="w-3.5 h-3.5 text-cyan-400" />
+              Open 3D GL / KMS Window
             </button>
             <button
               type="button"

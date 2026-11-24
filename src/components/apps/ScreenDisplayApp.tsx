@@ -1,6 +1,9 @@
 import { Effect } from "effect";
 import {
+  AppWindow,
+  Box,
   Cpu,
+  ExternalLink,
   Gamepad2,
   Layers,
   Monitor,
@@ -8,12 +11,13 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { domButtonToLinux, domCodeToLinux } from "unkernel";
 import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../../core/runtime.ts";
 import { DEFAULT_UNKERNEL_CONFIG, type FbScalingMode } from "../../core/schema.ts";
-import { WaylandDesktopHost } from "../../core/wayland-host.ts";
+import { useWaylandDesktop, waylandDesktopManager } from "../../core/wayland-host.ts";
 import { WebGpuFb0Renderer } from "../../gpu/webgpu-fb0.ts";
 import { wmStore } from "../../wm/wm-store.ts";
 
@@ -50,18 +54,16 @@ export const ScreenDisplayApp: React.FC<{ windowFocused?: boolean }> = ({ window
     }
   );
 
+  const wlDesktop = useWaylandDesktop();
   const [tab, setTab] = useState<ScreenTab>("fb0");
   const [fbBackend, setFbBackend] = useState<"webgpu" | "canvas2d">("canvas2d");
   const [glInfoText, setGlInfoText] = useState<string>("");
-  const [waylandReady, setWaylandReady] = useState(false);
   const [captured, setCaptured] = useState(false);
   const [pointerLocked, setPointerLocked] = useState(false);
   const [scanoutActive, setScanoutActive] = useState<{ width: number; height: number; kind: "fb0" | "3d-gl" } | null>(null);
 
   const fbCanvasRef = useRef<HTMLCanvasElement>(null);
   const fbRendererRef = useRef<WebGpuFb0Renderer | null>(null);
-  const waylandContainerRef = useRef<HTMLDivElement>(null);
-  const waylandHostRef = useRef<WaylandDesktopHost | null>(null);
   const heldKeysRef = useRef<Set<number>>(new Set());
   const glStageRef = useRef<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null>(null);
 
@@ -147,25 +149,6 @@ export const ScreenDisplayApp: React.FC<{ windowFocused?: boolean }> = ({ window
     document.addEventListener("pointerlockchange", onLockChange);
     return () => document.removeEventListener("pointerlockchange", onLockChange);
   }, []);
-
-  // Attach Wayland compositor (wland) when Debian + Wayland enabled
-  useEffect(() => {
-    const container = waylandContainerRef.current;
-    if (!container || vmState.phase !== "running" || !cfg.wayland || cfg.distro !== "debian") return;
-
-    const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
-    if (!vm) return;
-
-    const host = new WaylandDesktopHost();
-    waylandHostRef.current = host;
-    void host.attach(vm, container).then((ok) => setWaylandReady(ok));
-
-    return () => {
-      host.dispose();
-      waylandHostRef.current = null;
-      setWaylandReady(false);
-    };
-  }, [vmState.phase, cfg.wayland, cfg.distro]);
 
   // Release evdev keyboard capture automatically when another OS window takes focus
   useEffect(() => {
@@ -362,8 +345,8 @@ export const ScreenDisplayApp: React.FC<{ windowFocused?: boolean }> = ({ window
             <button
               type="button"
               onClick={() => {
-                setTab("fb0");
-                runDemo("kmscube", "kmscube (3D VirGL)");
+                wmStore.openApp("gl-window");
+                runDemo("kmscube", "kmscube (3D VirGL Desktop Window)");
               }}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/30 text-cyan-200 transition"
             >
@@ -371,6 +354,16 @@ export const ScreenDisplayApp: React.FC<{ windowFocused?: boolean }> = ({ window
               kmscube 3D
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => wmStore.openApp("gl-window")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-violet-500/15 hover:bg-violet-500/25 border border-violet-400/30 text-violet-200 transition"
+            title="Pop out floating Desktop 3D GL / KMS window"
+          >
+            <Box className="w-3.5 h-3.5" />
+            Pop Out 3D GL
+          </button>
 
           <button
             type="button"
@@ -491,39 +484,112 @@ export const ScreenDisplayApp: React.FC<{ windowFocused?: boolean }> = ({ window
         )}
       </div>
 
-      {/* Tab 3: Wayland Compositor (wland) */}
-      <div className={`relative flex-1 min-h-0 flex flex-col ${tab === "wayland" ? "" : "hidden"}`}>
-        <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] border-b border-white/8 text-xs">
-          <span className="text-zinc-400">
-            wland compositor:{" "}
-            <strong className={waylandReady ? "text-emerald-300" : "text-amber-300"}>
-              {cfg.distro !== "debian"
-                ? "Requires Debian"
-                : waylandReady
-                ? "Connected (/dev/kwshm + vsock:1023)"
-                : "Standby"}
-            </strong>
-          </span>
+      {/* Tab 3: Desktop-Integrated Wayland Compositor (wland) */}
+      <div className={`relative flex-1 min-h-0 flex flex-col overflow-y-auto p-5 space-y-4 ${tab === "wayland" ? "" : "hidden"}`}>
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-semibold text-white">
+              <Layers className="w-4 h-4 text-violet-400" />
+              Desktop-Integrated Wayland Compositor (wland)
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-mono border ${
+                  wlDesktop.ready
+                    ? "bg-emerald-500/15 border-emerald-400/30 text-emerald-300"
+                    : "bg-amber-500/15 border-amber-400/30 text-amber-300"
+                }`}
+              >
+                {cfg.distro !== "debian"
+                  ? "Requires Debian"
+                  : wlDesktop.ready
+                  ? "ACTIVE (/dev/kwshm + vsock:1023)"
+                  : "STANDBY"}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Native Linux Wayland apps now open directly as first-class floating <strong>unkernelOS Desktop windows</strong> with full resize, snap, workspaces &amp; VirGL dmabuf support.
+            </p>
+          </div>
           {cfg.distro === "debian" && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => runDemo("wland foot", "foot (Wayland)")}
-                className="px-2.5 py-0.5 rounded bg-violet-500/20 hover:bg-violet-500/30 border border-violet-400/30 text-violet-200 text-[11px]"
+                onClick={() => runDemo("wland foot", "foot (Native Wayland Desktop Window)")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-400/35 text-violet-200 text-xs font-medium transition"
               >
-                wland foot
+                <AppWindow className="w-3.5 h-3.5" />
+                Launch foot (Desktop)
               </button>
               <button
                 type="button"
-                onClick={() => runDemo("wland galculator", "Galculator (GTK Wayland)")}
-                className="px-2.5 py-0.5 rounded bg-white/8 hover:bg-white/14 border border-white/10 text-zinc-200 text-[11px]"
+                onClick={() => runDemo("wland galculator", "Galculator (GTK Wayland Window)")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/8 hover:bg-white/14 border border-white/12 text-zinc-200 text-xs font-medium transition"
               >
-                wland galculator
+                <AppWindow className="w-3.5 h-3.5" />
+                Launch Galculator
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  wmStore.openApp("gl-window");
+                  runDemo("kmscube", "kmscube (3D VirGL Desktop Window)");
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/35 text-cyan-200 text-xs font-medium transition"
+              >
+                <Box className="w-3.5 h-3.5" />
+                Launch kmscube (3D GL)
               </button>
             </div>
           )}
         </div>
-        <div ref={waylandContainerRef} className="relative flex-1 min-h-0 bg-[#07090f] overflow-hidden" />
+
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+            Active Desktop Wayland Surfaces ({wlDesktop.windows.length})
+          </div>
+          {wlDesktop.windows.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center space-y-2">
+              <AppWindow className="w-8 h-8 text-violet-400/60 mx-auto" />
+              <p className="text-xs text-zinc-300">No Linux Wayland windows running yet.</p>
+              <p className="text-[11px] text-zinc-500 max-w-md mx-auto">
+                Click <strong>Launch foot</strong> above or run <code className="text-violet-300">wland &lt;app&gt;</code> in any Kitty Terminal — it will immediately appear as a native floating window on your desktop.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {wlDesktop.windows.map((w) => (
+                <div
+                  key={w.key}
+                  className="p-3 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-white truncate">{w.title}</div>
+                    <div className="text-[10px] font-mono text-zinc-400 truncate">
+                      {w.appId || "wayland"} · surface #{w.surface}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => wmStore.openWaylandWindow(w.key, w.title, w.appId)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 text-violet-200 text-[11px]"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Focus
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => waylandDesktopManager.closeWindow(w.key)}
+                      className="p-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 text-rose-300"
+                      title="Close Wayland Window"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

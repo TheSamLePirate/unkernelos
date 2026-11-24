@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { uiSounds } from "../core/ui-sounds.ts";
+import { waylandDesktopManager } from "../core/wayland-host.ts";
 
 export type AppId =
   | "agent-studio"
@@ -16,6 +17,8 @@ export type AppId =
   | "shader-synth"
   | "preview"
   | "screen"
+  | "gl-window"
+  | "wayland-surface"
   | "git"
   | "toolchain"
   | "monitor"
@@ -199,13 +202,35 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "screen",
     title: "Graphical Display (FB0 / GL / Wayland)",
     shortTitle: "Screen",
-    description: "WebGPU /dev/fb0 framebuffer, VirGL 3D (/dev/dri) & Wayland desktop apps",
+    description: "WebGPU /dev/fb0 framebuffer, VirGL 3D (/dev/dri) & Wayland desktop launcher",
     defaultWidth: 980,
     defaultHeight: 680,
     minWidth: 540,
     minHeight: 400,
     accent: "from-pink-500 to-rose-500",
     shortcut: "⌘5",
+  },
+  "gl-window": {
+    id: "gl-window",
+    title: "Guest 3D GL / KMS Viewport",
+    shortTitle: "3D GL",
+    description: "Floating desktop-integrated VirGL 3D & KMS hardware-accelerated window",
+    defaultWidth: 860,
+    defaultHeight: 580,
+    minWidth: 420,
+    minHeight: 300,
+    accent: "from-emerald-400 to-cyan-500",
+  },
+  "wayland-surface": {
+    id: "wayland-surface",
+    title: "Linux Wayland App",
+    shortTitle: "Wayland",
+    description: "Native Linux Wayland window composited directly onto the unkernelOS desktop",
+    defaultWidth: 820,
+    defaultHeight: 540,
+    minWidth: 320,
+    minHeight: 220,
+    accent: "from-fuchsia-500 to-cyan-500",
   },
   git: {
     id: "git",
@@ -427,7 +452,79 @@ class WindowManagerStore {
     return id;
   }
 
-  public closeWindow(id: string): void {
+  public openWaylandWindow(surfaceKey: string, title: string, wlAppId: string): string {
+    const existing = this.state.windows.find(
+      (w) => w.appId === "wayland-surface" && w.props?.surfaceKey === surfaceKey
+    );
+    if (existing) {
+      this.focusWindow(existing.id);
+      return existing.id;
+    }
+
+    const def = APP_CATALOG["wayland-surface"];
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1440;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 900;
+    const w = Math.min(def.defaultWidth, vw - 40);
+    const h = Math.min(def.defaultHeight, vh - TOP_BAR_H - DOCK_RESERVE - 24);
+    const wsWins = this.state.windows.filter((win) => win.workspace === this.state.activeWorkspace);
+    const offset = (wsWins.length % 6) * 28;
+    const x = Math.max(20, Math.round((vw - w) / 2) + offset - 30);
+    const y = Math.max(TOP_BAR_H + 12, Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 15);
+    const id = `wl-${surfaceKey}`;
+    const zIndex = ++this.zCounter;
+
+    const win: WindowInstance = {
+      id,
+      appId: "wayland-surface",
+      title: title || wlAppId || "Linux Wayland App",
+      workspace: this.state.activeWorkspace,
+      x,
+      y,
+      width: w,
+      height: h,
+      zIndex,
+      minimized: false,
+      maximized: false,
+      snap: "none",
+      props: { surfaceKey, wlAppId },
+    };
+
+    uiSounds.playWindowOpen();
+    this.setState((s) => ({
+      ...s,
+      missionControlOpen: false,
+      controlCenterOpen: false,
+      contextMenu: null,
+      windows: [...s.windows, win],
+      activeWindowId: id,
+    }));
+    return id;
+  }
+
+  public updateWaylandWindowTitle(surfaceKey: string, title: string): void {
+    this.setState((s) => ({
+      ...s,
+      windows: s.windows.map((w) =>
+        w.appId === "wayland-surface" && w.props?.surfaceKey === surfaceKey && title && w.title !== title
+          ? { ...w, title }
+          : w
+      ),
+    }));
+  }
+
+  public closeWaylandWindowByKey(surfaceKey: string): void {
+    const win = this.state.windows.find(
+      (w) => w.appId === "wayland-surface" && w.props?.surfaceKey === surfaceKey
+    );
+    if (!win) return;
+    this.closeWindow(win.id, false);
+  }
+
+  public closeWindow(id: string, notifyWayland = true): void {
+    const target = this.state.windows.find((w) => w.id === id);
+    if (notifyWayland && target?.appId === "wayland-surface" && typeof target.props?.surfaceKey === "string") {
+      waylandDesktopManager.closeWindow(target.props.surfaceKey);
+    }
     uiSounds.playWindowClose();
     this.setState((s) => {
       const remaining = s.windows.filter((w) => w.id !== id);

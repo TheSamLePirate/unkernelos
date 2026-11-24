@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Globe, Layers, Lock, Palette, Pause, RotateCcw, Search, Sparkles } from "lucide-react";
+import { AppWindow, Box, Globe, Layers, Lock, Palette, Pause, RotateCcw, Search, Sparkles } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { OS_THEMES } from "../core/os-themes.ts";
 import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../core/runtime.ts";
@@ -44,6 +44,7 @@ export const CommandPalette: React.FC = () => {
 
   const q = query.trim().toLowerCase();
   const apps = (Object.keys(APP_CATALOG) as AppId[])
+    .filter((id) => id !== "wayland-surface")
     .map((id) => APP_CATALOG[id])
     .filter(
       (a) =>
@@ -174,6 +175,35 @@ export const CommandPalette: React.FC = () => {
             <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
               Desktop &amp; Kernel Actions
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.pushToast("Wayland Desktop App", "Launching foot as native floating desktop window...", "info");
+                appRuntime.runFork(
+                  Effect.flatMap(VmService, (v) => v.execShell("wland foot >/tmp/wland-foot.log 2>&1 &")).pipe(Effect.ignore)
+                );
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <AppWindow className="w-3.5 h-3.5 text-violet-400" />
+              Launch foot (Native Wayland Desktop Window)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.openApp("gl-window");
+                wmStore.pushToast("3D VirGL Desktop Window", "Launching kmscube in floating 3D GL window...", "info");
+                appRuntime.runFork(
+                  Effect.flatMap(VmService, (v) => v.execShell("kmscube >/tmp/kmscube.log 2>&1 &")).pipe(Effect.ignore)
+                );
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <Box className="w-3.5 h-3.5 text-cyan-400" />
+              Launch kmscube (3D VirGL Desktop Window)
+            </button>
             <button
               type="button"
               onClick={() => {

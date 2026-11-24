@@ -12,6 +12,7 @@ import {
 } from "../core/runtime.ts";
 import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
 import { uiSounds } from "../core/ui-sounds.ts";
+import { waylandDesktopManager } from "../core/wayland-host.ts";
 import { WebGpuBackdrop } from "../gpu/webgpu-backdrop.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
 import { AppLauncherOverlay } from "./AppLauncherOverlay.tsx";
@@ -36,6 +37,7 @@ import { DatabaseStudioApp } from "./apps/DatabaseStudioApp.tsx";
 import { DevUtilitiesApp } from "./apps/DevUtilitiesApp.tsx";
 import { FileExplorerApp } from "./apps/FileExplorerApp.tsx";
 import { GitApp } from "./apps/GitApp.tsx";
+import { GlViewportWindow } from "./apps/GlViewportWindow.tsx";
 import { KittyTerminalApp } from "./apps/KittyTerminalApp.tsx";
 import { NotesStudioApp } from "./apps/NotesStudioApp.tsx";
 import { PreviewBrowserApp } from "./apps/PreviewBrowserApp.tsx";
@@ -46,9 +48,10 @@ import { SettingsApp } from "./apps/SettingsApp.tsx";
 import { ShaderSynthApp } from "./apps/ShaderSynthApp.tsx";
 import { SystemMonitorApp } from "./apps/SystemMonitorApp.tsx";
 import { ToolchainInstallerApp } from "./apps/ToolchainInstallerApp.tsx";
+import { WaylandSurfaceWindow } from "./apps/WaylandSurfaceWindow.tsx";
 import { WhiteboardApp } from "./apps/WhiteboardApp.tsx";
 
-const renderWindowApp = (win: WindowInstance, focused: boolean): React.ReactNode => {
+const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean): React.ReactNode => {
   switch (win.appId) {
     case "agent-studio":
       return <AgentStudioApp windowFocused={focused} />;
@@ -78,6 +81,16 @@ const renderWindowApp = (win: WindowInstance, focused: boolean): React.ReactNode
       return <PreviewBrowserApp />;
     case "screen":
       return <ScreenDisplayApp windowFocused={focused} />;
+    case "gl-window":
+      return <GlViewportWindow windowFocused={focused} />;
+    case "wayland-surface":
+      return (
+        <WaylandSurfaceWindow
+          surfaceKey={String(win.props?.surfaceKey || "")}
+          windowFocused={focused}
+          visible={visible && !win.minimized}
+        />
+      );
     case "git":
       return <GitApp />;
     case "toolchain":
@@ -108,9 +121,36 @@ export const Desktop: React.FC = () => {
     Effect.map(SettingsService, (s) => s.configRef),
     DEFAULT_UNKERNEL_CONFIG
   );
+  const vmState = useSubscriptionRef(
+    Effect.map(VmService, (v) => v.stateRef),
+    {
+      phase: "idle" as const,
+      bootStage: "",
+      bootProgress: 0,
+      error: null,
+      support: null,
+      crossOriginIsolated: false,
+      webgpuAvailable: false,
+      distro: "debian",
+      cpus: 1,
+      memoryMiB: 2048,
+      transport: "inline",
+      stats: null,
+      glStatus: null,
+      displayMode: null,
+      inputState: { keyboard: false, mouse: false, tablet: false },
+      detectedPorts: [],
+      kernelLogs: [],
+      hasSnapshot: false,
+      audioMuted: false,
+      wispActiveUrl: "",
+    }
+  );
 
   const wallpaperRef = useRef<HTMLCanvasElement>(null);
   const backdropInstanceRef = useRef<WebGpuBackdrop | null>(null);
+  const waylandRootRef = useRef<HTMLDivElement>(null);
+  const glAutoOpenedRef = useRef(false);
 
   // Sync live OS theme, blur, opacity & UI sound preference
   useEffect(() => {
@@ -156,6 +196,73 @@ export const Desktop: React.FC = () => {
     );
   }, []);
 
+  // Attach Desktop-level Wayland compositor (wland) so Linux GUI apps open directly as OS windows!
+  useEffect(() => {
+    const container = waylandRootRef.current;
+    if (!container || vmState.phase !== "running" || !cfg.wayland || cfg.distro !== "debian") {
+      return;
+    }
+    const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+    if (!vm) return;
+
+    let cancelled = false;
+    void waylandDesktopManager
+      .attach(vm, container, {
+        onMountWindow: (info) => {
+          if (cancelled) return;
+          wmStore.openWaylandWindow(info.key, info.title, info.appId);
+        },
+        onUnmountWindow: (key) => {
+          if (cancelled) return;
+          wmStore.closeWaylandWindowByKey(key);
+        },
+        onUpdateWindow: (info) => {
+          if (cancelled) return;
+          wmStore.updateWaylandWindowTitle(info.key, info.title);
+        },
+      })
+      .then((ok) => {
+        if (ok && !cancelled) {
+          wmStore.pushToast(
+            "Wayland Desktop Compositor Ready",
+            "Linux GUI apps (e.g. wland foot) now open directly as floating unkernelOS desktop windows.",
+            "info"
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      waylandDesktopManager.dispose();
+    };
+  }, [vmState.phase, cfg.wayland, cfg.distro]);
+
+  // Auto-pop a floating 3D GL / KMS desktop window whenever a guest VirGL 3D scanout becomes active
+  useEffect(() => {
+    if (vmState.phase !== "running") {
+      glAutoOpenedRef.current = false;
+      return;
+    }
+    const timer = window.setInterval(() => {
+      const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+      const scanout = vm?.gl?.gpu?.scanout;
+      const active = Boolean(scanout && scanout.width > 0 && scanout.height > 0);
+      if (active && !glAutoOpenedRef.current) {
+        glAutoOpenedRef.current = true;
+        const wins = wmStore.getSnapshot().windows;
+        const hasDisplayWin = wins.some(
+          (w) => (w.appId === "gl-window" || w.appId === "screen") && !w.minimized
+        );
+        if (!hasDisplayWin) {
+          wmStore.openApp("gl-window");
+        }
+      } else if (!active) {
+        glAutoOpenedRef.current = false;
+      }
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [vmState.phase]);
+
   // Bridge Effect OS events to Window Manager & Toasts
   const handleOsEvent = useCallback((ev: { _tag: string; payload: unknown }) => {
     if (ev._tag === "OpenPreview") {
@@ -169,7 +276,10 @@ export const Desktop: React.FC = () => {
       };
       wmStore.pushToast(n.title, n.message, n.level ?? "info");
     } else if (ev._tag === "DisplayMode" && ev.payload) {
-      wmStore.openApp("screen");
+      const wins = wmStore.getSnapshot().windows;
+      if (!wins.some((w) => w.appId === "gl-window" || w.appId === "screen")) {
+        wmStore.openApp("gl-window");
+      }
     }
   }, []);
   useOsEvents(handleOsEvent);
@@ -246,6 +356,9 @@ export const Desktop: React.FC = () => {
         />
       )}
 
+      {/* Desktop Wayland Host Root (output geometry + popups/dnd; top-level surfaces mount in WindowFrame) */}
+      <div ref={waylandRootRef} className="fixed inset-0 pointer-events-none z-[1] overflow-hidden" />
+
       {/* Desktop Ambient Widgets (Behind Windows, Toggleable) */}
       <DesktopWidgets />
 
@@ -263,7 +376,7 @@ export const Desktop: React.FC = () => {
           return (
             <div key={win.id} data-window-surface="true" className="pointer-events-auto">
               <WindowFrame win={win} focused={focused} visible={visible}>
-                {renderWindowApp(win, focused)}
+                {renderWindowApp(win, focused, visible)}
               </WindowFrame>
             </div>
           );

@@ -1,6 +1,8 @@
 import {
   Activity,
+  AppWindow,
   Bot,
+  Box,
   Code2,
   Cpu,
   Database,
@@ -42,6 +44,8 @@ const APP_META: Record<
   "shader-synth": { icon: Sparkles, category: "creative" },
   preview: { icon: Globe, category: "dev" },
   screen: { icon: Monitor, category: "system" },
+  "gl-window": { icon: Box, category: "creative" },
+  "wayland-surface": { icon: AppWindow, category: "system" },
   git: { icon: GitBranch, category: "dev" },
   toolchain: { icon: Package, category: "system" },
   monitor: { icon: Activity, category: "system" },
@@ -77,6 +81,7 @@ export const AppLauncherOverlay: React.FC = () => {
 
   const q = query.trim().toLowerCase();
   const appIds = (Object.keys(APP_CATALOG) as AppId[]).filter((id) => {
+    if (id === "wayland-surface") return false;
     const def = APP_CATALOG[id];
     const meta = APP_META[id];
     if (category !== "all" && meta?.category !== category) return false;
@@ -110,7 +115,7 @@ export const AppLauncherOverlay: React.FC = () => {
                 wmStore.setLauncher(false);
               }
             }}
-            placeholder="Search 18 WebOS apps..."
+            placeholder="Search 19 WebOS apps..."
             className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
           />
           <kbd className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-mono text-zinc-400">
