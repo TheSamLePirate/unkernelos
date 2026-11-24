@@ -55,7 +55,10 @@ interface SearchHit {
 }
 
 function detectLanguage(path: string): string {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const base = path.split("/").pop()?.toLowerCase() ?? "";
+  if (base === "dune" || base === "dune-project") return "ocaml";
+  if (base === "cargo.toml") return "yaml";
+  const ext = base.split(".").pop() ?? "";
   const map: Record<string, string> = {
     ts: "typescript",
     tsx: "tsx",
@@ -64,8 +67,14 @@ function detectLanguage(path: string): string {
     mjs: "javascript",
     py: "python",
     rs: "rust",
+    ml: "ocaml",
+    mli: "ocaml",
+    mll: "ocaml",
+    mly: "ocaml",
+    toml: "yaml",
     go: "go",
     json: "json",
+    ipynb: "json",
     html: "html",
     css: "css",
     sh: "bash",
@@ -89,8 +98,15 @@ const KEYWORDS = new Set([
   "if", "else", "for", "while", "switch", "case", "break", "continue", "async", "await",
   "try", "catch", "finally", "throw", "new", "class", "extends", "interface", "type",
   "enum", "readonly", "public", "private", "protected", "true", "false", "null", "undefined",
-  "def", "lambda", "with", "as", "pass", "elif", "yield", "fn", "pub", "struct", "impl",
-  "match", "use", "mod", "mut", "package", "func", "defer", "go", "select", "chan",
+  "def", "lambda", "with", "as", "pass", "elif", "yield",
+  // Rust
+  "fn", "pub", "struct", "impl", "trait", "where", "match", "use", "mod", "mut", "ref",
+  "move", "loop", "crate", "self", "Self", "unsafe", "dyn", "extern", "in",
+  // OCaml
+  "rec", "fun", "of", "then", "begin", "end", "module", "sig", "open", "val", "and",
+  "or", "not", "exception", "raise", "when", "do", "done", "to", "downto", "functor", "include",
+  // Go / SQL
+  "package", "func", "defer", "go", "select", "chan", "SELECT", "FROM", "WHERE", "INSERT", "CREATE", "TABLE",
 ]);
 
 function escapeHtml(s: string): string {
@@ -104,6 +120,9 @@ function highlightCode(code: string, lang: string): string {
     .map((line) => {
       // Comments first
       if ((lang === "python" || lang === "bash" || lang === "yaml") && /^\s*#/.test(line)) {
+        return `<span class="text-zinc-500 italic">${escapeHtml(line)}</span>`;
+      }
+      if (lang === "ocaml" && /^\s*\(\*.*\*\)?\s*$/.test(line)) {
         return `<span class="text-zinc-500 italic">${escapeHtml(line)}</span>`;
       }
       if (/^\s*\/\//.test(line)) {
@@ -177,14 +196,20 @@ function highlightCode(code: string, lang: string): string {
 }
 
 function fileDotColor(name: string): string {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const lower = name.toLowerCase();
+  if (lower === "cargo.toml" || lower.endsWith(".rs")) return "bg-orange-500";
+  if (lower === "dune" || lower === "dune-project" || lower.endsWith(".ml") || lower.endsWith(".mli")) {
+    return "bg-amber-500";
+  }
+  const ext = lower.split(".").pop() ?? "";
   if (ext === "ts" || ext === "tsx") return "bg-sky-400";
   if (ext === "js" || ext === "jsx") return "bg-amber-400";
-  if (ext === "py") return "bg-emerald-400";
+  if (ext === "py" || ext === "ipynb") return "bg-emerald-400";
   if (ext === "json") return "bg-yellow-300";
   if (ext === "css") return "bg-fuchsia-400";
   if (ext === "html") return "bg-orange-400";
   if (ext === "md") return "bg-cyan-300";
+  if (ext === "sql") return "bg-teal-400";
   return "bg-zinc-400";
 }
 
@@ -505,6 +530,12 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
       cmd = `bun run ${sq(activeTab.path)}`;
     } else if (ext === "py") {
       cmd = `python3 ${sq(activeTab.path)}`;
+    } else if (ext === "rs") {
+      cmd = `[ -f Cargo.toml ] && cargo run || (rustc ${sq(activeTab.path)} -o /tmp/unkernel-rs-run && /tmp/unkernel-rs-run)`;
+    } else if (ext === "ml") {
+      cmd = `[ -f dune-project ] && dune exec -- ./bin/main.exe || ocaml ${sq(activeTab.path)}`;
+    } else if (ext === "sql") {
+      cmd = `sqlite3 -header -column :memory: < ${sq(activeTab.path)}`;
     } else if (ext === "sh") {
       cmd = `sh ${sq(activeTab.path)}`;
     } else {

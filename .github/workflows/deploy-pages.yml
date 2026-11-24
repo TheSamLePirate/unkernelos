@@ -40,14 +40,14 @@ jobs:
       - name: Fetch base unkernel distro images (Alpine + Debian)
         run: bun run fetch-distros
 
-      - name: Cache pre-installed Debian Dev + AI EROFS image
+      - name: Cache pre-installed Debian Dev + AI + Science + Rust + OCaml EROFS image
         id: cache-debian-dev
         uses: actions/cache@v4
         with:
           path: .cache/custom-distros/debian-full.erofs
-          key: debian-full-v1-${{ hashFiles('scripts/build-debian-dev.sh', 'bun.lock') }}
+          key: debian-full-v2-${{ hashFiles('scripts/build-debian-dev.sh', 'bun.lock') }}
 
-      - name: Build full pre-installed Debian EROFS (git, gh, python, pip, node, npm, bun, pi, claude, mesa/gl, foot)
+      - name: Build full pre-installed Debian EROFS (git, gh, python, science, rust, ocaml, sqlite3, node, bun, pi, claude, mesa/gl, foot)
         if: steps.cache-debian-dev.outputs.cache-hit != 'true'
         run: |
           BASE_DEBIAN=$(find .cache/distros -name "debian.erofs" | head -n1)

@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  BookOpen,
   Bot,
   Check,
   ChevronRight,
@@ -209,6 +210,11 @@ export const FileExplorerApp: React.FC = () => {
     // Route PDF, Video & Audio directly into Media & Capture Studio!
     if (MEDIA_STUDIO_RE.test(entry.name)) {
       wmStore.openFileInMedia(entry.path);
+      return;
+    }
+    // Route Jupyter notebooks into the Polyglot Science Notebook
+    if (/\.ipynb$/i.test(entry.name)) {
+      wmStore.openFileInNotebook(entry.path);
       return;
     }
     setSelectedFile(entry);
@@ -1129,6 +1135,19 @@ export const FileExplorerApp: React.FC = () => {
                   <Film className="w-3.5 h-3.5" />
                   Open in Media Studio
                 </button>
+                {/\.ipynb$/i.test(ctxMenu.entry.name) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      wmStore.openFileInNotebook(ctxMenu.entry.path);
+                      setCtxMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-amber-200"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Open in Notebook
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {

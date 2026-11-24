@@ -7,8 +7,12 @@ export type ToolId =
   | "gh"
   | "python"
   | "pip"
+  | "py-science"
   | "node"
   | "bun"
+  | "rust"
+  | "ocaml"
+  | "sqlite"
   | "claude"
   | "pi"
   | "mesa"
@@ -19,7 +23,7 @@ export type ToolStatusKind = "unknown" | "missing" | "installing" | "installed" 
 export interface ToolSpec {
   readonly id: ToolId;
   readonly name: string;
-  readonly category: "vcs" | "runtime" | "agent" | "graphics";
+  readonly category: "vcs" | "runtime" | "science" | "agent" | "graphics";
   readonly description: string;
   readonly approxSize: string;
   readonly debianOnly?: boolean;
@@ -102,6 +106,50 @@ export const TOOLCHAIN_SPECS: readonly ToolSpec[] = [
     versionCmd: 'PATH="/usr/local/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH" bun --version',
     installDebian: 'bun --version',
     installAlpine: 'bun --version',
+  },
+  {
+    id: "rust",
+    name: "Rust (rustc + cargo)",
+    category: "runtime",
+    description: "Native aarch64 Rust compiler, Cargo package manager & C linker",
+    approxSize: "~210 MB",
+    checkCmd: 'PATH="$HOME/.cargo/bin:/usr/bin:/usr/local/bin:$PATH" command -v rustc && command -v cargo',
+    versionCmd: 'PATH="$HOME/.cargo/bin:/usr/bin:/usr/local/bin:$PATH" rustc --version',
+    installDebian: "sudo apt-get update && sudo apt-get install -y rustc cargo gcc libc6-dev pkg-config",
+    installAlpine: "sudo apk add --no-cache rust cargo build-base",
+  },
+  {
+    id: "ocaml",
+    name: "OCaml (ocaml + ocamlopt + dune)",
+    category: "runtime",
+    description: "Native OCaml bytecode/native compilers & Dune build system",
+    approxSize: "~95 MB",
+    checkCmd: "command -v ocaml && command -v ocamlopt",
+    versionCmd: "ocaml -version",
+    installDebian: "sudo apt-get update && sudo apt-get install -y ocaml ocaml-dune gcc libc6-dev",
+    installAlpine: "sudo apk add --no-cache ocaml dune build-base",
+  },
+  {
+    id: "py-science",
+    name: "Python Science (NumPy + Matplotlib)",
+    category: "science",
+    description: "Vectorized math, linear algebra & inline Matplotlib PNG plots for Notebook",
+    approxSize: "~32 MB",
+    checkCmd: 'python3 -c "import numpy, matplotlib"',
+    versionCmd: 'python3 -c "import numpy, matplotlib; print(f\'numpy {numpy.__version__}, mpl {matplotlib.__version__}\')"',
+    installDebian: "sudo apt-get update && sudo apt-get install -y python3-numpy python3-matplotlib",
+    installAlpine: "sudo apk add --no-cache py3-numpy py3-matplotlib || pip3 install numpy matplotlib",
+  },
+  {
+    id: "sqlite",
+    name: "SQLite 3 CLI",
+    category: "science",
+    description: "Native SQLite3 database engine powering SQL Studio & Polyglot Notebook",
+    approxSize: "~3 MB",
+    checkCmd: "command -v sqlite3",
+    versionCmd: "sqlite3 --version | awk '{print $1}'",
+    installDebian: "sudo apt-get update && sudo apt-get install -y sqlite3",
+    installAlpine: "sudo apk add --no-cache sqlite",
   },
   {
     id: "claude",

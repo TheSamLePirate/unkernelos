@@ -53,6 +53,8 @@ const GitApp = lazy(() => import("./apps/GitApp.tsx").then((m) => ({ default: m.
 const GlViewportWindow = lazy(() => import("./apps/GlViewportWindow.tsx").then((m) => ({ default: m.GlViewportWindow })));
 const KittyTerminalApp = lazy(() => import("./apps/KittyTerminalApp.tsx").then((m) => ({ default: m.KittyTerminalApp })));
 const MediaStudioApp = lazy(() => import("./apps/MediaStudioApp.tsx").then((m) => ({ default: m.MediaStudioApp })));
+const NetworkInspectorApp = lazy(() => import("./apps/NetworkInspectorApp.tsx").then((m) => ({ default: m.NetworkInspectorApp })));
+const NotebookApp = lazy(() => import("./apps/NotebookApp.tsx").then((m) => ({ default: m.NotebookApp })));
 const NotesStudioApp = lazy(() => import("./apps/NotesStudioApp.tsx").then((m) => ({ default: m.NotesStudioApp })));
 const PreviewBrowserApp = lazy(() => import("./apps/PreviewBrowserApp.tsx").then((m) => ({ default: m.PreviewBrowserApp })));
 const ProcessManagerApp = lazy(() => import("./apps/ProcessManagerApp.tsx").then((m) => ({ default: m.ProcessManagerApp })));
@@ -60,6 +62,7 @@ const ScreenDisplayApp = lazy(() => import("./apps/ScreenDisplayApp.tsx").then((
 const ServiceRunnerApp = lazy(() => import("./apps/ServiceRunnerApp.tsx").then((m) => ({ default: m.ServiceRunnerApp })));
 const SettingsApp = lazy(() => import("./apps/SettingsApp.tsx").then((m) => ({ default: m.SettingsApp })));
 const ShaderSynthApp = lazy(() => import("./apps/ShaderSynthApp.tsx").then((m) => ({ default: m.ShaderSynthApp })));
+const StoreApp = lazy(() => import("./apps/StoreApp.tsx").then((m) => ({ default: m.StoreApp })));
 const SystemMonitorApp = lazy(() => import("./apps/SystemMonitorApp.tsx").then((m) => ({ default: m.SystemMonitorApp })));
 const ToolchainInstallerApp = lazy(() => import("./apps/ToolchainInstallerApp.tsx").then((m) => ({ default: m.ToolchainInstallerApp })));
 const WaylandSurfaceWindow = lazy(() => import("./apps/WaylandSurfaceWindow.tsx").then((m) => ({ default: m.WaylandSurfaceWindow })));
@@ -82,16 +85,22 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
       return <AgentApiApp />;
     case "ide":
       return <CodeIdeApp windowFocused={focused} />;
+    case "notebook":
+      return <NotebookApp />;
     case "terminal":
       return <KittyTerminalApp windowFocused={focused} />;
     case "explorer":
       return <FileExplorerApp />;
     case "api-client":
       return <ApiClientApp />;
+    case "network-inspector":
+      return <NetworkInspectorApp />;
     case "database":
       return <DatabaseStudioApp />;
     case "services":
       return <ServiceRunnerApp />;
+    case "app-store":
+      return <StoreApp />;
     case "automations":
       return <AutomationsApp />;
     case "custom-app":

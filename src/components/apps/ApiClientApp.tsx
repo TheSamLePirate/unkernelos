@@ -10,10 +10,11 @@ import {
   Trash2,
   Wand2,
 } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { networkStore } from "../../core/network-store.ts";
 import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../../core/runtime.ts";
 import { DEFAULT_CREDENTIALS } from "../../core/schema.ts";
-import { wmStore } from "../../wm/wm-store.ts";
+import { useWm, wmStore } from "../../wm/wm-store.ts";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
@@ -98,6 +99,7 @@ function loadSaved(): SavedRequest[] {
 }
 
 export const ApiClientApp: React.FC = () => {
+  const wm = useWm();
   const creds = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.credsRef),
     DEFAULT_CREDENTIALS
@@ -142,6 +144,29 @@ export const ApiClientApp: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<ApiResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Accept handoff from Live Network Inspector ("Open in API Client")
+  useEffect(() => {
+    const draft = wm.apiClientDraft;
+    if (!draft) return;
+    const validMethods: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+    const m = draft.method.toUpperCase() as HttpMethod;
+    setMethod(validMethods.includes(m) ? m : "GET");
+    setUrl(draft.url);
+    setTarget(draft.target);
+    if (draft.headers.length > 0) {
+      setHeaders(
+        draft.headers.map(([k, v], i) => ({
+          id: `draft-${draft.id}-${i}`,
+          key: k,
+          value: v,
+          enabled: true,
+        }))
+      );
+    }
+    if (draft.body) setBody(draft.body);
+    wmStore.clearApiClientDraft(draft.id);
+  }, [wm.apiClientDraft]);
 
   const persistSaved = (next: SavedRequest[]) => {
     setSaved(next);
@@ -232,10 +257,37 @@ export const ApiClientApp: React.FC = () => {
         );
 
         const durationMs = Math.round(performance.now() - t0);
+        const sizeBytes = new TextEncoder().encode(res.body).byteLength;
         setResponse({
           ...res,
           durationMs,
-          sizeBytes: new TextEncoder().encode(res.body).byteLength,
+          sizeBytes,
+        });
+        let parsedPath = cleanUrl;
+        let parsedPort: number | undefined;
+        try {
+          const u = new URL(cleanUrl);
+          parsedPath = `${u.pathname}${u.search}`;
+          if (u.port) parsedPort = Number(u.port);
+        } catch {
+          // ignore
+        }
+        networkStore.recordComplete({
+          source: "api-client",
+          method,
+          url: cleanUrl,
+          port: parsedPort,
+          path: parsedPath,
+          status: res.status,
+          statusText: res.statusText,
+          durationMs,
+          reqSize: hasBody ? new TextEncoder().encode(body).byteLength : 0,
+          resSize: sizeBytes,
+          reqHeaders: Object.entries(hdrs),
+          resHeaders: res.headers,
+          reqBody: hasBody ? body : "",
+          resBody: res.body,
+          contentType: res.contentType,
         });
       } else {
         const r = await fetch(cleanUrl, {
@@ -246,19 +298,63 @@ export const ApiClientApp: React.FC = () => {
         const txt = await r.text();
         const resHeaders: [string, string][] = [];
         r.headers.forEach((v, k) => resHeaders.push([k, v]));
+        const durationMs = Math.round(performance.now() - t0);
+        const sizeBytes = new TextEncoder().encode(txt).byteLength;
+        const ct = r.headers.get("content-type") || "";
         setResponse({
           status: r.status,
           statusText: r.statusText,
-          durationMs: Math.round(performance.now() - t0),
-          sizeBytes: new TextEncoder().encode(txt).byteLength,
+          durationMs,
+          sizeBytes,
           headers: resHeaders,
           body: txt,
-          contentType: r.headers.get("content-type") || "",
+          contentType: ct,
+        });
+        let parsedPath = cleanUrl;
+        try {
+          const u = new URL(cleanUrl);
+          parsedPath = `${u.pathname}${u.search}`;
+        } catch {
+          // ignore
+        }
+        networkStore.recordComplete({
+          source: "api-client",
+          method,
+          url: cleanUrl,
+          path: parsedPath,
+          status: r.status,
+          statusText: r.statusText,
+          durationMs,
+          reqSize: hasBody ? new TextEncoder().encode(body).byteLength : 0,
+          resSize: sizeBytes,
+          reqHeaders: Object.entries(hdrs),
+          resHeaders,
+          reqBody: hasBody ? body : "",
+          resBody: txt,
+          contentType: ct,
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
       setResponse(null);
+      networkStore.recordComplete({
+        source: "api-client",
+        method,
+        url: cleanUrl,
+        path: cleanUrl,
+        status: 0,
+        statusText: "Error",
+        durationMs: Math.round(performance.now() - t0),
+        reqSize: hasBody ? new TextEncoder().encode(body).byteLength : 0,
+        resSize: 0,
+        reqHeaders: Object.entries(hdrs),
+        resHeaders: [],
+        reqBody: hasBody ? body : "",
+        resBody: "",
+        contentType: "",
+        error: msg,
+      });
     } finally {
       setLoading(false);
     }

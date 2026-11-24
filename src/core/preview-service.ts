@@ -1,4 +1,5 @@
 import type { GuestSocket, KernelHandle } from "unkernel";
+import { networkStore } from "./network-store.ts";
 
 interface RelayRequest {
   t: "kw-vm-fetch";
@@ -152,7 +153,35 @@ export class GuestPreviewRelay {
       }
     };
 
+    const t0 = performance.now();
+    let reqBodyPreview = "";
+    let reqSize = 0;
+    if (req.body) {
+      reqSize = req.body.byteLength;
+      try {
+        reqBodyPreview = new TextDecoder().decode(req.body.slice(0, 16_384));
+      } catch {
+        reqBodyPreview = `<binary ${reqSize} bytes>`;
+      }
+    }
+    const netId = networkStore.startRequest({
+      source: "preview-sw",
+      method: req.method,
+      url: `http://127.0.0.1:${req.port}${req.path}`,
+      port: req.port,
+      path: req.path,
+      reqHeaders: req.headers,
+      reqBody: reqBodyPreview,
+      reqSize,
+    });
+
     const fail = (status: number, message: string) => {
+      networkStore.finishRequest(netId, {
+        status,
+        statusText: "Error",
+        durationMs: performance.now() - t0,
+        error: message,
+      });
       try {
         port.postMessage({ t: "error", status, message });
       } catch {
@@ -197,6 +226,7 @@ export class GuestPreviewRelay {
 
       const resHeaders: [string, string][] = [];
       res.headers.forEach((v, k) => resHeaders.push([k, v]));
+      const ct = res.headers.get("content-type") || "";
       port.postMessage({
         t: "head",
         status: res.status,
@@ -205,11 +235,23 @@ export class GuestPreviewRelay {
       });
 
       if (!res.body || req.method === "HEAD") {
+        networkStore.finishRequest(netId, {
+          status: res.status,
+          statusText: res.statusText,
+          durationMs: performance.now() - t0,
+          resHeaders,
+          contentType: ct,
+          resSize: 0,
+        });
         port.postMessage({ t: "end" });
         return;
       }
 
       const reader = res.body.getReader();
+      let totalResBytes = 0;
+      const textChunks: Uint8Array[] = [];
+      let capturedBytes = 0;
+      const isTextLike = /text|json|javascript|xml|svg|html|css|urlencoded/i.test(ct) || !ct;
       try {
         while (!cancelled) {
           if (credits <= 0) {
@@ -222,11 +264,40 @@ export class GuestPreviewRelay {
           if (done) break;
           if (value && value.byteLength > 0) {
             credits--;
+            totalResBytes += value.byteLength;
+            if (netId && isTextLike && capturedBytes < 32_768) {
+              const take = value.subarray(0, Math.min(value.byteLength, 32_768 - capturedBytes));
+              textChunks.push(take.slice());
+              capturedBytes += take.byteLength;
+            }
             const copy = value.slice();
             port.postMessage({ t: "chunk", data: copy.buffer }, [copy.buffer]);
           }
         }
-        if (!cancelled) port.postMessage({ t: "end" });
+        if (!cancelled) {
+          let resBody = "";
+          if (netId && isTextLike && textChunks.length > 0) {
+            const merged = new Uint8Array(capturedBytes);
+            let off = 0;
+            for (const c of textChunks) {
+              merged.set(c, off);
+              off += c.byteLength;
+            }
+            resBody = new TextDecoder().decode(merged);
+          } else if (netId && !isTextLike) {
+            resBody = `<binary ${ct || "stream"} — ${totalResBytes} bytes>`;
+          }
+          networkStore.finishRequest(netId, {
+            status: res.status,
+            statusText: res.statusText,
+            durationMs: performance.now() - t0,
+            resHeaders,
+            resBody,
+            resSize: totalResBytes,
+            contentType: ct,
+          });
+          port.postMessage({ t: "end" });
+        }
       } finally {
         reader.cancel().catch(() => {});
       }

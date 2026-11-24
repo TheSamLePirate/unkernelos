@@ -63,7 +63,7 @@ sudo mount --bind /dev/pts "$ROOTFS/dev/pts"
 sudo mount -t proc proc "$ROOTFS/proc"
 sudo mount -t sysfs sysfs "$ROOTFS/sys"
 
-echo "=== [4/7] Installing Debian packages (git, gh, python3, pip, mesa/gl, foot) ==="
+echo "=== [4/7] Installing Debian packages (git, gh, python3, science, rust, ocaml, sqlite3, mesa/gl, foot) ==="
 sudo chroot "$ROOTFS" /bin/bash -euxo pipefail <<'CHROOT_APT'
 export DEBIAN_FRONTEND=noninteractive
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -75,6 +75,16 @@ apt-get install -y --no-install-recommends \
   python3 \
   python3-pip \
   python3-venv \
+  python3-numpy \
+  python3-matplotlib \
+  sqlite3 \
+  gcc \
+  libc6-dev \
+  pkg-config \
+  rustc \
+  cargo \
+  ocaml \
+  ocaml-dune \
   curl \
   ca-certificates \
   jq \
@@ -143,6 +153,12 @@ git --version
 gh --version | head -n1
 python3 --version
 pip3 --version
+python3 -c "import numpy, matplotlib; print('science:', numpy.__version__, matplotlib.__version__)"
+sqlite3 --version
+rustc --version
+cargo --version
+ocaml -version
+dune --version
 node --version
 npm --version
 bun --version

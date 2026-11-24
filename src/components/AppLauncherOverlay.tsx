@@ -1,6 +1,7 @@
 import {
   Activity,
   AppWindow,
+  BookOpen,
   Bot,
   Box,
   Code2,
@@ -16,10 +17,12 @@ import {
   Package,
   PenTool,
   PlayCircle,
+  Radar,
   Search,
   Send,
   Settings,
   Sparkles,
+  Store,
   Terminal,
   Workflow,
   Wrench,
@@ -39,11 +42,14 @@ const APP_META: Record<
   "agent-swarm": { icon: Network, category: "dev" },
   "agent-api": { icon: Workflow, category: "dev" },
   ide: { icon: Code2, category: "dev" },
+  notebook: { icon: BookOpen, category: "dev" },
   terminal: { icon: Terminal, category: "dev" },
   explorer: { icon: FolderOpen, category: "system" },
   "api-client": { icon: Send, category: "dev" },
+  "network-inspector": { icon: Radar, category: "dev" },
   database: { icon: Database, category: "dev" },
   services: { icon: PlayCircle, category: "dev" },
+  "app-store": { icon: Store, category: "creative" },
   automations: { icon: Zap, category: "dev" },
   "custom-app": { icon: Sparkles, category: "creative" },
   notes: { icon: FileText, category: "creative" },
@@ -135,7 +141,7 @@ export const AppLauncherOverlay: React.FC = () => {
                 wmStore.setLauncher(false);
               }
             }}
-            placeholder={`Search ${23 + customApps.length} WebOS & Agent-Built apps...`}
+            placeholder={`Search ${Object.keys(APP_CATALOG).length - 2 + customApps.length} WebOS & Agent-Built apps...`}
             className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
           />
           <kbd className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-mono text-zinc-400">

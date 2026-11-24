@@ -32,7 +32,8 @@ const EMPTY_SNAPSHOT: ToolchainSnapshot = {
 
 const CATEGORY_LABEL: Record<string, string> = {
   vcs: "Version Control & GitHub",
-  runtime: "Languages & Runtimes",
+  runtime: "Languages & Runtimes (Python, Node, Bun, Rust, OCaml)",
+  science: "Data Science & SQL (NumPy, Matplotlib, SQLite)",
   agent: "AI Coding Agents",
   graphics: "Graphics (Debian Only)",
 };
@@ -59,11 +60,19 @@ export const ToolchainInstallerApp: React.FC = () => {
     );
   };
 
+  const installScienceRustOcaml = () => {
+    appRuntime.runFork(
+      Effect.flatMap(ToolchainService, (t) =>
+        t.installStack(["rust", "ocaml", "py-science", "sqlite"])
+      ).pipe(Effect.ignore)
+    );
+  };
+
   const refresh = () => {
     appRuntime.runFork(Effect.flatMap(ToolchainService, (t) => t.refreshAll()));
   };
 
-  const categories = ["vcs", "runtime", "agent", "graphics"] as const;
+  const categories = ["vcs", "runtime", "science", "agent", "graphics"] as const;
 
   return (
     <div className="flex flex-col w-full h-full bg-[#0a0c13]/94">
@@ -91,11 +100,20 @@ export const ToolchainInstallerApp: React.FC = () => {
           <button
             type="button"
             disabled={snap.busy}
+            onClick={installScienceRustOcaml}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:brightness-110 disabled:opacity-45 shadow-lg shadow-orange-600/20 transition"
+          >
+            {snap.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            Rust + OCaml + Science
+          </button>
+          <button
+            type="button"
+            disabled={snap.busy}
             onClick={installCoreStack}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-violet-600 to-cyan-500 text-white hover:brightness-110 disabled:opacity-45 shadow-lg shadow-violet-600/20 transition"
           >
             {snap.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            Install Full Stack (git, gh, py, node, bun, claude, pi)
+            Install Full Stack
           </button>
         </div>
       </div>

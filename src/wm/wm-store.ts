@@ -8,11 +8,14 @@ export type AppId =
   | "agent-swarm"
   | "agent-api"
   | "ide"
+  | "notebook"
   | "terminal"
   | "explorer"
   | "api-client"
+  | "network-inspector"
   | "database"
   | "services"
+  | "app-store"
   | "automations"
   | "custom-app"
   | "notes"
@@ -94,13 +97,24 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "ide",
     title: "Code IDE",
     shortTitle: "Code",
-    description: "Multi-tab code editor with syntax highlighting, ripgrep search & integrated terminal",
+    description: "Multi-tab code editor (TS, Python, Rust, OCaml) with ripgrep search & integrated terminal",
     defaultWidth: 1100,
     defaultHeight: 680,
     minWidth: 680,
     minHeight: 440,
     accent: "from-sky-500 to-indigo-600",
     shortcut: "⌘9",
+  },
+  notebook: {
+    id: "notebook",
+    title: "Polyglot Science Notebook",
+    shortTitle: "Notebook",
+    description: "Jupyter-style Python (Matplotlib/NumPy), Rust, OCaml, Bun, SQL, Bash & osctl cells + .ipynb",
+    defaultWidth: 1080,
+    defaultHeight: 690,
+    minWidth: 640,
+    minHeight: 440,
+    accent: "from-orange-500 via-amber-500 to-cyan-500",
   },
   terminal: {
     id: "terminal",
@@ -137,6 +151,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minHeight: 420,
     accent: "from-teal-400 to-cyan-600",
   },
+  "network-inspector": {
+    id: "network-inspector",
+    title: "Live Network & HTTP Inspector",
+    shortTitle: "Network",
+    description: "Capture guest vsock HTTP traffic, waterfall latency, JSON/headers, cURL export & replay",
+    defaultWidth: 1060,
+    defaultHeight: 660,
+    minWidth: 640,
+    minHeight: 420,
+    accent: "from-cyan-400 via-sky-500 to-indigo-600",
+  },
   database: {
     id: "database",
     title: "SQL & Database Studio",
@@ -152,12 +177,23 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "services",
     title: "Service & Daemon Runner",
     shortTitle: "Services",
-    description: "Launch, monitor & tail logs for background Bun/Python/Vite servers inside Linux",
+    description: "Launch, monitor & tail logs for Bun/Python/Rust/OCaml/Vite servers inside Linux",
     defaultWidth: 940,
     defaultHeight: 600,
     minWidth: 580,
     minHeight: 380,
     accent: "from-emerald-500 to-green-600",
+  },
+  "app-store": {
+    id: "app-store",
+    title: "App Store & Project Starters",
+    shortTitle: "Store",
+    description: "1-click WebOS apps, Rust/OCaml/Python/Bun project starters & Linux science toolchains",
+    defaultWidth: 1060,
+    defaultHeight: 680,
+    minWidth: 640,
+    minHeight: 440,
+    accent: "from-fuchsia-500 via-violet-500 to-sky-500",
   },
   automations: {
     id: "automations",
@@ -389,6 +425,15 @@ export interface TerminalLaunchRequest {
   readonly title?: string;
 }
 
+export interface ApiClientDraft {
+  readonly id: number;
+  readonly method: string;
+  readonly url: string;
+  readonly target: "vm" | "browser";
+  readonly headers: readonly [string, string][];
+  readonly body: string;
+}
+
 interface WmState {
   readonly windows: readonly WindowInstance[];
   readonly activeWindowId: string | null;
@@ -409,6 +454,8 @@ interface WmState {
   readonly recentWorkspaces: readonly string[];
   readonly ideOpenFilePath: string | null;
   readonly mediaOpenFilePath: string | null;
+  readonly notebookOpenFilePath: string | null;
+  readonly apiClientDraft: ApiClientDraft | null;
   readonly explorerTargetDir: string | null;
   readonly terminalLaunchRequest: TerminalLaunchRequest | null;
   readonly toasts: readonly ToastItem[];
@@ -475,6 +522,8 @@ class WindowManagerStore {
     recentWorkspaces: initialWorkspace.recent,
     ideOpenFilePath: null,
     mediaOpenFilePath: null,
+    notebookOpenFilePath: null,
+    apiClientDraft: null,
     explorerTargetDir: null,
     terminalLaunchRequest: null,
     toasts: [],
@@ -976,6 +1025,28 @@ class WindowManagerStore {
 
   public clearMediaOpenFile(): void {
     this.setState((s) => ({ ...s, mediaOpenFilePath: null }));
+  }
+
+  public openFileInNotebook(filePath: string): void {
+    this.setState((s) => ({ ...s, notebookOpenFilePath: filePath }));
+    this.openApp("notebook", { filePath });
+  }
+
+  public clearNotebookOpenFile(): void {
+    this.setState((s) => ({ ...s, notebookOpenFilePath: null }));
+  }
+
+  public openRequestInApiClient(draft: Omit<ApiClientDraft, "id">): void {
+    this.setState((s) => ({
+      ...s,
+      apiClientDraft: { ...draft, id: ++this.terminalReqCounter },
+    }));
+    this.openApp("api-client");
+  }
+
+  public clearApiClientDraft(id: number): void {
+    if (this.state.apiClientDraft?.id !== id) return;
+    this.setState((s) => ({ ...s, apiClientDraft: null }));
   }
 
   public openDirInIde(dir: string): void {

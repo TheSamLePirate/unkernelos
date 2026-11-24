@@ -66,32 +66,55 @@ export const ServiceRunnerApp: React.FC = () => {
   const [newCmd, setNewCmd] = useState("");
   const [newPort, setNewPort] = useState("3000");
   const [creating, setCreating] = useState(false);
-  const [pkgScripts, setPkgScripts] = useState<readonly { name: string; cmd: string }[]>([]);
+  const [pkgScripts, setPkgScripts] = useState<readonly { name: string; cmd: string; badge?: string }[]>([]);
 
   const selected = services.find((s) => s.id === selectedId) ?? services[0] ?? null;
 
-  // Auto-detect package.json scripts from the Active Workspace!
+  // Auto-detect package.json, Cargo.toml (Rust) & dune-project (OCaml) in Active Workspace!
   useEffect(() => {
     const dir = wm.activeWorkspaceDir || "/home/user/workspace";
     void appRuntime
       .runPromise(
-        Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.readFileText(`${dir}/package.json`)))
+        Effect.either(
+          Effect.gen(function* () {
+            const fs = yield* GuestFsService;
+            const detected: { name: string; cmd: string; badge?: string }[] = [];
+            const pkgRes = yield* fs.readFileText(`${dir}/package.json`).pipe(Effect.either);
+            if (pkgRes._tag === "Right") {
+              try {
+                const parsed = JSON.parse(pkgRes.right) as { scripts?: Record<string, string> };
+                if (parsed.scripts && typeof parsed.scripts === "object") {
+                  for (const [name, cmd] of Object.entries(parsed.scripts)) {
+                    detected.push({ name, cmd: `bun run ${name}`, badge: cmd });
+                  }
+                }
+              } catch {
+                // invalid json
+              }
+            }
+            const cargoRes = yield* fs.readFileText(`${dir}/Cargo.toml`).pipe(Effect.either);
+            if (cargoRes._tag === "Right") {
+              detected.push(
+                { name: "cargo run", cmd: "cargo run", badge: "Rust" },
+                { name: "cargo test", cmd: "cargo test", badge: "Rust" },
+                { name: "cargo release", cmd: "cargo build --release", badge: "Rust" }
+              );
+            }
+            const duneRes = yield* fs.readFileText(`${dir}/dune-project`).pipe(Effect.either);
+            if (duneRes._tag === "Right") {
+              detected.push(
+                { name: "dune build", cmd: "dune build", badge: "OCaml" },
+                { name: "dune exec", cmd: "dune exec ./bin/main.exe", badge: "OCaml" },
+                { name: "dune test", cmd: "dune runtest", badge: "OCaml" }
+              );
+            }
+            return detected;
+          })
+        )
       )
       .then((res) => {
-        if (res._tag === "Right") {
-          try {
-            const parsed = JSON.parse(res.right) as { scripts?: Record<string, string> };
-            if (parsed.scripts && typeof parsed.scripts === "object") {
-              setPkgScripts(
-                Object.entries(parsed.scripts).map(([name, cmd]) => ({ name, cmd }))
-              );
-              return;
-            }
-          } catch {
-            // invalid json
-          }
-        }
-        setPkgScripts([]);
+        if (res._tag === "Right") setPkgScripts(res.right);
+        else setPkgScripts([]);
       });
   }, [wm.activeWorkspaceDir]);
 
@@ -191,15 +214,20 @@ echo "Started PID $(cat ${pidFile})"
     setCreating(false);
   };
 
-  const addAndRunPkgScript = (name: string) => {
+  const addAndRunPkgScript = (name: string, cmd: string) => {
     const dir = wm.activeWorkspaceDir || "/home/user/workspace";
     const proj = dir.split("/").filter(Boolean).pop() || "app";
     const svc: ServiceDef = {
       id: `svc-${Math.random().toString(36).slice(2, 8)}`,
       name: `${proj}: ${name}`,
       cwd: dir,
-      command: `bun run ${name}`,
-      port: name === "dev" || name === "start" || name === "preview" ? 3000 : undefined,
+      command: cmd,
+      port:
+        name === "dev" || name === "start" || name === "preview"
+          ? 3000
+          : name === "cargo run"
+          ? 8080
+          : undefined,
     };
     persist([...services, svc]);
     setSelectedId(svc.id);
@@ -281,12 +309,12 @@ echo "Started PID $(cat ${pidFile})"
               package.json ({wm.activeWorkspaceDir.split("/").pop()})
             </div>
             <div className="flex flex-wrap gap-1">
-              {pkgScripts.slice(0, 6).map((sc) => (
+              {pkgScripts.slice(0, 8).map((sc) => (
                 <button
                   key={sc.name}
                   type="button"
-                  onClick={() => addAndRunPkgScript(sc.name)}
-                  title={sc.cmd}
+                  onClick={() => addAndRunPkgScript(sc.name, sc.cmd)}
+                  title={sc.badge ? `${sc.badge}: ${sc.cmd}` : sc.cmd}
                   className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/18 hover:bg-emerald-500/30 border border-emerald-400/30 text-[10px] font-mono text-emerald-100 transition"
                 >
                   <Play className="w-2.5 h-2.5" />
