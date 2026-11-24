@@ -70,7 +70,10 @@ export const ControlCenter: React.FC = () => {
         className="fixed inset-0 z-[78]"
         onClick={() => wmStore.setControlCenter(false)}
       />
-      <aside className="fixed top-10 right-3 z-[80] w-80 rounded-3xl glass-surface-focused p-4 space-y-3.5 animate-window-in">
+      <aside
+        style={{ top: "calc(42px + env(safe-area-inset-top))" }}
+        className="fixed left-2 right-2 sm:left-auto sm:right-3 z-[80] sm:w-80 max-h-[calc(100dvh-120px)] overflow-y-auto rounded-3xl glass-surface-focused p-4 space-y-3.5 animate-window-in"
+      >
         {/* Header */}
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-white tracking-tight">Control Center</span>

@@ -1,10 +1,11 @@
 import { Terminal as HeadlessTerminal } from "@xterm/headless";
 import { Effect } from "effect";
-import { ExternalLink, Sparkles, X } from "lucide-react";
+import { ClipboardPaste, ExternalLink, Keyboard, Sparkles, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import type { Pty } from "unkernel";
 import { appRuntime, GithubAuthService, VmService } from "../../core/runtime.ts";
 import type { KittyThemeId } from "../../core/schema.ts";
+import { useViewport } from "../../core/use-viewport.ts";
 import { KITTY_THEMES, KittyWebGpuRenderer } from "../../gpu/webgpu-terminal.ts";
 import { wmStore } from "../../wm/wm-store.ts";
 
@@ -148,8 +149,12 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   const [detectedUrl, setDetectedUrl] = useState<{ port: number; path: string } | null>(null);
   const [externalLink, setExternalLink] = useState<{ url: string; code?: string } | null>(null);
   const [hasDomFocus, setHasDomFocus] = useState(false);
+  const [ctrlArmed, setCtrlArmed] = useState(false);
+  const { isMobile, isTouch } = useViewport();
+  const showTouchBar = isMobile || isTouch;
   const recentDeviceCodeRef = useRef<string | null>(null);
   const recentTextRef = useRef<string>("");
+  const touchScrollYRef = useRef<number | null>(null);
 
   const focusInput = () => {
     const el = inputRef.current;
@@ -424,7 +429,14 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
       e.preventDefault();
       e.stopPropagation();
       termRef.current?.scrollToBottom();
-      ptyRef.current?.write(seq).catch(() => {});
+      if (ctrlArmed && seq.length === 1) {
+        const ch = seq.toLowerCase();
+        const ctrlSeq = ch >= "a" && ch <= "z" ? String.fromCharCode(ch.charCodeAt(0) - 96) : seq;
+        setCtrlArmed(false);
+        ptyRef.current?.write(ctrlSeq).catch(() => {});
+      } else {
+        ptyRef.current?.write(seq).catch(() => {});
+      }
       rendererRef.current?.markDirty();
     }
   };
@@ -442,7 +454,14 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     if (val) {
       e.target.value = "";
       termRef.current?.scrollToBottom();
-      ptyRef.current?.write(val).catch(() => {});
+      if (ctrlArmed && val.length === 1) {
+        const ch = val.toLowerCase();
+        const ctrlSeq = ch >= "a" && ch <= "z" ? String.fromCharCode(ch.charCodeAt(0) - 96) : val;
+        setCtrlArmed(false);
+        ptyRef.current?.write(ctrlSeq).catch(() => {});
+      } else {
+        ptyRef.current?.write(val).catch(() => {});
+      }
       rendererRef.current?.markDirty();
     }
   };
@@ -603,111 +622,236 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     }
   };
 
+  const sendVirtualKey = (seq: string) => {
+    onFocus?.();
+    termRef.current?.scrollToBottom();
+    ptyRef.current?.write(seq).catch(() => {});
+    rendererRef.current?.markDirty();
+    inputRef.current?.focus({ preventScroll: true });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchScrollYRef.current = e.touches[0]!.clientY;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1 || touchScrollYRef.current === null || !termRef.current) return;
+    const y = e.touches[0]!.clientY;
+    const dy = touchScrollYRef.current - y;
+    if (Math.abs(dy) >= 18) {
+      const lines = Math.round(dy / 18);
+      termRef.current.scrollLines(lines);
+      rendererRef.current?.markDirty();
+      touchScrollYRef.current = y;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchScrollYRef.current = null;
+  };
+
   return (
-    <div
-      ref={containerRef}
-      tabIndex={0}
-      onFocus={() => {
-        onFocus?.();
-        inputRef.current?.focus({ preventScroll: true });
-      }}
-      onClick={() => {
-        onFocus?.();
-        inputRef.current?.focus({ preventScroll: true });
-      }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onContextMenu={handleContextMenu}
-      onWheel={handleWheel}
-      style={{ backgroundColor: theme.bg }}
-      className={`relative w-full h-full overflow-hidden cursor-text outline-none transition-shadow ${
-        hasDomFocus ? "ring-1 ring-inset ring-violet-400/35" : focused ? "ring-1 ring-inset ring-white/10" : "opacity-90"
-      }`}
-    >
-      <canvas ref={canvasRef} className="block w-full h-full" />
+    <div style={{ backgroundColor: theme.bg }} className="flex flex-col w-full h-full overflow-hidden">
+      <div
+        ref={containerRef}
+        tabIndex={0}
+        onFocus={() => {
+          onFocus?.();
+          inputRef.current?.focus({ preventScroll: true });
+        }}
+        onClick={() => {
+          onFocus?.();
+          inputRef.current?.focus({ preventScroll: true });
+        }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onContextMenu={handleContextMenu}
+        onWheel={handleWheel}
+        className={`relative flex-1 min-h-0 w-full overflow-hidden cursor-text outline-none transition-shadow ${
+          hasDomFocus ? "ring-1 ring-inset ring-violet-400/35" : focused ? "ring-1 ring-inset ring-white/10" : "opacity-90"
+        }`}
+      >
+        <canvas ref={canvasRef} className="block w-full h-full" />
 
-      {/* Hidden textarea for native keyboard, IME & clipboard events */}
-      <textarea
-        ref={inputRef}
-        autoFocus={focused}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-        onFocus={() => setHasDomFocus(true)}
-        onBlur={() => setHasDomFocus(false)}
-        onKeyDown={handleKeyDown}
-        onChange={handleInputChange}
-        onCompositionStart={handleCompositionStart}
-        onCompositionEnd={handleCompositionEnd}
-        onPaste={handlePaste}
-        aria-label="Terminal Input"
-        className="absolute opacity-0 w-1 h-1 top-0 left-0 resize-none overflow-hidden"
-      />
+        {/* Hidden textarea for native keyboard, IME & clipboard events */}
+        <textarea
+          ref={inputRef}
+          autoFocus={focused && !showTouchBar}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          onFocus={() => setHasDomFocus(true)}
+          onBlur={() => setHasDomFocus(false)}
+          onKeyDown={handleKeyDown}
+          onChange={handleInputChange}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={handleCompositionEnd}
+          onPaste={handlePaste}
+          aria-label="Terminal Input"
+          className="absolute opacity-0 w-1 h-1 top-0 left-0 resize-none overflow-hidden"
+        />
 
-      {/* WebGPU / Kitty HUD badge */}
-      <div className="pointer-events-none absolute bottom-2 right-2.5 flex items-center gap-1.5 text-[10px] font-mono">
-        {externalLink && (
-          <div className="pointer-events-auto flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full bg-violet-600/90 border border-violet-300/40 text-white shadow-lg shadow-violet-950/50 backdrop-blur-md">
+        {/* WebGPU / Kitty HUD badge */}
+        <div className="pointer-events-none absolute bottom-2 right-2.5 flex items-center gap-1.5 text-[10px] font-mono">
+          {externalLink && (
+            <div className="pointer-events-auto flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full bg-violet-600/90 border border-violet-300/40 text-white shadow-lg shadow-violet-950/50 backdrop-blur-md">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (externalLink.code) {
+                    navigator.clipboard.writeText(externalLink.code).catch(() => {});
+                  }
+                  window.open(externalLink.url, "_blank", "noopener,noreferrer");
+                }}
+                className="flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <ExternalLink className="w-2.5 h-2.5" />
+                {externalLink.code
+                  ? `Copy ${externalLink.code} & Open GitHub`
+                  : `Open ${externalLink.url.replace(/^https?:\/\//, "").slice(0, 28)}`}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExternalLink(null);
+                }}
+                className="p-0.5 rounded-full hover:bg-white/20 cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )}
+          {detectedUrl && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (externalLink.code) {
-                  navigator.clipboard.writeText(externalLink.code).catch(() => {});
-                }
-                window.open(externalLink.url, "_blank", "noopener,noreferrer");
+                wmStore.openPreview(detectedUrl.port, detectedUrl.path);
               }}
-              className="flex items-center gap-1 hover:underline cursor-pointer"
+              className="pointer-events-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 transition cursor-pointer"
             >
               <ExternalLink className="w-2.5 h-2.5" />
-              {externalLink.code
-                ? `Copy ${externalLink.code} & Open GitHub`
-                : `Open ${externalLink.url.replace(/^https?:\/\//, "").slice(0, 28)}`}
+              Preview :{detectedUrl.port}
             </button>
+          )}
+          <span
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-full border backdrop-blur-md ${
+              backend === "webgpu"
+                ? "bg-violet-500/15 border-violet-400/30 text-violet-300"
+                : "bg-zinc-800/70 border-zinc-700/60 text-zinc-400"
+            }`}
+          >
+            <Sparkles className="w-2.5 h-2.5" />
+            {backend === "webgpu" ? "WebGPU" : "2D"}
+          </span>
+          {status !== "connected" && (
+            <span className="px-2 py-0.5 rounded-full bg-zinc-900/80 border border-white/10 text-zinc-400">
+              {status}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* AAA Touch & Mobile Virtual Terminal Accessory Keybar */}
+      {showTouchBar && (
+        <div
+          onMouseDown={(e) => e.preventDefault()}
+          className="flex items-center gap-1 px-1.5 py-1.5 bg-black/70 border-t border-white/10 overflow-x-auto no-scrollbar shrink-0 select-none"
+        >
+          {(
+            [
+              ["ESC", "\x1b"],
+              ["TAB", "\t"],
+            ] as const
+          ).map(([label, seq]) => (
             <button
+              key={label}
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setExternalLink(null);
-              }}
-              className="p-0.5 rounded-full hover:bg-white/20 cursor-pointer"
-              title="Dismiss"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => sendVirtualKey(seq)}
+              className="px-2.5 py-1.5 rounded-lg bg-white/10 active:bg-violet-500/40 text-[11px] font-mono font-semibold text-zinc-100 shrink-0"
             >
-              <X className="w-2.5 h-2.5" />
+              {label}
             </button>
-          </div>
-        )}
-        {detectedUrl && (
+          ))}
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              wmStore.openPreview(detectedUrl.port, detectedUrl.path);
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setCtrlArmed((v) => !v);
+              inputRef.current?.focus({ preventScroll: true });
             }}
-            className="pointer-events-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 transition cursor-pointer"
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold shrink-0 border transition ${
+              ctrlArmed
+                ? "bg-violet-500/40 border-violet-300/60 text-white"
+                : "bg-white/10 border-transparent text-zinc-100"
+            }`}
           >
-            <ExternalLink className="w-2.5 h-2.5" />
-            Preview :{detectedUrl.port}
+            CTRL
           </button>
-        )}
-        <span
-          className={`flex items-center gap-1 px-2 py-0.5 rounded-full border backdrop-blur-md ${
-            backend === "webgpu"
-              ? "bg-violet-500/15 border-violet-400/30 text-violet-300"
-              : "bg-zinc-800/70 border-zinc-700/60 text-zinc-400"
-          }`}
-        >
-          <Sparkles className="w-2.5 h-2.5" />
-          {backend === "webgpu" ? "WebGPU" : "2D"}
-        </span>
-        {status !== "connected" && (
-          <span className="px-2 py-0.5 rounded-full bg-zinc-900/80 border border-white/10 text-zinc-400">
-            {status}
-          </span>
-        )}
-      </div>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => sendVirtualKey("\x03")}
+            className="px-2 py-1.5 rounded-lg bg-rose-500/20 active:bg-rose-500/40 text-[11px] font-mono font-semibold text-rose-200 shrink-0"
+          >
+            ^C
+          </button>
+          {(
+            [
+              ["↑", "\x1b[A"],
+              ["↓", "\x1b[B"],
+              ["←", "\x1b[D"],
+              ["→", "\x1b[C"],
+              ["|", "|"],
+              ["/", "/"],
+              ["~", "~"],
+              ["-", "-"],
+              ["_", "_"],
+            ] as const
+          ).map(([label, seq]) => (
+            <button
+              key={label}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => sendVirtualKey(seq)}
+              className="min-w-[32px] px-2 py-1.5 rounded-lg bg-white/8 active:bg-white/25 text-xs font-mono text-zinc-200 shrink-0"
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              navigator.clipboard.readText().then((t) => writePaste(t)).catch(() => {});
+            }}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/10 active:bg-white/25 text-[11px] font-mono text-zinc-200 shrink-0"
+            title="Paste Clipboard"
+          >
+            <ClipboardPaste className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => inputRef.current?.focus({ preventScroll: true })}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-cyan-500/20 active:bg-cyan-500/35 text-[11px] font-mono text-cyan-200 shrink-0"
+            title="Show Soft Keyboard"
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

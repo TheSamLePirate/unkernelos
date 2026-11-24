@@ -7,6 +7,7 @@ import {
   FilePlus,
   Folder,
   FolderOpen,
+  PanelLeft,
   Play,
   RefreshCw,
   Save,
@@ -24,6 +25,7 @@ import {
   VmService,
 } from "../../core/runtime.ts";
 import { DEFAULT_UNKERNEL_CONFIG } from "../../core/schema.ts";
+import { useIsMobile } from "../../core/use-viewport.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
 import { KittyTerminalPane, type KittyTerminalHandle } from "./KittyTerminalPane.tsx";
 
@@ -181,7 +183,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     DEFAULT_UNKERNEL_CONFIG
   );
 
+  const isMobile = useIsMobile();
   const [rootDir, setRootDir] = useState(wm.activeWorkspaceDir || "/home/user/workspace");
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [sidebarMode, setSidebarMode] = useState<"tree" | "search">("tree");
   const [dirMap, setDirMap] = useState<Record<string, readonly FsEntry[]>>({});
   const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
@@ -253,6 +257,7 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
       };
       setTabs((prev) => [...prev, tab]);
       setActivePath(filePath);
+      if (isMobile) setSidebarOpen(false);
     } else {
       wmStore.pushToast("Open Failed", res.left.message, "error");
     }
@@ -447,13 +452,25 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     <div className="flex flex-col w-full h-full bg-[#090b12]/96 select-none">
       {/* Top IDE Toolbar */}
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-black/45 border-b border-white/10 shrink-0">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Code2 className="w-4 h-4 text-sky-400 shrink-0" />
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((v) => !v)}
+            className={`p-1 rounded-md border transition shrink-0 ${
+              sidebarOpen
+                ? "bg-violet-500/20 border-violet-400/35 text-violet-200"
+                : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+            }`}
+            title="Toggle File Sidebar"
+          >
+            <PanelLeft className="w-3.5 h-3.5" />
+          </button>
+          <Code2 className="hidden sm:block w-4 h-4 text-sky-400 shrink-0" />
           <input
             value={rootDir}
             onChange={(e) => setRootDir(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && void loadDirectory(rootDir)}
-            className="w-64 max-w-full px-2 py-0.5 rounded-md bg-black/50 border border-white/10 text-[11px] font-mono text-zinc-200 outline-none"
+            className="w-40 sm:w-64 max-w-full px-2 py-0.5 rounded-md bg-black/50 border border-white/10 text-[11px] font-mono text-zinc-200 outline-none"
           />
           <button
             type="button"
@@ -513,9 +530,10 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
       </div>
 
       {/* Main Split: Sidebar | Editor + Terminal */}
-      <div className="flex-1 min-h-0 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <aside className="w-56 shrink-0 bg-black/35 border-r border-white/10 flex flex-col min-h-0">
+      <div className="relative flex-1 min-h-0 flex overflow-hidden">
+        {/* Left Sidebar (Collapsible Drawer on Mobile) */}
+        {sidebarOpen && (
+          <aside className="absolute md:relative inset-y-0 left-0 z-20 w-56 shrink-0 bg-[#0b0e17]/98 md:bg-black/35 border-r border-white/10 flex flex-col min-h-0 shadow-2xl md:shadow-none">
           <div className="grid grid-cols-2 p-1 gap-1 border-b border-white/8 text-[11px]">
             <button
               type="button"
@@ -577,6 +595,7 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
             </div>
           )}
         </aside>
+        )}
 
         {/* Right: Tabs + Code Editor + Integrated Terminal */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">

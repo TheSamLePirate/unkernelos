@@ -12,7 +12,10 @@ export const NotificationCenter: React.FC = () => {
         className="fixed inset-0 z-[78]"
         onClick={() => wmStore.setNotificationCenter(false)}
       />
-      <aside className="fixed top-10 right-3 z-[82] w-88 max-h-[72vh] rounded-3xl glass-surface-focused flex flex-col overflow-hidden animate-window-in">
+      <aside
+        style={{ top: "calc(42px + env(safe-area-inset-top))" }}
+        className="fixed left-2 right-2 sm:left-auto sm:right-3 z-[82] sm:w-88 max-h-[72dvh] rounded-3xl glass-surface-focused flex flex-col overflow-hidden animate-window-in"
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-2 text-xs font-semibold text-white">
             <Bell className="w-3.5 h-3.5 text-violet-400" />

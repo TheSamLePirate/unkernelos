@@ -107,7 +107,7 @@ export const Dock: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-16px)]">
+    <div className="hidden md:block fixed bottom-3 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-16px)]">
       <nav
         ref={navRef}
         onMouseMove={(e) => setMouseX(e.clientX)}

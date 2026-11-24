@@ -14,7 +14,9 @@ import {
   RotateCcw,
   Send,
   Shield,
+  SlidersHorizontal,
   Sparkles,
+  Terminal,
   Wrench,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -210,6 +212,8 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
   const [deployedActionsUrl, setDeployedActionsUrl] = useState<string | null>(null);
   const [deployError, setDeployError] = useState<string | null>(null);
+  const [mobilePane, setMobilePane] = useState<"terminal" | "preview">("terminal");
+  const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
 
   const isCustomClaudeModel =
     Boolean(creds.claudeModel) &&
@@ -416,8 +420,20 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            onClick={() => setMobileOptionsOpen((v) => !v)}
+            className={`flex md:hidden items-center gap-1 px-2 py-1 rounded-lg text-xs border transition ${
+              mobileOptionsOpen
+                ? "bg-violet-500/25 border-violet-400/40 text-white"
+                : "bg-white/5 border-white/10 text-zinc-300"
+            }`}
+            title="Model & Thinking Options"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
             onClick={() => wmStore.openApp("toolchain")}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
           >
             <Wrench className="w-3.5 h-3.5 text-indigo-400" />
             Toolchain
@@ -428,7 +444,7 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
               wmStore.setWorkspaceDir(workspaceDir);
               wmStore.openApp("git");
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
           >
             <GitBranch className="w-3.5 h-3.5 text-orange-400" />
             Git
@@ -437,16 +453,21 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             type="button"
             disabled={deploying}
             onClick={handleDeployPages}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:brightness-110 disabled:opacity-50 shadow-lg shadow-emerald-500/20 transition"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg text-xs font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:brightness-110 disabled:opacity-50 shadow-lg shadow-emerald-500/20 transition"
           >
             <Rocket className="w-3.5 h-3.5" />
-            {deploying ? "Publishing..." : "Publish to GitHub Pages"}
+            <span className="hidden sm:inline">{deploying ? "Publishing..." : "Publish to GitHub Pages"}</span>
+            <span className="sm:hidden">{deploying ? "..." : "Publish"}</span>
           </button>
         </div>
       </div>
 
       {/* Harness Options Bar (Model, Thinking/Effort, Permissions, Provider, Session flags) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-black/25 border-b border-white/8 shrink-0">
+      <div
+        className={`${
+          mobileOptionsOpen ? "flex" : "hidden md:flex"
+        } flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-black/25 border-b border-white/8 shrink-0`}
+      >
         {agent === "claude" ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {/* Claude Model */}
@@ -723,23 +744,60 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
         </div>
       </div>
 
+      {/* Mobile / Tablet Pane Switcher (< 1024px) */}
+      <div className="flex lg:hidden items-center gap-1 px-2.5 py-1.5 bg-black/45 border-b border-white/10 shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobilePane("terminal")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition ${
+            mobilePane === "terminal"
+              ? "bg-violet-500/25 border border-violet-400/40 text-white"
+              : "bg-white/[0.04] text-zinc-400"
+          }`}
+        >
+          <Terminal className="w-3.5 h-3.5" />
+          Agent Terminal
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane("preview")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition ${
+            mobilePane === "preview"
+              ? "bg-emerald-500/25 border border-emerald-400/40 text-emerald-100"
+              : "bg-white/[0.04] text-zinc-400"
+          }`}
+        >
+          <Globe className="w-3.5 h-3.5" />
+          Live Preview
+          {vmState.detectedPorts.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/30 text-[10px] font-mono text-emerald-200">
+              :{vmState.detectedPorts[0]!.port}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Main Split: Agent Kitty Terminal (Left) | Live Webserver Preview (Right) */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 lg:divide-x divide-white/10">
         {/* Left: Agent PTY */}
-        <div className="relative flex flex-col min-h-0">
-          <div className="flex items-center justify-between px-3 py-1.5 bg-black/30 border-b border-white/6 text-[11px] text-zinc-400">
-            <span className="font-mono flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        <div
+          className={`relative flex-col min-h-0 ${
+            mobilePane === "terminal" ? "flex" : "hidden lg:flex"
+          }`}
+        >
+          <div className="hidden sm:flex items-center justify-between px-3 py-1.5 bg-black/30 border-b border-white/6 text-[11px] text-zinc-400">
+            <span className="font-mono flex items-center gap-1.5 truncate">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
               Agent PTY · {workspaceDir}
             </span>
-            <span className="text-[10px] text-zinc-500">WebGPU Kitty Engine</span>
+            <span className="text-[10px] text-zinc-500 shrink-0">WebGPU Kitty Engine</span>
           </div>
           <div className="flex-1 min-h-0">
             <KittyTerminalPane
               themeId={cfg.kittyTheme}
               fontSize={cfg.terminalFontSize}
               preferWebGpu={cfg.webgpuTerminal}
-              focused={windowFocused}
+              focused={windowFocused && mobilePane === "terminal"}
               onReady={(h) => {
                 termHandleRef.current = h;
               }}
@@ -748,7 +806,11 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
         </div>
 
         {/* Right: Embedded Guest Webserver Preview */}
-        <div className="flex flex-col min-h-0 bg-[#07090f]">
+        <div
+          className={`flex-col min-h-0 bg-[#07090f] ${
+            mobilePane === "preview" ? "flex" : "hidden lg:flex"
+          }`}
+        >
           <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-black/40 border-b border-white/8">
             <div className="flex items-center gap-1.5">
               <Globe className="w-3.5 h-3.5 text-emerald-400" />

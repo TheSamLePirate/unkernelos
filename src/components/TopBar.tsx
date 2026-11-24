@@ -77,22 +77,25 @@ export const TopBar: React.FC = () => {
       : "bg-rose-400";
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[36px] z-50 glass-bar px-3 flex items-center justify-between text-xs select-none">
+    <header
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+      className="fixed top-0 left-0 right-0 min-h-[36px] z-50 glass-bar px-2.5 sm:px-3 flex items-center justify-between text-xs select-none"
+    >
       {/* Left: Brand, Active App & Workspaces */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
         <button
           type="button"
           onClick={() => wmStore.toggleCommandPalette()}
-          className="flex items-center gap-2 font-semibold text-white hover:opacity-90 transition"
+          className="flex items-center gap-1.5 sm:gap-2 font-semibold text-white hover:opacity-90 transition shrink-0"
         >
           <span className="w-4.5 h-4.5 rounded-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 flex items-center justify-center text-[10px] font-bold shadow">
             U
           </span>
-          <span className="tracking-tight">unkernelOS</span>
+          <span className="tracking-tight hidden xs:inline sm:inline">unkernelOS</span>
         </button>
 
-        <span className="text-white/20">/</span>
-        <span className="font-medium text-zinc-200 max-w-[110px] truncate">{activeTitle}</span>
+        <span className="text-white/20 hidden sm:inline">/</span>
+        <span className="font-medium text-zinc-200 max-w-[100px] sm:max-w-[110px] truncate">{activeTitle}</span>
 
         {/* Workspaces 1–4 Switcher */}
         <div className="hidden sm:flex items-center gap-0.5 ml-1 p-0.5 rounded-full bg-white/[0.05] border border-white/10">
@@ -152,7 +155,21 @@ export const TopBar: React.FC = () => {
       </div>
 
       {/* Right: Live VM Telemetry Pills + Quick Controls + Control Center */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Compact Mobile VM Telemetry Pill */}
+        <button
+          type="button"
+          onClick={() => wmStore.openApp("monitor")}
+          className="flex md:hidden items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-[10px] font-mono text-zinc-200"
+          title={`Linux ${vm.distro} · ${vm.cpus} vCPU · ${vm.transport}`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
+          <span>{vm.cpus}c</span>
+          {vm.transport === "shared" && (
+            <span className="text-[8px] px-1 rounded bg-emerald-500/20 text-emerald-300">SAB</span>
+          )}
+        </button>
+
         <button
           type="button"
           onClick={() => wmStore.openApp("monitor")}
@@ -211,7 +228,7 @@ export const TopBar: React.FC = () => {
           ) : (
             <GitBranch className="w-3 h-3 text-violet-300" />
           )}
-          <span className="max-w-[96px] truncate font-mono">
+          <span className="hidden sm:inline max-w-[96px] truncate font-mono">
             {ghAuth.status === "authenticated" && ghAuth.user ? `@${ghAuth.user.login}` : "GitHub"}
           </span>
         </button>
@@ -229,7 +246,7 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => appRuntime.runFork(Effect.flatMap(VmService, (v) => v.toggleMute()))}
-          className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition"
+          className="hidden sm:inline-flex p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition"
           title="Toggle Guest Audio"
         >
           {vm.audioMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5" />}
@@ -269,7 +286,7 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => wmStore.toggleCommandPalette()}
-          className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.06] hover:bg-white/12 border border-white/10 text-[11px] font-mono text-zinc-300 transition"
+          className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.06] hover:bg-white/12 border border-white/10 text-[11px] font-mono text-zinc-300 transition"
           title="Command Palette (⌘K)"
         >
           <Command className="w-3 h-3" />K

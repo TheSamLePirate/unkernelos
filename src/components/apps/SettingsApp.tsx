@@ -183,10 +183,10 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
   ];
 
   return (
-    <div className="flex w-full h-full bg-[#0a0c13]/95 overflow-hidden">
-      {/* Left Navigation */}
-      <div className="w-52 shrink-0 bg-black/35 border-r border-white/10 p-3 flex flex-col justify-between">
-        <div className="space-y-1">
+    <div className="flex flex-col md:flex-row w-full h-full bg-[#0a0c13]/95 overflow-hidden">
+      {/* Navigation: Horizontal Scrollable Pills on Mobile, Left Sidebar on Desktop */}
+      <div className="w-full md:w-52 shrink-0 bg-black/40 md:bg-black/35 border-b md:border-b-0 md:border-r border-white/10 p-2 md:p-3 flex flex-row md:flex-col items-center md:items-stretch justify-between gap-2 overflow-x-auto md:overflow-visible no-scrollbar">
+        <div className="flex flex-row md:flex-col gap-1 shrink-0 md:shrink">
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
@@ -195,38 +195,39 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition ${
+                className={`flex items-center gap-2 md:gap-2.5 px-2.5 md:px-3 py-1.5 md:py-2 rounded-xl text-xs font-medium whitespace-nowrap transition md:w-full ${
                   active
                     ? "bg-violet-500/20 text-white border border-violet-400/35"
                     : "text-zinc-400 hover:bg-white/6 hover:text-zinc-100"
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
                 {t.label}
               </button>
             );
           })}
         </div>
 
-        <div className="space-y-2 pt-3 border-t border-white/10">
+        <div className="shrink-0 md:space-y-2 md:pt-3 md:border-t border-white/10">
           {needsReboot && (
-            <div className="text-[11px] text-amber-300 px-1">
+            <div className="hidden md:block text-[11px] text-amber-300 px-1">
               Kernel config changed — reboot to apply.
             </div>
           )}
           <button
             type="button"
             onClick={applyAndReboot}
-            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:brightness-110 transition"
+            className="flex items-center justify-center gap-1.5 px-3 md:px-0 py-1.5 md:py-2 md:w-full rounded-xl text-xs font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:brightness-110 whitespace-nowrap transition"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            Apply &amp; Reboot VM
+            <span className="hidden md:inline">Apply &amp; Reboot VM</span>
+            <span className="md:hidden">Reboot</span>
           </button>
         </div>
       </div>
 
       {/* Right Content */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-5">
         {tab === "appearance" && (
           <div className="space-y-5 max-w-2xl">
             <h2 className="text-sm font-semibold text-white">WebOS Themes, Live WebGPU Shaders &amp; Glass Engine</h2>

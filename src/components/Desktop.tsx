@@ -25,6 +25,7 @@ import { Dock } from "./Dock.tsx";
 import { GithubConnectModal } from "./GithubConnectModal.tsx";
 import { LockScreen } from "./LockScreen.tsx";
 import { MissionControlOverlay } from "./MissionControlOverlay.tsx";
+import { MobileNavBar } from "./MobileNavBar.tsx";
 import { NotificationCenter } from "./NotificationCenter.tsx";
 import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
@@ -346,7 +347,7 @@ export const Desktop: React.FC = () => {
         e.preventDefault();
         wmStore.setContextMenu({ x: e.clientX, y: e.clientY, kind: "desktop" });
       }}
-      className="relative w-screen h-screen overflow-hidden wallpaper-fallback"
+      className="relative w-screen h-[100dvh] overflow-hidden wallpaper-fallback"
     >
       {/* WebGPU Live Selectable Shader Backdrop */}
       {cfg.webgpuWallpaper && (
@@ -383,8 +384,11 @@ export const Desktop: React.FC = () => {
         })}
       </main>
 
-      {/* Bottom Floating AAA Magnification Dock */}
+      {/* Bottom Floating AAA Magnification Dock (Desktop & Tablet) */}
       <Dock />
+
+      {/* AAA Mobile Bottom Navigation Bar (< 768px) */}
+      <MobileNavBar />
 
       {/* Control Center Popover */}
       <ControlCenter />
@@ -417,7 +421,10 @@ export const Desktop: React.FC = () => {
       <BootOverlay />
 
       {/* Toast Notification Stack */}
-      <div className="fixed top-12 right-3 z-[95] flex flex-col gap-2 w-80 pointer-events-none">
+      <div
+        style={{ top: "calc(44px + env(safe-area-inset-top))" }}
+        className="fixed left-3 right-3 sm:left-auto sm:right-3 z-[95] flex flex-col gap-2 sm:w-80 pointer-events-none"
+      >
         {wm.toasts.map((t) => (
           <div
             key={t.id}
