@@ -5,14 +5,17 @@ import {
   CheckCircle2,
   Copy,
   Cpu,
+  Download,
   Play,
   RefreshCw,
+  Shield,
   Terminal,
   Trash2,
+  Upload,
   Workflow,
   XCircle,
 } from "lucide-react";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   AGENT_DOCS_MARKDOWN,
   AGENT_OS_SCHEMA,
@@ -20,14 +23,16 @@ import {
   executeOsAction,
   syncAgentOsDocsToGuest,
   useAgentApi,
+  type AgentPermissionMode,
   type OsApiCategory,
 } from "../../core/agent-os-api.ts";
+import { exportOsProfileBundle, importOsProfileBundle } from "../../core/os-backup.ts";
 import { wmStore } from "../../wm/wm-store.ts";
 
 type ApiTab = "explorer" | "logs" | "docs";
 
 const CATEGORIES: readonly { id: "all" | OsApiCategory; label: string }[] = [
-  { id: "all", label: "All (43)" },
+  { id: "all", label: `All (${AGENT_OS_SCHEMA.length})` },
   { id: "wm", label: "Window Manager" },
   { id: "workspace", label: "Workspace" },
   { id: "system", label: "System & IO" },
@@ -52,6 +57,7 @@ export const AgentApiApp: React.FC = () => {
   const [running, setRunning] = useState(false);
   const [syncingDocs, setSyncingDocs] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
   const visibleMethods = useMemo(
     () =>
@@ -167,7 +173,55 @@ export const AgentApiApp: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Agent Permission Firewall Mode */}
+          <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px]">
+            <Shield
+              className={`w-3 h-3 ${
+                api.permissionMode === "read-only"
+                  ? "text-rose-400"
+                  : api.permissionMode === "supervised"
+                  ? "text-amber-400"
+                  : "text-emerald-400"
+              }`}
+            />
+            <select
+              aria-label="Agent Firewall Mode"
+              value={api.permissionMode}
+              onChange={(e) => agentApiStore.setPermissionMode(e.target.value as AgentPermissionMode)}
+              className="bg-transparent text-zinc-200 outline-none cursor-pointer"
+              title="Agent Permission Firewall Mode"
+            >
+              <option value="auto" className="bg-[#12141f]">Firewall: Auto</option>
+              <option value="supervised" className="bg-[#12141f]">Firewall: Supervised</option>
+              <option value="read-only" className="bg-[#12141f]">Firewall: Read-Only</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={exportOsProfileBundle}
+            className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] bg-white/6 hover:bg-white/12 border border-white/10 text-zinc-200 transition"
+            title="Export OS Profile (.unkernelos.json)"
+          >
+            <Download className="w-3 h-3 text-cyan-400" />
+            Backup
+          </button>
+          <button
+            type="button"
+            onClick={() => importRef.current?.click()}
+            className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] bg-white/6 hover:bg-white/12 border border-white/10 text-zinc-200 transition"
+            title="Import OS Profile (.unkernelos.json)"
+          >
+            <Upload className="w-3 h-3 text-violet-400" />
+            Restore
+          </button>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json,.unkernelos.json"
+            className="hidden"
+            onChange={(e) => void importOsProfileBundle(e.target.files?.[0])}
+          />
           <button
             type="button"
             disabled={syncingDocs}

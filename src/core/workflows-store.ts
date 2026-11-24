@@ -104,9 +104,42 @@ class WorkflowsStore {
   private workflows: readonly WorkflowDef[] = loadWorkflows();
   private listeners = new Set<() => void>();
   private osExecutor: OsExecutor | null = null;
+  private schedulerTimer: number | null = null;
+  private seenPorts = new Set<number>();
 
   public setOsExecutor(fn: OsExecutor): void {
     this.osExecutor = fn;
+  }
+
+  public startScheduler(): () => void {
+    if (this.schedulerTimer !== null) return () => {};
+    this.schedulerTimer = window.setInterval(() => {
+      const now = Date.now();
+      for (const wf of this.workflows) {
+        if (!wf.enabled || wf.trigger !== "interval") continue;
+        const ms = Math.max(15, wf.intervalSec ?? 60) * 1000;
+        if (!wf.lastRunAt || now - wf.lastRunAt >= ms) {
+          void this.run(wf.id).catch(() => {});
+        }
+      }
+    }, 5000);
+    return () => {
+      if (this.schedulerTimer !== null) {
+        window.clearInterval(this.schedulerTimer);
+        this.schedulerTimer = null;
+      }
+    };
+  }
+
+  public handlePortsChanged(ports: readonly { port: number }[]): void {
+    const newlyOpened = ports.filter((p) => !this.seenPorts.has(p.port));
+    this.seenPorts = new Set(ports.map((p) => p.port));
+    if (newlyOpened.length === 0) return;
+    for (const wf of this.workflows) {
+      if (wf.enabled && wf.trigger === "port-detected") {
+        void this.run(wf.id).catch(() => {});
+      }
+    }
   }
 
   public subscribe = (fn: () => void): (() => void) => {

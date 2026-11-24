@@ -27,6 +27,8 @@ export const AutomationsApp: React.FC = () => {
   const [wfOpen, setWfOpen] = useState(false);
   const [wfName, setWfName] = useState("");
   const [wfCmd, setWfCmd] = useState("");
+  const [wfTrigger, setWfTrigger] = useState<"manual" | "interval" | "port-detected">("manual");
+  const [wfIntervalSec, setWfIntervalSec] = useState(60);
   const [wfNotify, setWfNotify] = useState(true);
 
   // New Custom OS App Form
@@ -52,8 +54,9 @@ export const AutomationsApp: React.FC = () => {
     if (!wfName.trim() || !wfCmd.trim()) return;
     const wf = workflowsStore.create({
       name: wfName.trim(),
-      description: `Shell automation: ${wfCmd.trim().slice(0, 60)}`,
-      trigger: "manual",
+      description: `Trigger: ${wfTrigger}${wfTrigger === "interval" ? ` (${wfIntervalSec}s)` : ""} · ${wfCmd.trim().slice(0, 48)}`,
+      trigger: wfTrigger,
+      intervalSec: wfTrigger === "interval" ? Math.max(15, wfIntervalSec) : undefined,
       enabled: true,
       steps: [
         { kind: "shell", command: wfCmd.trim() },
@@ -158,6 +161,26 @@ export const AutomationsApp: React.FC = () => {
                   placeholder="Linux command (e.g. bun test)"
                   className="w-full px-2.5 py-1.5 rounded-lg bg-black/50 border border-white/10 text-xs font-mono text-white outline-none"
                 />
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={wfTrigger}
+                    onChange={(e) => setWfTrigger(e.target.value as "manual" | "interval" | "port-detected")}
+                    className="flex-1 px-2 py-1 rounded-lg bg-black/50 border border-white/10 text-[11px] text-zinc-200 outline-none"
+                  >
+                    <option value="manual" className="bg-[#12141f]">Trigger: Manual</option>
+                    <option value="interval" className="bg-[#12141f]">Trigger: Every N sec</option>
+                    <option value="port-detected" className="bg-[#12141f]">Trigger: On New Port</option>
+                  </select>
+                  {wfTrigger === "interval" && (
+                    <input
+                      type="number"
+                      min={15}
+                      value={wfIntervalSec}
+                      onChange={(e) => setWfIntervalSec(Number(e.target.value) || 60)}
+                      className="w-16 px-2 py-1 rounded-lg bg-black/50 border border-white/10 text-[11px] font-mono text-white outline-none"
+                    />
+                  )}
+                </div>
                 <label className="flex items-center gap-2 text-[11px] text-zinc-300">
                   <input
                     type="checkbox"

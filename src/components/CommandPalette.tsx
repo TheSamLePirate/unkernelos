@@ -1,9 +1,29 @@
 import { Effect } from "effect";
-import { AppWindow, Box, Code2, FolderOpen, Globe, Layers, Lock, Palette, Pause, RotateCcw, Search, Sparkles, Terminal } from "lucide-react";
+import {
+  AppWindow,
+  Box,
+  ClipboardList,
+  Code2,
+  FileCode2,
+  FolderOpen,
+  Globe,
+  Layers,
+  Lock,
+  Palette,
+  Pause,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Terminal,
+  Zap,
+} from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { clipboardStore, useClipboardHistory } from "../core/clipboard-store.ts";
+import { useDynamicApps } from "../core/dynamic-apps-store.ts";
 import { OS_THEMES } from "../core/os-themes.ts";
 import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../core/runtime.ts";
 import type { OsThemeId } from "../core/schema.ts";
+import { useWorkflows, workflowsStore } from "../core/workflows-store.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
 
 export const CommandPalette: React.FC = () => {
@@ -34,11 +54,33 @@ export const CommandPalette: React.FC = () => {
     }
   );
 
+  const customApps = useDynamicApps();
+  const workflows = useWorkflows();
+  const clipHistory = useClipboardHistory();
   const [query, setQuery] = useState("");
+  const [workspaceFiles, setWorkspaceFiles] = useState<readonly string[]>([]);
 
   useEffect(() => {
-    if (wm.commandPaletteOpen) setQuery("");
-  }, [wm.commandPaletteOpen]);
+    if (!wm.commandPaletteOpen) return;
+    setQuery("");
+    const dir = wm.activeWorkspaceDir || "/home/user/workspace";
+    const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+    void appRuntime
+      .runPromise(
+        Effect.either(
+          Effect.flatMap(VmService, (v) =>
+            v.execShell(
+              `cd ${sq(dir)} 2>/dev/null && find . -maxdepth 3 -type f ! -path '*/.git/*' ! -path '*/node_modules/*' 2>/dev/null | sed 's|^\\./||' | sort | head -n 120`
+            )
+          )
+        )
+      )
+      .then((res) => {
+        if (res._tag === "Right") {
+          setWorkspaceFiles(res.right.stdout.split("\n").map((l) => l.trim()).filter(Boolean));
+        }
+      });
+  }, [wm.commandPaletteOpen, wm.activeWorkspaceDir]);
 
   if (!wm.commandPaletteOpen) return null;
 
@@ -53,6 +95,19 @@ export const CommandPalette: React.FC = () => {
         a.description.toLowerCase().includes(q) ||
         a.id.includes(q)
     );
+
+  const matchingCustomApps = customApps.filter(
+    (a) => !q || a.title.toLowerCase().includes(q) || a.id.includes(q)
+  );
+  const matchingWorkflows = workflows.filter(
+    (w) => !q || w.name.toLowerCase().includes(q) || w.description.toLowerCase().includes(q)
+  );
+  const matchingFiles = q
+    ? workspaceFiles.filter((f) => f.toLowerCase().includes(q)).slice(0, 8)
+    : [];
+  const matchingClips = q
+    ? clipHistory.filter((c) => c.text.toLowerCase().includes(q)).slice(0, 4)
+    : [];
 
   const matchingThemes = (Object.keys(OS_THEMES) as OsThemeId[])
     .map((id) => OS_THEMES[id])
@@ -107,6 +162,99 @@ export const CommandPalette: React.FC = () => {
                     Preview <code className="text-emerald-300">http://localhost:{p.port}/</code>
                   </span>
                   <span className="text-[10px] font-mono text-zinc-500">vsock</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {matchingFiles.length > 0 && (
+            <div className="pb-1 mb-1 border-b border-white/8">
+              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-sky-400">
+                Workspace Files ({wm.activeWorkspaceDir.split("/").pop()})
+              </div>
+              {matchingFiles.map((rel) => (
+                <button
+                  key={rel}
+                  type="button"
+                  onClick={() => {
+                    const full = `${wm.activeWorkspaceDir}/${rel}`.replace(/\/+/g, "/");
+                    wmStore.openFileInIde(full);
+                    wmStore.setCommandPalette(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-sky-500/15 text-xs font-mono text-zinc-200 transition"
+                >
+                  <FileCode2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span className="truncate">{rel}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {matchingCustomApps.length > 0 && (
+            <div className="pb-1 mb-1 border-b border-white/8">
+              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-violet-400">
+                Agent-Built Custom Apps
+              </div>
+              {matchingCustomApps.map((app) => (
+                <button
+                  key={app.id}
+                  type="button"
+                  onClick={() => {
+                    wmStore.openDynamicApp(app);
+                    wmStore.setCommandPalette(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-violet-500/15 text-xs text-zinc-200 transition"
+                >
+                  <span>{app.emoji}</span>
+                  <span className="font-medium text-white">{app.title}</span>
+                  <span className="text-[10px] text-zinc-400 truncate">{app.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {matchingWorkflows.length > 0 && (
+            <div className="pb-1 mb-1 border-b border-white/8">
+              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+                Workflows (Run Now)
+              </div>
+              {matchingWorkflows.slice(0, 4).map((wf) => (
+                <button
+                  key={wf.id}
+                  type="button"
+                  onClick={() => {
+                    wmStore.setCommandPalette(false);
+                    void workflowsStore.run(wf.id);
+                    wmStore.pushToast("Workflow Started", wf.name, "info");
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-amber-500/15 text-xs text-zinc-200 transition"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="font-medium text-white">{wf.name}</span>
+                  <span className="text-[10px] text-zinc-400 truncate">{wf.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {matchingClips.length > 0 && (
+            <div className="pb-1 mb-1 border-b border-white/8">
+              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-pink-400">
+                Clipboard History
+              </div>
+              {matchingClips.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    void clipboardStore.copyToHost(c.text, "manual");
+                    wmStore.pushToast("Copied", c.text.slice(0, 60), "success");
+                    wmStore.setCommandPalette(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-white/10 text-xs font-mono text-zinc-300 transition"
+                >
+                  <ClipboardList className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                  <span className="truncate">{c.text}</span>
                 </button>
               ))}
             </div>

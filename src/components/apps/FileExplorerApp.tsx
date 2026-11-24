@@ -17,6 +17,7 @@ import {
   FileCode2,
   FileImage,
   FilePlus2,
+  Film,
   Folder,
   FolderGit2,
   FolderPlus,
@@ -61,6 +62,7 @@ interface ClipboardItem {
 }
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|ico|bmp)$/i;
+const MEDIA_STUDIO_RE = /\.(pdf|mp4|webm|mov|mkv|ogv|mp3|wav|ogg|flac|m4a|aac)$/i;
 const CODE_RE = /\.(ts|tsx|js|jsx|mjs|py|rs|go|sh|json|html|css|md|yml|yaml|toml|sql|c|cpp|h|wgsl|glsl)$/i;
 
 function formatSize(bytes: number): string {
@@ -107,6 +109,7 @@ export const FileExplorerApp: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [clipboard, setClipboard] = useState<ClipboardItem | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: FsEntry } | null>(null);
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
@@ -196,10 +199,16 @@ export const FileExplorerApp: React.FC = () => {
   };
 
   const openEntry = async (entry: FsEntry) => {
+    setCtxMenu(null);
     if (entry.isDir) {
       setSelectedFile(null);
       await loadDir(entry.path, true);
       if (isMobile) setSidebarOpen(false);
+      return;
+    }
+    // Route PDF, Video & Audio directly into Media & Capture Studio!
+    if (MEDIA_STUDIO_RE.test(entry.name)) {
+      wmStore.openFileInMedia(entry.path);
       return;
     }
     setSelectedFile(entry);
@@ -799,6 +808,11 @@ export const FileExplorerApp: React.FC = () => {
                   <div
                     key={entry.path}
                     onClick={() => void openEntry(entry)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCtxMenu({ x: e.clientX, y: e.clientY, entry });
+                    }}
                     className={`group relative flex flex-col items-center gap-1.5 p-3 rounded-2xl border cursor-pointer transition text-center ${
                       active
                         ? "bg-white/12 border-white/25 text-white"
@@ -807,6 +821,8 @@ export const FileExplorerApp: React.FC = () => {
                   >
                     {entry.isDir ? (
                       <Folder className="w-8 h-8 text-amber-400" />
+                    ) : MEDIA_STUDIO_RE.test(entry.name) ? (
+                      <Film className="w-8 h-8 text-rose-400" />
                     ) : IMAGE_RE.test(entry.name) ? (
                       <FileImage className="w-8 h-8 text-pink-400" />
                     ) : CODE_RE.test(entry.name) ? (
@@ -830,6 +846,11 @@ export const FileExplorerApp: React.FC = () => {
                   <div
                     key={entry.path}
                     onClick={() => void openEntry(entry)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCtxMenu({ x: e.clientX, y: e.clientY, entry });
+                    }}
                     className={`group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition ${
                       active ? "bg-white/12 text-white" : "text-zinc-300 hover:bg-white/6"
                     }`}
@@ -837,6 +858,8 @@ export const FileExplorerApp: React.FC = () => {
                     <div className="flex items-center gap-2 min-w-0">
                       {entry.isDir ? (
                         <Folder className="w-4 h-4 text-amber-400 shrink-0" />
+                      ) : MEDIA_STUDIO_RE.test(entry.name) ? (
+                        <Film className="w-4 h-4 text-rose-400 shrink-0" />
                       ) : IMAGE_RE.test(entry.name) ? (
                         <FileImage className="w-4 h-4 text-pink-400 shrink-0" />
                       ) : CODE_RE.test(entry.name) ? (
@@ -1030,6 +1053,145 @@ export const FileExplorerApp: React.FC = () => {
             : `Workspace: ${wm.activeWorkspaceDir.split("/").pop() || "/"}`}
         </span>
       </div>
+
+      {/* File/Folder Right-Click Context Menu */}
+      {ctxMenu && (
+        <>
+          <div className="fixed inset-0 z-[120]" onClick={() => setCtxMenu(null)} />
+          <div
+            style={{
+              left: Math.min(ctxMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 210),
+              top: Math.min(ctxMenu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 280),
+            }}
+            className="fixed z-[125] w-52 rounded-2xl glass-surface-focused p-1.5 text-xs shadow-2xl animate-window-in"
+          >
+            <div className="px-2.5 py-1 text-[10px] font-mono text-zinc-400 truncate border-b border-white/8 mb-1">
+              {ctxMenu.entry.name}
+            </div>
+            {ctxMenu.entry.isDir ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    wmStore.setWorkspaceDir(ctxMenu.entry.path);
+                    wmStore.pushToast("Active Workspace Set", ctxMenu.entry.path, "success");
+                    setCtxMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-amber-200"
+                >
+                  <Star className="w-3.5 h-3.5" />
+                  Set as Active Workspace
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    wmStore.openTerminalInDir(ctxMenu.entry.path);
+                    setCtxMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-cyan-200"
+                >
+                  <Terminal className="w-3.5 h-3.5" />
+                  Open Terminal Here
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    wmStore.openDirInIde(ctxMenu.entry.path);
+                    setCtxMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-sky-200"
+                >
+                  <Code2 className="w-3.5 h-3.5" />
+                  Open in Code IDE
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    wmStore.openFileInIde(ctxMenu.entry.path);
+                    setCtxMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-sky-200"
+                >
+                  <Code2 className="w-3.5 h-3.5" />
+                  Open in Code IDE
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    wmStore.openFileInMedia(ctxMenu.entry.path);
+                    setCtxMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-pink-200"
+                >
+                  <Film className="w-3.5 h-3.5" />
+                  Open in Media Studio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleDownload(ctxMenu.entry);
+                    setCtxMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download to PC
+                </button>
+              </>
+            )}
+            <div className="my-1 border-t border-white/8" />
+            <button
+              type="button"
+              onClick={() => {
+                const e = ctxMenu.entry;
+                setCtxMenu(null);
+                void handleRename(e);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Rename
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setClipboard({ mode: "copy", entry: ctxMenu.entry });
+                setCtxMenu(null);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setClipboard({ mode: "cut", entry: ctxMenu.entry });
+                setCtxMenu(null);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
+            >
+              <Scissors className="w-3.5 h-3.5" />
+              Cut / Move
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const e = ctxMenu.entry;
+                setCtxMenu(null);
+                void handleDelete(e);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-rose-500/20 text-rose-300"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -781,10 +781,53 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
 
 const AGENT_KV_PREFIX = "unkernelos:agent-kv:";
 const SERVICES_STORAGE_KEY = "unkernelos:services:v1";
+const PERM_MODE_STORAGE_KEY = "unkernelos:agent-perm-mode:v1";
+
+export type AgentPermissionMode = "auto" | "supervised" | "read-only";
+
+const READ_ONLY_METHODS = new Set([
+  "system.info",
+  "system.clipboard.read",
+  "system.clipboard.history",
+  "system.screenshot",
+  "wm.apps",
+  "wm.windows",
+  "workspace.get",
+  "preview.ports",
+  "preview.url",
+  "theme.list",
+  "config.get",
+  "wayland.list",
+  "github.status",
+  "browser.storage.get",
+  "services.list",
+  "mount.list",
+  "app.list",
+  "workflow.list",
+  "swarm.status",
+]);
+
+const SENSITIVE_METHODS = new Set([
+  "github.deployPages",
+  "system.vm",
+  "app.install",
+  "app.uninstall",
+  "config.set",
+  "browser.download",
+  "wm.close",
+  "system.lock",
+]);
+
+function loadPermMode(): AgentPermissionMode {
+  if (typeof localStorage === "undefined") return "auto";
+  const v = localStorage.getItem(PERM_MODE_STORAGE_KEY);
+  return v === "supervised" || v === "read-only" ? v : "auto";
+}
 
 interface AgentApiState {
   readonly bridgeAttached: boolean;
   readonly registeredCommands: readonly string[];
+  readonly permissionMode: AgentPermissionMode;
   readonly logs: readonly AgentApiCallRecord[];
   readonly totalCalls: number;
 }
@@ -793,6 +836,7 @@ class AgentApiStore {
   private state: AgentApiState = {
     bridgeAttached: false,
     registeredCommands: [],
+    permissionMode: loadPermMode(),
     logs: [],
     totalCalls: 0,
   };
@@ -811,6 +855,16 @@ class AgentApiStore {
 
   public setBridgeState(attached: boolean, commands: readonly string[]): void {
     this.state = { ...this.state, bridgeAttached: attached, registeredCommands: commands };
+    this.emit();
+  }
+
+  public setPermissionMode(mode: AgentPermissionMode): void {
+    try {
+      localStorage.setItem(PERM_MODE_STORAGE_KEY, mode);
+    } catch {
+      // ignore
+    }
+    this.state = { ...this.state, permissionMode: mode };
     this.emit();
   }
 
@@ -850,6 +904,22 @@ export async function executeOsAction(
 ): Promise<unknown> {
   const t0 = performance.now();
   try {
+    // Enforce Agent Permission Firewall for external guest/MCP callers
+    if (meta.source === "guest-cli" || meta.source === "mcp") {
+      const mode = agentApiStore.getSnapshot().permissionMode;
+      if (mode === "read-only" && !READ_ONLY_METHODS.has(method)) {
+        throw new Error(`Blocked by Agent OS Firewall (Read-Only mode): '${method}' is disabled.`);
+      }
+      if (mode === "supervised" && SENSITIVE_METHODS.has(method)) {
+        const ok = window.confirm(
+          `unkernelOS Agent Firewall\n\nAllow agent (${meta.source}) to run:\n${method}\n\nParams:\n${JSON.stringify(params, null, 2).slice(0, 400)}`
+        );
+        if (!ok) {
+          throw new Error(`User denied agent action '${method}'`);
+        }
+      }
+    }
+
     const result = await dispatchOsAction(method, params);
     agentApiStore.recordCall({
       id: Math.random().toString(36).slice(2, 9),

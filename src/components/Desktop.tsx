@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { X } from "lucide-react";
-import React, { useCallback, useEffect, useRef } from "react";
+import { Loader2, X } from "lucide-react";
+import React, { lazy, Suspense, useCallback, useEffect, useRef } from "react";
 import { attachAgentOsBridge, detachAgentOsBridge } from "../core/agent-os-api.ts";
 import { clipboardStore } from "../core/clipboard-store.ts";
 import { applyOsThemeToDocument } from "../core/os-themes.ts";
@@ -15,6 +15,7 @@ import {
 import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
 import { uiSounds } from "../core/ui-sounds.ts";
 import { waylandDesktopManager } from "../core/wayland-host.ts";
+import { workflowsStore } from "../core/workflows-store.ts";
 import { WebGpuBackdrop } from "../gpu/webgpu-backdrop.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
 import { AppLauncherOverlay } from "./AppLauncherOverlay.tsx";
@@ -33,33 +34,43 @@ import { NotificationCenter } from "./NotificationCenter.tsx";
 import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
 import { VoiceOrbOverlay } from "./VoiceOrbOverlay.tsx";
+import { WindowErrorBoundary } from "./WindowErrorBoundary.tsx";
 import { WindowFrame } from "./WindowFrame.tsx";
 import { WindowSwitcherHud } from "./WindowSwitcherHud.tsx";
-import { AgentApiApp } from "./apps/AgentApiApp.tsx";
-import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
-import { AgentSwarmApp } from "./apps/AgentSwarmApp.tsx";
-import { ApiClientApp } from "./apps/ApiClientApp.tsx";
-import { AutomationsApp } from "./apps/AutomationsApp.tsx";
-import { CodeIdeApp } from "./apps/CodeIdeApp.tsx";
-import { DatabaseStudioApp } from "./apps/DatabaseStudioApp.tsx";
-import { DevUtilitiesApp } from "./apps/DevUtilitiesApp.tsx";
-import { DynamicAppHost } from "./apps/DynamicAppHost.tsx";
-import { FileExplorerApp } from "./apps/FileExplorerApp.tsx";
-import { GitApp } from "./apps/GitApp.tsx";
-import { GlViewportWindow } from "./apps/GlViewportWindow.tsx";
-import { KittyTerminalApp } from "./apps/KittyTerminalApp.tsx";
-import { MediaStudioApp } from "./apps/MediaStudioApp.tsx";
-import { NotesStudioApp } from "./apps/NotesStudioApp.tsx";
-import { PreviewBrowserApp } from "./apps/PreviewBrowserApp.tsx";
-import { ProcessManagerApp } from "./apps/ProcessManagerApp.tsx";
-import { ScreenDisplayApp } from "./apps/ScreenDisplayApp.tsx";
-import { ServiceRunnerApp } from "./apps/ServiceRunnerApp.tsx";
-import { SettingsApp } from "./apps/SettingsApp.tsx";
-import { ShaderSynthApp } from "./apps/ShaderSynthApp.tsx";
-import { SystemMonitorApp } from "./apps/SystemMonitorApp.tsx";
-import { ToolchainInstallerApp } from "./apps/ToolchainInstallerApp.tsx";
-import { WaylandSurfaceWindow } from "./apps/WaylandSurfaceWindow.tsx";
-import { WhiteboardApp } from "./apps/WhiteboardApp.tsx";
+
+// Code-split all 23+ WebOS apps via React.lazy for ultra-fast initial boot & PWA load!
+const AgentApiApp = lazy(() => import("./apps/AgentApiApp.tsx").then((m) => ({ default: m.AgentApiApp })));
+const AgentStudioApp = lazy(() => import("./apps/AgentStudioApp.tsx").then((m) => ({ default: m.AgentStudioApp })));
+const AgentSwarmApp = lazy(() => import("./apps/AgentSwarmApp.tsx").then((m) => ({ default: m.AgentSwarmApp })));
+const ApiClientApp = lazy(() => import("./apps/ApiClientApp.tsx").then((m) => ({ default: m.ApiClientApp })));
+const AutomationsApp = lazy(() => import("./apps/AutomationsApp.tsx").then((m) => ({ default: m.AutomationsApp })));
+const CodeIdeApp = lazy(() => import("./apps/CodeIdeApp.tsx").then((m) => ({ default: m.CodeIdeApp })));
+const DatabaseStudioApp = lazy(() => import("./apps/DatabaseStudioApp.tsx").then((m) => ({ default: m.DatabaseStudioApp })));
+const DevUtilitiesApp = lazy(() => import("./apps/DevUtilitiesApp.tsx").then((m) => ({ default: m.DevUtilitiesApp })));
+const DynamicAppHost = lazy(() => import("./apps/DynamicAppHost.tsx").then((m) => ({ default: m.DynamicAppHost })));
+const FileExplorerApp = lazy(() => import("./apps/FileExplorerApp.tsx").then((m) => ({ default: m.FileExplorerApp })));
+const GitApp = lazy(() => import("./apps/GitApp.tsx").then((m) => ({ default: m.GitApp })));
+const GlViewportWindow = lazy(() => import("./apps/GlViewportWindow.tsx").then((m) => ({ default: m.GlViewportWindow })));
+const KittyTerminalApp = lazy(() => import("./apps/KittyTerminalApp.tsx").then((m) => ({ default: m.KittyTerminalApp })));
+const MediaStudioApp = lazy(() => import("./apps/MediaStudioApp.tsx").then((m) => ({ default: m.MediaStudioApp })));
+const NotesStudioApp = lazy(() => import("./apps/NotesStudioApp.tsx").then((m) => ({ default: m.NotesStudioApp })));
+const PreviewBrowserApp = lazy(() => import("./apps/PreviewBrowserApp.tsx").then((m) => ({ default: m.PreviewBrowserApp })));
+const ProcessManagerApp = lazy(() => import("./apps/ProcessManagerApp.tsx").then((m) => ({ default: m.ProcessManagerApp })));
+const ScreenDisplayApp = lazy(() => import("./apps/ScreenDisplayApp.tsx").then((m) => ({ default: m.ScreenDisplayApp })));
+const ServiceRunnerApp = lazy(() => import("./apps/ServiceRunnerApp.tsx").then((m) => ({ default: m.ServiceRunnerApp })));
+const SettingsApp = lazy(() => import("./apps/SettingsApp.tsx").then((m) => ({ default: m.SettingsApp })));
+const ShaderSynthApp = lazy(() => import("./apps/ShaderSynthApp.tsx").then((m) => ({ default: m.ShaderSynthApp })));
+const SystemMonitorApp = lazy(() => import("./apps/SystemMonitorApp.tsx").then((m) => ({ default: m.SystemMonitorApp })));
+const ToolchainInstallerApp = lazy(() => import("./apps/ToolchainInstallerApp.tsx").then((m) => ({ default: m.ToolchainInstallerApp })));
+const WaylandSurfaceWindow = lazy(() => import("./apps/WaylandSurfaceWindow.tsx").then((m) => ({ default: m.WaylandSurfaceWindow })));
+const WhiteboardApp = lazy(() => import("./apps/WhiteboardApp.tsx").then((m) => ({ default: m.WhiteboardApp })));
+
+const AppLoadingFallback: React.FC = () => (
+  <div className="flex items-center justify-center w-full h-full bg-[#090b12]/90 text-xs text-zinc-400 gap-2">
+    <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />
+    <span>Loading app...</span>
+  </div>
+);
 
 const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean): React.ReactNode => {
   switch (win.appId) {
@@ -309,11 +320,19 @@ export const Desktop: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [vmState.phase]);
 
-  // Bridge Effect OS events to Window Manager & Toasts
+  // Start live background Workflows scheduler (interval / cron triggers) while VM is running
+  useEffect(() => {
+    if (vmState.phase !== "running") return;
+    return workflowsStore.startScheduler();
+  }, [vmState.phase]);
+
+  // Bridge Effect OS events to Window Manager, Workflows & Toasts
   const handleOsEvent = useCallback((ev: { _tag: string; payload: unknown }) => {
     if (ev._tag === "OpenPreview") {
       const p = ev.payload as { port: number; path?: string };
       wmStore.openPreview(p.port, p.path || "/");
+    } else if (ev._tag === "PortsChanged" && Array.isArray(ev.payload)) {
+      workflowsStore.handlePortsChanged(ev.payload as { port: number }[]);
     } else if (ev._tag === "Notify") {
       const n = ev.payload as {
         title: string;
@@ -435,7 +454,11 @@ export const Desktop: React.FC = () => {
           return (
             <div key={win.id} data-window-surface="true" className="pointer-events-auto">
               <WindowFrame win={win} focused={focused} visible={visible}>
-                {renderWindowApp(win, focused, visible)}
+                <WindowErrorBoundary appTitle={win.title}>
+                  <Suspense fallback={<AppLoadingFallback />}>
+                    {renderWindowApp(win, focused, visible)}
+                  </Suspense>
+                </WindowErrorBoundary>
               </WindowFrame>
             </div>
           );
