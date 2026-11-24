@@ -51,7 +51,7 @@ const PROMPT_TEMPLATES = [
   },
 ];
 
-export const AgentStudioApp: React.FC = () => {
+export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocused = true }) => {
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
     DEFAULT_UNKERNEL_CONFIG
@@ -377,6 +377,7 @@ export const AgentStudioApp: React.FC = () => {
               themeId={cfg.kittyTheme}
               fontSize={cfg.terminalFontSize}
               preferWebGpu={cfg.webgpuTerminal}
+              focused={windowFocused}
               onReady={(h) => {
                 termHandleRef.current = h;
               }}

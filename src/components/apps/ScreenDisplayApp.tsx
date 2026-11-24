@@ -19,7 +19,7 @@ import { wmStore } from "../../wm/wm-store.ts";
 
 type ScreenTab = "fb0" | "wayland" | "gl";
 
-export const ScreenDisplayApp: React.FC = () => {
+export const ScreenDisplayApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocused = true }) => {
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
     DEFAULT_UNKERNEL_CONFIG
@@ -167,9 +167,16 @@ export const ScreenDisplayApp: React.FC = () => {
     };
   }, [vmState.phase, cfg.wayland, cfg.distro]);
 
+  // Release evdev keyboard capture automatically when another OS window takes focus
+  useEffect(() => {
+    if (!windowFocused && captured) {
+      setCaptured(false);
+    }
+  }, [windowFocused, captured]);
+
   // Complete evdev keyboard capture (all special keys, modifiers, F1-F12, arrows, Tab, Esc + release-all on blur)
   useEffect(() => {
-    if (!captured) return;
+    if (!captured || !windowFocused) return;
 
     const releaseAll = () => {
       const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
@@ -215,7 +222,7 @@ export const ScreenDisplayApp: React.FC = () => {
       window.removeEventListener("keyup", ku, { capture: true });
       window.removeEventListener("blur", onBlur);
     };
-  }, [captured]);
+  }, [captured, windowFocused]);
 
   const handleFbPointer = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));

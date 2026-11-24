@@ -143,6 +143,25 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   const [backend, setBackend] = useState<"webgpu" | "canvas2d">("canvas2d");
   const [status, setStatus] = useState<"connecting" | "connected" | "exited">("connecting");
   const [detectedUrl, setDetectedUrl] = useState<{ port: number; path: string } | null>(null);
+  const [hasDomFocus, setHasDomFocus] = useState(false);
+
+  const focusInput = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    // Re-assert focus after mousedown default browser blur/selection settling
+    requestAnimationFrame(() => {
+      if (document.activeElement !== el && focused) {
+        el.focus({ preventScroll: true });
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (focused) {
+      focusInput();
+    }
+  }, [focused]);
 
   const theme = KITTY_THEMES[themeId] ?? KITTY_THEMES["tokyo-night"];
 
@@ -299,8 +318,15 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     });
     ro.observe(container);
 
+    const onGlobalMouseUp = () => {
+      dragSelect.current = false;
+      mouseDownBtn.current = null;
+    };
+    window.addEventListener("mouseup", onGlobalMouseUp);
+
     return () => {
       disposed = true;
+      window.removeEventListener("mouseup", onGlobalMouseUp);
       ro.disconnect();
       ptyRef.current?.close();
       ptyRef.current = null;
@@ -427,15 +453,17 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Prevent default browser focus-steal/text-selection on the non-editable canvas wrapper
+    // so the hidden textarea retains focus reliably when returning from another window.
+    e.preventDefault();
     onFocus?.();
-    inputRef.current?.focus();
+    focusInput();
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect || !rendererRef.current) return;
     const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
 
     const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
     if (mode !== "none" && !e.shiftKey) {
-      e.preventDefault();
       const btn = e.button === 1 ? 1 : e.button === 2 ? 2 : 0;
       mouseDownBtn.current = btn;
       lastMouseCell.current = cell;
@@ -445,7 +473,6 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
 
     // Middle-click paste when not in mouse tracking mode
     if (e.button === 1) {
-      e.preventDefault();
       navigator.clipboard.readText().then((t) => writePaste(t)).catch(() => {});
       return;
     }
@@ -519,14 +546,23 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   return (
     <div
       ref={containerRef}
+      tabIndex={0}
+      onFocus={() => {
+        onFocus?.();
+        inputRef.current?.focus({ preventScroll: true });
+      }}
+      onClick={() => {
+        onFocus?.();
+        inputRef.current?.focus({ preventScroll: true });
+      }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onContextMenu={handleContextMenu}
       onWheel={handleWheel}
       style={{ backgroundColor: theme.bg }}
-      className={`relative w-full h-full overflow-hidden cursor-text transition-shadow ${
-        focused ? "ring-1 ring-inset ring-violet-400/25" : "opacity-90"
+      className={`relative w-full h-full overflow-hidden cursor-text outline-none transition-shadow ${
+        hasDomFocus ? "ring-1 ring-inset ring-violet-400/35" : focused ? "ring-1 ring-inset ring-white/10" : "opacity-90"
       }`}
     >
       <canvas ref={canvasRef} className="block w-full h-full" />
@@ -539,13 +575,15 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
         autoCapitalize="off"
         autoComplete="off"
         autoCorrect="off"
+        onFocus={() => setHasDomFocus(true)}
+        onBlur={() => setHasDomFocus(false)}
         onKeyDown={handleKeyDown}
         onChange={handleInputChange}
         onCompositionStart={handleCompositionStart}
         onCompositionEnd={handleCompositionEnd}
         onPaste={handlePaste}
         aria-label="Terminal Input"
-        className="absolute opacity-0 w-1 h-1 pointer-events-none top-0 left-0"
+        className="absolute opacity-0 w-1 h-1 top-0 left-0 resize-none overflow-hidden"
       />
 
       {/* WebGPU / Kitty HUD badge */}

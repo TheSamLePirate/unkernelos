@@ -26,18 +26,18 @@ import { SettingsApp } from "./apps/SettingsApp.tsx";
 import { SystemMonitorApp } from "./apps/SystemMonitorApp.tsx";
 import { ToolchainInstallerApp } from "./apps/ToolchainInstallerApp.tsx";
 
-const renderWindowApp = (win: WindowInstance): React.ReactNode => {
+const renderWindowApp = (win: WindowInstance, focused: boolean): React.ReactNode => {
   switch (win.appId) {
     case "agent-studio":
-      return <AgentStudioApp />;
+      return <AgentStudioApp windowFocused={focused} />;
     case "terminal":
-      return <KittyTerminalApp />;
+      return <KittyTerminalApp windowFocused={focused} />;
     case "explorer":
       return <FileExplorerApp />;
     case "preview":
       return <PreviewBrowserApp />;
     case "screen":
-      return <ScreenDisplayApp />;
+      return <ScreenDisplayApp windowFocused={focused} />;
     case "git":
       return <GitApp />;
     case "toolchain":
@@ -157,11 +157,14 @@ export const Desktop: React.FC = () => {
 
       {/* Floating Glass Window Layer */}
       <main className="relative z-10 w-full h-full">
-        {wm.windows.map((win) => (
-          <WindowFrame key={win.id} win={win} focused={win.id === wm.activeWindowId}>
-            {renderWindowApp(win)}
-          </WindowFrame>
-        ))}
+        {wm.windows.map((win) => {
+          const focused = win.id === wm.activeWindowId;
+          return (
+            <WindowFrame key={win.id} win={win} focused={focused}>
+              {renderWindowApp(win, focused)}
+            </WindowFrame>
+          );
+        })}
       </main>
 
       {/* Bottom Floating Glass Dock */}

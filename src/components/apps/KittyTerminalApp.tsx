@@ -25,7 +25,7 @@ const makeTab = (idx: number): TermTab => {
   };
 };
 
-export const KittyTerminalApp: React.FC = () => {
+export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocused = true }) => {
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
     DEFAULT_UNKERNEL_CONFIG
@@ -227,7 +227,7 @@ export const KittyTerminalApp: React.FC = () => {
                   themeId={cfg.kittyTheme}
                   fontSize={cfg.terminalFontSize}
                   preferWebGpu={cfg.webgpuTerminal}
-                  focused={tab.id === activeTab.id && tab.activePane === paneId}
+                  focused={windowFocused && tab.id === activeTab.id && tab.activePane === paneId}
                   onFocus={() =>
                     setTabs((prev) =>
                       prev.map((t) => (t.id === tab.id ? { ...t, activePane: paneId } : t))
