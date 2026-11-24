@@ -1,18 +1,25 @@
 import { Effect } from "effect";
 import {
   Activity,
+  Archive,
   CheckCircle2,
+  Code2,
   DownloadCloud,
   ExternalLink,
   FolderGit2,
+  FolderOpen,
   GitBranch,
   GitCommit,
   Globe,
   Link2,
   Lock,
+  Minus,
+  Plus,
   PlusCircle,
   RefreshCw,
   Rocket,
+  RotateCcw,
+  Terminal,
   Unlock,
   UploadCloud,
 } from "lucide-react";
@@ -152,16 +159,48 @@ export const GitApp: React.FC = () => {
               const name = e.target.value.split("/").filter(Boolean).pop();
               if (name) setRepoName(name);
             }}
-            onKeyDown={(e) => e.key === "Enter" && refresh(repoDir, selectedDiffFile)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                wmStore.setWorkspaceDir(repoDir);
+                void refresh(repoDir, selectedDiffFile);
+              }
+            }}
             className="flex-1 px-2.5 py-1 rounded-lg bg-black/50 border border-white/12 text-xs font-mono text-zinc-100 outline-none"
           />
           <button
             type="button"
-            onClick={() => refresh(repoDir, selectedDiffFile)}
+            onClick={() => {
+              wmStore.setWorkspaceDir(repoDir);
+              void refresh(repoDir, selectedDiffFile);
+            }}
             className="p-1.5 rounded-lg bg-white/8 hover:bg-white/14 text-zinc-300"
             title="Refresh Git Status"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.openDirInIde(repoDir)}
+            className="hidden sm:inline-flex p-1.5 rounded-lg bg-white/6 hover:bg-white/12 text-sky-300"
+            title="Open in Code IDE"
+          >
+            <Code2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.openDirInExplorer(repoDir)}
+            className="hidden sm:inline-flex p-1.5 rounded-lg bg-white/6 hover:bg-white/12 text-amber-300"
+            title="Open in File Explorer"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.openTerminalInDir(repoDir)}
+            className="hidden sm:inline-flex p-1.5 rounded-lg bg-white/6 hover:bg-white/12 text-cyan-300"
+            title="Open Terminal in Repo"
+          >
+            <Terminal className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -248,16 +287,73 @@ export const GitApp: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Branch & Remote */}
+              {/* Branch Switcher, Stash & Remote */}
               <div className="space-y-2 p-3 rounded-xl bg-white/[0.03] border border-white/10">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 font-mono text-orange-300">
-                    <GitBranch className="w-3.5 h-3.5" />
-                    {state.branch}
-                  </span>
-                  <span className="text-[11px] text-zinc-400 truncate max-w-[210px]" title={state.remoteUrl ?? ""}>
-                    {state.remoteUrl ?? "No origin remote"}
-                  </span>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <GitBranch className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                    <select
+                      aria-label="Git Branch"
+                      value={state.branch}
+                      disabled={busy}
+                      onChange={(e) => {
+                        if (e.target.value === "__new__") {
+                          const b = window.prompt("New branch name:", "feature/ui");
+                          if (b?.trim()) {
+                            void runAction(
+                              "checkout",
+                              Effect.flatMap(GitService, (g) => g.checkoutBranch(repoDir, b.trim(), true))
+                            );
+                          }
+                        } else {
+                          void runAction(
+                            "checkout",
+                            Effect.flatMap(GitService, (g) => g.checkoutBranch(repoDir, e.target.value, false))
+                          );
+                        }
+                      }}
+                      className="bg-black/40 border border-white/10 rounded-md px-1.5 py-0.5 font-mono text-orange-300 text-xs outline-none cursor-pointer"
+                    >
+                      {state.branches.map((b) => (
+                        <option key={b} value={b} className="bg-[#12141f] text-zinc-100">
+                          {b}
+                        </option>
+                      ))}
+                      <option value="__new__" className="bg-[#12141f] text-emerald-300">
+                        + New branch...
+                      </option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      disabled={busy || state.files.length === 0}
+                      onClick={() =>
+                        void runAction("stash", Effect.flatMap(GitService, (g) => g.stash(repoDir, false)))
+                      }
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/6 hover:bg-white/14 text-[10px] text-zinc-300 disabled:opacity-35"
+                      title="Stash working changes"
+                    >
+                      <Archive className="w-3 h-3" />
+                      Stash
+                    </button>
+                    {state.stashCount > 0 && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void runAction("stash-pop", Effect.flatMap(GitService, (g) => g.stash(repoDir, true)))
+                        }
+                        className="px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-[10px] font-mono text-amber-200"
+                        title="Pop latest stash"
+                      >
+                        Pop ({state.stashCount})
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="text-[10px] font-mono text-zinc-500 truncate" title={state.remoteUrl ?? ""}>
+                  origin: {state.remoteUrl ?? "No origin remote"}
                 </div>
 
                 {!state.remoteUrl && (
@@ -314,24 +410,85 @@ export const GitApp: React.FC = () => {
                 {state.files.length === 0 ? (
                   <p className="text-xs text-zinc-500 italic">Working tree clean.</p>
                 ) : (
-                  <div className="max-h-40 overflow-y-auto space-y-1">
-                    {state.files.map((f) => (
-                      <button
-                        key={f.path}
-                        type="button"
-                        onClick={() => setSelectedDiffFile(f.path)}
-                        className={`w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-xs font-mono transition ${
-                          selectedDiffFile === f.path
-                            ? "bg-white/12 text-white"
-                            : "bg-white/[0.02] text-zinc-300 hover:bg-white/8"
-                        }`}
-                      >
-                        <span className="truncate">{f.path}</span>
-                        <span className="text-[10px] text-amber-300 ml-2">
-                          {(f.index + f.worktree).trim() || "M"}
-                        </span>
-                      </button>
-                    ))}
+                  <div className="max-h-44 overflow-y-auto space-y-1">
+                    {state.files.map((f) => {
+                      const isStaged = f.index !== " " && f.index !== "?";
+                      return (
+                        <div
+                          key={f.path}
+                          onClick={() => setSelectedDiffFile(f.path)}
+                          className={`group w-full flex items-center justify-between gap-1 px-2 py-1 rounded-lg text-xs font-mono cursor-pointer transition ${
+                            selectedDiffFile === f.path
+                              ? "bg-white/12 text-white"
+                              : "bg-white/[0.02] text-zinc-300 hover:bg-white/8"
+                          }`}
+                        >
+                          <span className="truncate flex-1">{f.path}</span>
+                          <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                wmStore.openFileInIde(`${repoDir}/${f.path}`.replace(/\/+/g, "/"));
+                              }}
+                              title="Open in Code IDE"
+                              className="p-0.5 rounded hover:bg-white/15 text-sky-300"
+                            >
+                              <Code2 className="w-3 h-3" />
+                            </button>
+                            {isStaged ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void runAction(
+                                    "unstage",
+                                    Effect.flatMap(GitService, (g) => g.unstageFile(repoDir, f.path))
+                                  );
+                                }}
+                                title="Unstage file"
+                                className="p-0.5 rounded hover:bg-white/15 text-amber-300"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void runAction(
+                                    "stage",
+                                    Effect.flatMap(GitService, (g) => g.stageFile(repoDir, f.path))
+                                  );
+                                }}
+                                title="Stage file"
+                                className="p-0.5 rounded hover:bg-white/15 text-emerald-300"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!window.confirm(`Discard all changes in ${f.path}?`)) return;
+                                void runAction(
+                                  "discard",
+                                  Effect.flatMap(GitService, (g) => g.discardFile(repoDir, f.path))
+                                );
+                              }}
+                              title="Discard changes"
+                              className="p-0.5 rounded hover:bg-rose-500/25 text-rose-300"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-amber-300 ml-1 shrink-0 group-hover:hidden">
+                            {(f.index + f.worktree).trim() || "M"}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

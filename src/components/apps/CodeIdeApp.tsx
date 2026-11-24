@@ -1,18 +1,30 @@
 import { Effect } from "effect";
 import {
+  Bot,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Code2,
   FileCode2,
   FilePlus,
+  FileSearch,
   Folder,
+  FolderGit2,
   FolderOpen,
+  FolderPlus,
+  Minus,
   PanelLeft,
+  Pencil,
   Play,
+  Plus,
   RefreshCw,
+  Replace,
   Save,
   Search,
+  Terminal,
   TerminalSquare,
+  Trash2,
+  WrapText,
   X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -197,6 +209,15 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
   const [searching, setSearching] = useState(false);
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1 });
   const [saving, setSaving] = useState(false);
+  const [wordWrap, setWordWrap] = useState(false);
+  const [editorFontSize, setEditorFontSize] = useState(12.5);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [findIdx, setFindIdx] = useState(0);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickQuery, setQuickQuery] = useState("");
+  const [allProjectFiles, setAllProjectFiles] = useState<readonly string[]>([]);
 
   const preRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
@@ -204,6 +225,113 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
   const termRef = useRef<KittyTerminalHandle | null>(null);
 
   const activeTab = tabs.find((t) => t.path === activePath) ?? null;
+
+  const commitRootDir = (nextDir: string) => {
+    const clean = nextDir.trim().replace(/\/+/g, "/") || "/home/user/workspace";
+    setRootDir(clean);
+    wmStore.setWorkspaceDir(clean);
+    void loadDirectory(clean);
+    const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+    termRef.current?.write(`cd ${sq(clean)}\n`);
+  };
+
+  // Global IDE keyboard shortcuts (⌘P Quick Open, ⌘F Find & Replace, ⌘⇧S Save All)
+  useEffect(() => {
+    if (!windowFocused) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "p") {
+        e.preventDefault();
+        void openQuickPicker();
+      } else if (k === "f") {
+        e.preventDefault();
+        setFindOpen((v) => !v);
+      } else if (k === "s" && e.shiftKey) {
+        e.preventDefault();
+        void saveAllTabs();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [windowFocused, rootDir, tabs]);
+
+  const openQuickPicker = async () => {
+    setQuickOpen(true);
+    setQuickQuery("");
+    const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+    const res = await appRuntime.runPromise(
+      Effect.either(
+        Effect.flatMap(VmService, (vm) =>
+          vm.execShell(
+            `cd ${sq(rootDir)} && find . -maxdepth 4 -type f ! -path '*/.git/*' ! -path '*/node_modules/*' 2>/dev/null | sed 's|^\\./||' | sort | head -n 300`
+          )
+        )
+      )
+    );
+    if (res._tag === "Right") {
+      setAllProjectFiles(res.right.stdout.split("\n").map((l) => l.trim()).filter(Boolean));
+    }
+  };
+
+  const saveAllTabs = async () => {
+    const dirtyTabs = tabs.filter((t) => t.content !== t.savedContent);
+    if (dirtyTabs.length === 0) return;
+    setSaving(true);
+    for (const t of dirtyTabs) {
+      await appRuntime.runPromise(
+        Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.writeFileText(t.path, t.content)))
+      );
+    }
+    await appRuntime.runPromise(Effect.either(Effect.flatMap(VmService, (vm) => vm.syncDisk())));
+    setSaving(false);
+    setTabs((prev) => prev.map((t) => ({ ...t, savedContent: t.content })));
+    wmStore.pushToast("Saved All", `${dirtyTabs.length} file(s) saved`, "success");
+  };
+
+  const findMatches = useMemo(() => {
+    if (!activeTab || !findQuery) return [];
+    const low = activeTab.content.toLowerCase();
+    const q = findQuery.toLowerCase();
+    const hits: number[] = [];
+    let pos = low.indexOf(q);
+    while (pos !== -1) {
+      hits.push(pos);
+      pos = low.indexOf(q, pos + Math.max(1, q.length));
+    }
+    return hits;
+  }, [activeTab?.content, findQuery]);
+
+  const jumpToMatch = (idx: number) => {
+    if (!findMatches.length || !textareaRef.current) return;
+    const safe = ((idx % findMatches.length) + findMatches.length) % findMatches.length;
+    setFindIdx(safe);
+    const start = findMatches[safe]!;
+    const ta = textareaRef.current;
+    ta.focus();
+    ta.setSelectionRange(start, start + findQuery.length);
+    const lineNum = ta.value.slice(0, start).split("\n").length;
+    ta.scrollTop = Math.max(0, (lineNum - 5) * (editorFontSize * 1.6));
+    syncScroll();
+  };
+
+  const replaceOne = () => {
+    if (!activeTab || !findMatches.length) return;
+    const safe = ((findIdx % findMatches.length) + findMatches.length) % findMatches.length;
+    const start = findMatches[safe]!;
+    const next =
+      activeTab.content.slice(0, start) +
+      replaceText +
+      activeTab.content.slice(start + findQuery.length);
+    updateActiveContent(next);
+  };
+
+  const replaceAll = () => {
+    if (!activeTab || !findQuery) return;
+    const escaped = findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const next = activeTab.content.replace(new RegExp(escaped, "gi"), replaceText);
+    updateActiveContent(next);
+  };
 
   const loadDirectory = useCallback(async (dir: string) => {
     const res = await appRuntime.runPromise(
@@ -302,10 +430,10 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     });
   };
 
-  const createNewFile = async () => {
-    const rel = window.prompt(`New file path inside ${rootDir}:`, "app.ts");
+  const createNewFile = async (baseDir = rootDir) => {
+    const rel = window.prompt(`New file path inside ${baseDir}:`, "app.ts");
     if (!rel?.trim()) return;
-    const fullPath = `${rootDir}/${rel.trim()}`.replace(/\/+/g, "/");
+    const fullPath = `${baseDir}/${rel.trim()}`.replace(/\/+/g, "/");
     const parent = fullPath.split("/").slice(0, -1).join("/") || "/";
     await appRuntime.runPromise(
       Effect.either(
@@ -316,8 +444,55 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
         })
       )
     );
-    await loadDirectory(rootDir);
+    await loadDirectory(baseDir);
+    if (baseDir !== rootDir) await loadDirectory(rootDir);
     await openFile(fullPath);
+  };
+
+  const createNewFolder = async (baseDir = rootDir) => {
+    const rel = window.prompt(`New folder name inside ${baseDir}:`, "components");
+    if (!rel?.trim()) return;
+    const fullPath = `${baseDir}/${rel.trim()}`.replace(/\/+/g, "/");
+    await appRuntime.runPromise(
+      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.mkdir(fullPath)))
+    );
+    await loadDirectory(baseDir);
+    if (baseDir !== rootDir) await loadDirectory(rootDir);
+  };
+
+  const renameEntry = async (entry: FsEntry) => {
+    const nextName = window.prompt(`Rename ${entry.name} to:`, entry.name);
+    if (!nextName?.trim() || nextName.trim() === entry.name) return;
+    const parent = entry.path.split("/").slice(0, -1).join("/") || "/";
+    const toPath = `${parent}/${nextName.trim()}`.replace(/\/+/g, "/");
+    const res = await appRuntime.runPromise(
+      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.rename(entry.path, toPath)))
+    );
+    if (res._tag === "Right") {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.path === entry.path ? { ...t, path: toPath, name: nextName.trim() } : t
+        )
+      );
+      if (activePath === entry.path) setActivePath(toPath);
+      await loadDirectory(parent);
+    } else {
+      wmStore.pushToast("Rename Failed", res.left.message, "error");
+    }
+  };
+
+  const deleteEntry = async (entry: FsEntry) => {
+    if (!window.confirm(`Delete ${entry.name}?`)) return;
+    const parent = entry.path.split("/").slice(0, -1).join("/") || "/";
+    const res = await appRuntime.runPromise(
+      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.remove(entry.path)))
+    );
+    if (res._tag === "Right") {
+      closeTab(entry.path);
+      await loadDirectory(parent);
+    } else {
+      wmStore.pushToast("Delete Failed", res.left.message, "error");
+    }
   };
 
   const runActiveFile = () => {
@@ -411,37 +586,75 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
       const isSelected = activePath === entry.path;
       return (
         <div key={entry.path}>
-          <button
-            type="button"
-            onClick={() => (entry.isDir ? toggleDir(entry.path) : void openFile(entry.path, entry.name))}
+          <div
             style={{ paddingLeft: `${8 + depth * 12}px` }}
-            className={`w-full flex items-center gap-1.5 pr-2 py-1 text-left text-xs rounded-md transition ${
+            onClick={() => (entry.isDir ? toggleDir(entry.path) : void openFile(entry.path, entry.name))}
+            className={`group w-full flex items-center justify-between gap-1 pr-1.5 py-1 text-left text-xs rounded-md cursor-pointer transition ${
               isSelected
                 ? "bg-violet-500/25 text-white"
                 : "text-zinc-300 hover:bg-white/6 hover:text-white"
             }`}
           >
-            {entry.isDir ? (
-              <>
-                {expanded ? (
-                  <ChevronDown className="w-3 h-3 text-zinc-500 shrink-0" />
-                ) : (
-                  <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
-                )}
-                {expanded ? (
-                  <FolderOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                ) : (
-                  <Folder className="w-3.5 h-3.5 text-amber-400/80 shrink-0" />
-                )}
-              </>
-            ) : (
-              <>
-                <span className="w-3 shrink-0" />
-                <span className={`w-2 h-2 rounded-full shrink-0 ${fileDotColor(entry.name)}`} />
-              </>
-            )}
-            <span className="truncate font-mono text-[11px]">{entry.name}</span>
-          </button>
+            <div className="flex items-center gap-1.5 min-w-0">
+              {entry.isDir ? (
+                <>
+                  {expanded ? (
+                    <ChevronDown className="w-3 h-3 text-zinc-500 shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
+                  )}
+                  {expanded ? (
+                    <FolderOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  ) : (
+                    <Folder className="w-3.5 h-3.5 text-amber-400/80 shrink-0" />
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="w-3 shrink-0" />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${fileDotColor(entry.name)}`} />
+                </>
+              )}
+              <span className="truncate font-mono text-[11px]">{entry.name}</span>
+            </div>
+            <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+              {entry.isDir && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void createNewFile(entry.path);
+                  }}
+                  title="New file here"
+                  className="p-0.5 rounded hover:bg-white/15 text-zinc-400 hover:text-cyan-300"
+                >
+                  <FilePlus className="w-3 h-3" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void renameEntry(entry);
+                }}
+                title="Rename"
+                className="p-0.5 rounded hover:bg-white/15 text-zinc-400 hover:text-white"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void deleteEntry(entry);
+                }}
+                title="Delete"
+                className="p-0.5 rounded hover:bg-rose-500/25 text-zinc-400 hover:text-rose-300"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
           {entry.isDir && expanded && renderTree(entry.path, depth + 1)}
         </div>
       );
@@ -451,8 +664,8 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
   return (
     <div className="flex flex-col w-full h-full bg-[#090b12]/96 select-none">
       {/* Top IDE Toolbar */}
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-black/45 border-b border-white/10 shrink-0">
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+      <div className="flex items-center justify-between gap-2 px-2.5 sm:px-3 py-1.5 bg-black/45 border-b border-white/10 shrink-0">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
           <button
             type="button"
             onClick={() => setSidebarOpen((v) => !v)}
@@ -469,51 +682,138 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
           <input
             value={rootDir}
             onChange={(e) => setRootDir(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void loadDirectory(rootDir)}
-            className="w-40 sm:w-64 max-w-full px-2 py-0.5 rounded-md bg-black/50 border border-white/10 text-[11px] font-mono text-zinc-200 outline-none"
+            onKeyDown={(e) => e.key === "Enter" && commitRootDir(rootDir)}
+            className="w-36 sm:w-60 max-w-full px-2 py-0.5 rounded-md bg-black/50 border border-white/10 text-[11px] font-mono text-zinc-200 outline-none focus:border-sky-400/50"
+            title="Working Directory (press Enter to switch workspace)"
           />
           <button
             type="button"
             onClick={() => void loadDirectory(rootDir)}
-            className="p-1 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white"
+            className="p-1 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white shrink-0"
             title="Refresh Tree"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
-            onClick={() => void createNewFile()}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/8 hover:bg-white/14 text-[11px] text-zinc-200 transition"
+            onClick={() => void createNewFile(rootDir)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/8 hover:bg-white/14 text-[11px] text-zinc-200 transition shrink-0"
+            title="New File"
           >
             <FilePlus className="w-3 h-3 text-cyan-400" />
-            New File
+            <span className="hidden lg:inline">File</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => void createNewFolder(rootDir)}
+            className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/6 hover:bg-white/14 text-[11px] text-zinc-300 transition shrink-0"
+            title="New Folder"
+          >
+            <FolderPlus className="w-3 h-3 text-amber-400" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void openQuickPicker()}
+            className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/6 hover:bg-white/14 border border-white/10 text-[11px] text-zinc-300 transition shrink-0"
+            title="Quick Open File (⌘P)"
+          >
+            <FileSearch className="w-3 h-3 text-violet-400" />
+            <span className="font-mono text-[10px]">⌘P</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 shrink-0">
           {activeTab && (
             <>
               <button
                 type="button"
+                onClick={() => setFindOpen((v) => !v)}
+                className={`p-1 rounded-lg border transition ${
+                  findOpen
+                    ? "bg-violet-500/25 border-violet-400/40 text-white"
+                    : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                }`}
+                title="Find & Replace (⌘F)"
+              >
+                <Replace className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setWordWrap((v) => !v)}
+                className={`hidden sm:inline-flex p-1 rounded-lg border transition ${
+                  wordWrap
+                    ? "bg-cyan-500/20 border-cyan-400/35 text-cyan-200"
+                    : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                }`}
+                title="Toggle Word Wrap"
+              >
+                <WrapText className="w-3.5 h-3.5" />
+              </button>
+              <div className="hidden xl:flex items-center bg-white/5 rounded-lg border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setEditorFontSize((s) => Math.max(10, s - 1))}
+                  className="p-1 text-zinc-400 hover:text-white"
+                  title="Decrease editor font size"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditorFontSize((s) => Math.min(18, s + 1))}
+                  className="p-1 text-zinc-400 hover:text-white"
+                  title="Increase editor font size"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+              <button
+                type="button"
                 onClick={runActiveFile}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/35 text-emerald-200 transition"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/35 text-emerald-200 transition"
                 title="Run active file in integrated terminal"
               >
                 <Play className="w-3 h-3" />
-                Run
+                <span className="hidden sm:inline">Run</span>
               </button>
               <button
                 type="button"
                 disabled={saving || activeTab.content === activeTab.savedContent}
                 onClick={() => void saveActiveTab()}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-violet-600/85 hover:bg-violet-500 text-white disabled:opacity-40 transition"
-                title="Save (⌘S)"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-violet-600/85 hover:bg-violet-500 text-white disabled:opacity-40 transition"
+                title="Save (⌘S) · Save All (⌘⇧S)"
               >
                 <Save className="w-3 h-3" />
-                {saving ? "Saving..." : "Save"}
+                <span className="hidden sm:inline">{saving ? "..." : "Save"}</span>
               </button>
             </>
           )}
+          <div className="hidden lg:flex items-center gap-0.5 pl-1 ml-0.5 border-l border-white/10">
+            <button
+              type="button"
+              onClick={() => wmStore.openTerminalInDir(rootDir)}
+              className="p-1 rounded-md text-zinc-400 hover:text-cyan-300 hover:bg-white/10"
+              title="Open Kitty Terminal in this folder"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => wmStore.openDirInGit(rootDir)}
+              className="p-1 rounded-md text-zinc-400 hover:text-orange-300 hover:bg-white/10"
+              title="Open Git for this workspace"
+            >
+              <FolderGit2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => wmStore.openDirInStudio(rootDir)}
+              className="p-1 rounded-md text-zinc-400 hover:text-violet-300 hover:bg-white/10"
+              title="Open Agent Studio in this workspace"
+            >
+              <Bot className="w-3.5 h-3.5" />
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => setShowTerminal((v) => !v)}
@@ -635,6 +935,73 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
             )}
           </div>
 
+          {/* In-File Find & Replace Bar */}
+          {findOpen && activeTab && (
+            <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 bg-black/60 border-b border-white/10 text-xs shrink-0">
+              <Search className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+              <input
+                autoFocus
+                value={findQuery}
+                onChange={(e) => {
+                  setFindQuery(e.target.value);
+                  setFindIdx(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") jumpToMatch(e.shiftKey ? findIdx - 1 : findIdx + 1);
+                  if (e.key === "Escape") setFindOpen(false);
+                }}
+                placeholder="Find..."
+                className="w-36 px-2 py-0.5 rounded bg-black/60 border border-white/12 text-[11px] font-mono text-white outline-none"
+              />
+              <span className="text-[10px] font-mono text-zinc-400 min-w-[44px]">
+                {findMatches.length > 0 ? `${(findIdx % findMatches.length) + 1}/${findMatches.length}` : "0/0"}
+              </span>
+              <button
+                type="button"
+                onClick={() => jumpToMatch(findIdx - 1)}
+                className="p-0.5 rounded hover:bg-white/10 text-zinc-300"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => jumpToMatch(findIdx + 1)}
+                className="p-0.5 rounded hover:bg-white/10 text-zinc-300"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              <input
+                value={replaceText}
+                onChange={(e) => setReplaceText(e.target.value)}
+                placeholder="Replace..."
+                className="w-32 px-2 py-0.5 rounded bg-black/60 border border-white/12 text-[11px] font-mono text-white outline-none"
+              />
+              <button
+                type="button"
+                onClick={replaceOne}
+                disabled={!findMatches.length}
+                className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/18 text-[11px] text-zinc-200 disabled:opacity-40"
+              >
+                Replace
+              </button>
+              <button
+                type="button"
+                onClick={replaceAll}
+                disabled={!findMatches.length}
+                className="px-2 py-0.5 rounded bg-violet-600/80 hover:bg-violet-500 text-[11px] text-white disabled:opacity-40"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setFindOpen(false)}
+                className="ml-auto p-0.5 rounded hover:bg-white/10 text-zinc-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Code Editor Surface */}
           <div className="flex-1 min-h-0 relative flex overflow-hidden bg-[#0c0e17]">
             {activeTab ? (
@@ -642,7 +1009,8 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                 {/* Line Numbers Gutter */}
                 <div
                   ref={gutterRef}
-                  className="w-12 shrink-0 py-3 pr-2.5 text-right font-mono text-[12px] leading-[1.6] text-zinc-600 bg-black/25 border-r border-white/6 overflow-hidden select-none"
+                  style={{ fontSize: `${editorFontSize}px` }}
+                  className="w-12 shrink-0 py-3 pr-2.5 text-right font-mono leading-[1.6] text-zinc-600 bg-black/25 border-r border-white/6 overflow-hidden select-none"
                 >
                   {Array.from({ length: Math.max(1, lineCount) }, (_, i) => (
                     <div key={i}>{i + 1}</div>
@@ -654,7 +1022,10 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                   <pre
                     ref={preRef}
                     aria-hidden="true"
-                    className="absolute inset-0 m-0 p-3 font-mono text-[12.5px] leading-[1.6] whitespace-pre overflow-hidden pointer-events-none text-zinc-100"
+                    style={{ fontSize: `${editorFontSize}px` }}
+                    className={`absolute inset-0 m-0 p-3 font-mono leading-[1.6] overflow-hidden pointer-events-none text-zinc-100 ${
+                      wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre"
+                    }`}
                     dangerouslySetInnerHTML={{ __html: highlightedHtml }}
                   />
                   <textarea
@@ -689,7 +1060,10 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                     autoCapitalize="off"
                     autoComplete="off"
                     autoCorrect="off"
-                    className="relative w-full h-full m-0 p-3 bg-transparent text-transparent caret-cyan-400 font-mono text-[12.5px] leading-[1.6] whitespace-pre overflow-auto outline-none resize-none select-text"
+                    style={{ fontSize: `${editorFontSize}px` }}
+                    className={`relative w-full h-full m-0 p-3 bg-transparent text-transparent caret-cyan-400 font-mono leading-[1.6] overflow-auto outline-none resize-none select-text ${
+                      wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre"
+                    }`}
                   />
                 </div>
               </>
@@ -755,6 +1129,64 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
           </div>
         </div>
       </div>
+
+      {/* Quick Open File Modal (⌘P) */}
+      {quickOpen && (
+        <div
+          onClick={() => setQuickOpen(false)}
+          className="absolute inset-0 z-40 bg-black/55 backdrop-blur-sm flex items-start justify-center pt-14 px-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl glass-surface-focused overflow-hidden shadow-2xl animate-window-in"
+          >
+            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
+              <FileSearch className="w-4 h-4 text-violet-400" />
+              <input
+                autoFocus
+                value={quickQuery}
+                onChange={(e) => setQuickQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setQuickOpen(false);
+                  if (e.key === "Enter") {
+                    const first = allProjectFiles.find((f) =>
+                      f.toLowerCase().includes(quickQuery.trim().toLowerCase())
+                    );
+                    if (first) {
+                      setQuickOpen(false);
+                      void openFile(`${rootDir}/${first}`.replace(/\/+/g, "/"));
+                    }
+                  }
+                }}
+                placeholder="Quick open file in workspace..."
+                className="flex-1 bg-transparent text-xs font-mono text-white outline-none"
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto p-1.5 space-y-0.5">
+              {allProjectFiles
+                .filter((f) => !quickQuery.trim() || f.toLowerCase().includes(quickQuery.trim().toLowerCase()))
+                .slice(0, 40)
+                .map((rel) => (
+                  <button
+                    key={rel}
+                    type="button"
+                    onClick={() => {
+                      setQuickOpen(false);
+                      void openFile(`${rootDir}/${rel}`.replace(/\/+/g, "/"));
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left text-xs font-mono text-zinc-200 transition"
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${fileDotColor(rel)}`} />
+                    <span className="truncate">{rel}</span>
+                  </button>
+                ))}
+              {allProjectFiles.length === 0 && (
+                <div className="p-4 text-center text-xs text-zinc-500">No files found in {rootDir}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

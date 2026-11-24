@@ -12,6 +12,8 @@ export interface GitFileStatus {
 export interface GitRepoState {
   readonly isRepo: boolean;
   readonly branch: string;
+  readonly branches: readonly string[];
+  readonly stashCount: number;
   readonly remoteUrl: string | null;
   readonly files: readonly GitFileStatus[];
   readonly commits: readonly { hash: string; subject: string; date: string; author: string }[];
@@ -118,6 +120,11 @@ export interface GitApi {
   readonly getDiff: (repoDir: string, filePath?: string) => Effect.Effect<string, GitError>;
   readonly initRepo: (repoDir: string) => Effect.Effect<void, GitError>;
   readonly stageAll: (repoDir: string) => Effect.Effect<void, GitError>;
+  readonly stageFile: (repoDir: string, filePath: string) => Effect.Effect<void, GitError>;
+  readonly unstageFile: (repoDir: string, filePath: string) => Effect.Effect<void, GitError>;
+  readonly discardFile: (repoDir: string, filePath: string) => Effect.Effect<void, GitError>;
+  readonly checkoutBranch: (repoDir: string, branch: string, create?: boolean) => Effect.Effect<string, GitError>;
+  readonly stash: (repoDir: string, pop?: boolean) => Effect.Effect<string, GitError>;
   readonly commit: (repoDir: string, message: string) => Effect.Effect<string, GitError>;
   readonly push: (repoDir: string) => Effect.Effect<string, GitError>;
   readonly pull: (repoDir: string) => Effect.Effect<string, GitError>;
@@ -230,6 +237,8 @@ export const GitLive = Layer.effect(
             return {
               isRepo: false,
               branch: "",
+              branches: [],
+              stashCount: 0,
               remoteUrl: null,
               files: [],
               commits: [],
@@ -238,8 +247,10 @@ export const GitLive = Layer.effect(
             };
           }
 
-          const [branchRes, remoteRes, statusRes, logRes] = yield* Effect.all([
+          const [branchRes, branchesRes, stashRes, remoteRes, statusRes, logRes] = yield* Effect.all([
             run("branch", `cd ${sq(repoDir)} && git branch --show-current 2>/dev/null || echo main`),
+            run("branches", `cd ${sq(repoDir)} && git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null || true`),
+            run("stash", `cd ${sq(repoDir)} && git stash list 2>/dev/null | wc -l`),
             run("remote", `cd ${sq(repoDir)} && git remote get-url origin 2>/dev/null || true`),
             run("status", `cd ${sq(repoDir)} && git status --porcelain=v1 2>/dev/null`),
             run(
@@ -247,6 +258,12 @@ export const GitLive = Layer.effect(
               `cd ${sq(repoDir)} && git log -n 15 --format='%h%x09%s%x09%cr%x09%an' 2>/dev/null || true`
             ),
           ]);
+
+          const branches = branchesRes.stdout
+            .split("\n")
+            .map((b) => b.trim())
+            .filter(Boolean);
+          const stashCount = Number(stashRes.stdout.trim()) || 0;
 
           const files: GitFileStatus[] = statusRes.stdout
             .split("\n")
@@ -268,10 +285,13 @@ export const GitLive = Layer.effect(
           const rawRemote = remoteRes.stdout.trim() || null;
           const remoteUrl = rawRemote ? stripRemoteCredentials(rawRemote) : null;
           const { pagesUrl, actionsUrl } = parseGithubMeta(remoteUrl);
+          const curBranch = branchRes.stdout.trim() || "main";
 
           return {
             isRepo: true,
-            branch: branchRes.stdout.trim() || "main",
+            branch: curBranch,
+            branches: branches.length > 0 ? branches : [curBranch],
+            stashCount,
             remoteUrl,
             files,
             commits,
@@ -315,6 +335,65 @@ ${ENSURE_GITIGNORE_SNIPPET}`
           if (r.exitCode !== 0) {
             return yield* Effect.fail(new GitError({ operation: "stage", message: r.stderr || r.stdout }));
           }
+        }),
+
+      stageFile: (repoDir, filePath) =>
+        Effect.gen(function* () {
+          const r = yield* run("stage-file", `cd ${sq(repoDir)} && git add -- ${sq(filePath)}`);
+          if (r.exitCode !== 0) {
+            return yield* Effect.fail(new GitError({ operation: "stage-file", message: r.stderr || r.stdout }));
+          }
+        }),
+
+      unstageFile: (repoDir, filePath) =>
+        Effect.gen(function* () {
+          const r = yield* run(
+            "unstage-file",
+            `cd ${sq(repoDir)} && (git restore --staged -- ${sq(filePath)} 2>/dev/null || git reset HEAD -- ${sq(filePath)})`
+          );
+          if (r.exitCode !== 0) {
+            return yield* Effect.fail(new GitError({ operation: "unstage-file", message: r.stderr || r.stdout }));
+          }
+        }),
+
+      discardFile: (repoDir, filePath) =>
+        Effect.gen(function* () {
+          const r = yield* run(
+            "discard-file",
+            `cd ${sq(repoDir)} && (git checkout -- ${sq(filePath)} 2>/dev/null || rm -rf -- ${sq(filePath)})`
+          );
+          if (r.exitCode !== 0) {
+            return yield* Effect.fail(new GitError({ operation: "discard-file", message: r.stderr || r.stdout }));
+          }
+          yield* vm.syncDisk();
+        }),
+
+      checkoutBranch: (repoDir, branch, create = false) =>
+        Effect.gen(function* () {
+          const clean = branch.trim();
+          const flag = create ? "-b" : "";
+          const r = yield* run(
+            "checkout",
+            `cd ${sq(repoDir)} && git checkout ${flag} ${sq(clean)} 2>&1`
+          );
+          if (r.exitCode !== 0) {
+            return yield* Effect.fail(new GitError({ operation: "checkout", message: r.stderr || r.stdout }));
+          }
+          yield* vm.syncDisk();
+          return r.stdout || r.stderr || `Switched to ${clean}`;
+        }),
+
+      stash: (repoDir, pop = false) =>
+        Effect.gen(function* () {
+          const r = yield* run(
+            "stash",
+            `cd ${sq(repoDir)} && git stash ${pop ? "pop" : "push -u"} 2>&1`
+          );
+          if (r.exitCode !== 0) {
+            return yield* Effect.fail(new GitError({ operation: "stash", message: r.stderr || r.stdout }));
+          }
+          yield* vm.syncDisk();
+          return r.stdout || r.stderr || (pop ? "Stash popped" : "Changes stashed");
         }),
 
       commit: (repoDir, message) =>

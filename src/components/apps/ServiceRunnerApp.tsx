@@ -1,6 +1,9 @@
 import { Effect } from "effect";
 import {
+  Eraser,
+  Folder,
   Globe,
+  Package,
   Play,
   PlayCircle,
   Plus,
@@ -10,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
-import { appRuntime, VmService } from "../../core/runtime.ts";
+import { appRuntime, GuestFsService, VmService } from "../../core/runtime.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
 
 interface ServiceDef {
@@ -63,8 +66,34 @@ export const ServiceRunnerApp: React.FC = () => {
   const [newCmd, setNewCmd] = useState("");
   const [newPort, setNewPort] = useState("3000");
   const [creating, setCreating] = useState(false);
+  const [pkgScripts, setPkgScripts] = useState<readonly { name: string; cmd: string }[]>([]);
 
   const selected = services.find((s) => s.id === selectedId) ?? services[0] ?? null;
+
+  // Auto-detect package.json scripts from the Active Workspace!
+  useEffect(() => {
+    const dir = wm.activeWorkspaceDir || "/home/user/workspace";
+    void appRuntime
+      .runPromise(
+        Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.readFileText(`${dir}/package.json`)))
+      )
+      .then((res) => {
+        if (res._tag === "Right") {
+          try {
+            const parsed = JSON.parse(res.right) as { scripts?: Record<string, string> };
+            if (parsed.scripts && typeof parsed.scripts === "object") {
+              setPkgScripts(
+                Object.entries(parsed.scripts).map(([name, cmd]) => ({ name, cmd }))
+              );
+              return;
+            }
+          } catch {
+            // invalid json
+          }
+        }
+        setPkgScripts([]);
+      });
+  }, [wm.activeWorkspaceDir]);
 
   const persist = (next: ServiceDef[]) => {
     setServices(next);
@@ -162,10 +191,42 @@ echo "Started PID $(cat ${pidFile})"
     setCreating(false);
   };
 
+  const addAndRunPkgScript = (name: string) => {
+    const dir = wm.activeWorkspaceDir || "/home/user/workspace";
+    const proj = dir.split("/").filter(Boolean).pop() || "app";
+    const svc: ServiceDef = {
+      id: `svc-${Math.random().toString(36).slice(2, 8)}`,
+      name: `${proj}: ${name}`,
+      cwd: dir,
+      command: `bun run ${name}`,
+      port: name === "dev" || name === "start" || name === "preview" ? 3000 : undefined,
+    };
+    persist([...services, svc]);
+    setSelectedId(svc.id);
+    void startService(svc);
+  };
+
+  const clearSelectedLogs = async () => {
+    if (!selected) return;
+    await appRuntime.runPromise(
+      Effect.either(
+        Effect.flatMap(VmService, (vm) => vm.execShell(`: > /tmp/unkernel-svc-${selected.id}.log`))
+      )
+    );
+    setLogs("");
+  };
+
+  const syncServiceCwd = () => {
+    if (!selected) return;
+    const dir = wm.activeWorkspaceDir || "/home/user/workspace";
+    persist(services.map((s) => (s.id === selected.id ? { ...s, cwd: dir } : s)));
+    wmStore.pushToast("Working Dir Updated", `${selected.name} → ${dir}`, "info");
+  };
+
   return (
-    <div className="flex w-full h-full bg-[#090b12]/96 overflow-hidden">
+    <div className="flex flex-col md:flex-row w-full h-full bg-[#090b12]/96 overflow-hidden">
       {/* Left Services List */}
-      <aside className="w-64 shrink-0 bg-black/35 border-r border-white/10 p-3 flex flex-col gap-2.5 overflow-y-auto">
+      <aside className="w-full md:w-64 max-h-52 md:max-h-none shrink-0 bg-black/35 border-b md:border-b-0 md:border-r border-white/10 p-3 flex flex-col gap-2.5 overflow-y-auto">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-white flex items-center gap-1.5">
             <PlayCircle className="w-4 h-4 text-emerald-400" />
@@ -209,6 +270,29 @@ echo "Started PID $(cat ${pidFile})"
               >
                 Add Service
               </button>
+            </div>
+          </div>
+        )}
+
+        {pkgScripts.length > 0 && (
+          <div className="p-2 rounded-2xl bg-emerald-500/8 border border-emerald-400/20 space-y-1.5">
+            <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+              <Package className="w-3 h-3" />
+              package.json ({wm.activeWorkspaceDir.split("/").pop()})
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {pkgScripts.slice(0, 6).map((sc) => (
+                <button
+                  key={sc.name}
+                  type="button"
+                  onClick={() => addAndRunPkgScript(sc.name)}
+                  title={sc.cmd}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/18 hover:bg-emerald-500/30 border border-emerald-400/30 text-[10px] font-mono text-emerald-100 transition"
+                >
+                  <Play className="w-2.5 h-2.5" />
+                  {sc.name}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -303,8 +387,25 @@ echo "Started PID $(cat ${pidFile})"
 
                 <button
                   type="button"
+                  onClick={syncServiceCwd}
+                  className="p-1.5 rounded-xl bg-white/8 hover:bg-white/14 text-amber-300"
+                  title={`Use Active Workspace (${wm.activeWorkspaceDir})`}
+                >
+                  <Folder className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void clearSelectedLogs()}
+                  className="p-1.5 rounded-xl bg-white/8 hover:bg-white/14 text-zinc-300"
+                  title="Clear Logs"
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => void pollStatus()}
                   className="p-1.5 rounded-xl bg-white/8 hover:bg-white/14 text-zinc-300"
+                  title="Refresh"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>

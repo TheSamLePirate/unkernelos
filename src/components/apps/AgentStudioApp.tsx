@@ -3,8 +3,11 @@ import {
   Activity,
   Bot,
   Brain,
+  Code2,
   Cpu,
+  Eraser,
   ExternalLink,
+  FolderOpen,
   FolderPlus,
   GitBranch,
   Globe,
@@ -16,6 +19,7 @@ import {
   Shield,
   SlidersHorizontal,
   Sparkles,
+  Square,
   Terminal,
   Wrench,
 } from "lucide-react";
@@ -23,6 +27,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   appRuntime,
   GitService,
+  GuestFsService,
   SettingsService,
   useSubscriptionRef,
   VmService,
@@ -36,7 +41,7 @@ import {
   type CredentialsConfig,
   type PiThinking,
 } from "../../core/schema.ts";
-import { wmStore } from "../../wm/wm-store.ts";
+import { useWm, wmStore } from "../../wm/wm-store.ts";
 import { KittyTerminalPane, type KittyTerminalHandle } from "./KittyTerminalPane.tsx";
 
 const PROMPT_TEMPLATES = [
@@ -168,6 +173,7 @@ function buildAgentCliCommand(agent: AgentKind, creds: CredentialsConfig, prompt
 }
 
 export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocused = true }) => {
+  const wm = useWm();
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
     DEFAULT_UNKERNEL_CONFIG
@@ -203,7 +209,10 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
   );
 
   const [agent, setAgent] = useState<AgentKind>(creds.defaultAgent);
-  const [projectName, setProjectName] = useState("my-ai-app");
+  const [workspaceDir, setWorkspaceDirState] = useState<string>(
+    wm.activeWorkspaceDir || "/home/user/workspace/my-ai-app"
+  );
+  const [knownProjects, setKnownProjects] = useState<readonly string[]>([]);
   const [prompt, setPrompt] = useState("");
   const [previewPort, setPreviewPort] = useState<number>(3000);
   const [previewKey, setPreviewKey] = useState(0);
@@ -226,8 +235,9 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
   const [customPiInput, setCustomPiInput] = useState(isCustomPiModel);
 
   const termHandleRef = useRef<KittyTerminalHandle | null>(null);
+  const lastCdDirRef = useRef<string>(workspaceDir);
 
-  const workspaceDir = `/home/user/workspace/${projectName.replace(/[^a-zA-Z0-9._-]/g, "-") || "my-ai-app"}`;
+  const projectName = workspaceDir.split("/").filter(Boolean).pop() || "my-ai-app";
 
   const updateCreds = (patch: Partial<CredentialsConfig>) => {
     appRuntime.runFork(Effect.flatMap(SettingsService, (s) => s.updateCredentials(patch)));
@@ -235,10 +245,36 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
 
   const cliPreview = useMemo(() => buildAgentCliCommand(agent, creds), [agent, creds]);
 
-  // Keep active workspace synced for File Explorer & Git app
+  // Discover existing projects under ~/workspace
   useEffect(() => {
-    wmStore.setWorkspaceDir(workspaceDir);
-  }, [workspaceDir]);
+    if (vmState.phase !== "running") return;
+    void appRuntime
+      .runPromise(Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.listProjects("/home/user/workspace"))))
+      .then((res) => {
+        if (res._tag === "Right") setKnownProjects(res.right);
+      });
+  }, [vmState.phase, wm.activeWorkspaceDir]);
+
+  // Bidirectional sync when active workspace changes from TopBar / Files / IDE / Git
+  useEffect(() => {
+    if (wm.activeWorkspaceDir && wm.activeWorkspaceDir !== workspaceDir) {
+      setWorkspaceDirState(wm.activeWorkspaceDir);
+      if (termHandleRef.current && lastCdDirRef.current !== wm.activeWorkspaceDir) {
+        lastCdDirRef.current = wm.activeWorkspaceDir;
+        termHandleRef.current.write(`mkdir -p ${sq(wm.activeWorkspaceDir)} && cd ${sq(wm.activeWorkspaceDir)}\n`);
+      }
+    }
+  }, [wm.activeWorkspaceDir]);
+
+  const switchProjectDir = (dir: string) => {
+    const clean = dir.trim().replace(/\/+/g, "/") || "/home/user/workspace/my-ai-app";
+    setWorkspaceDirState(clean);
+    wmStore.setWorkspaceDir(clean);
+    if (termHandleRef.current && lastCdDirRef.current !== clean) {
+      lastCdDirRef.current = clean;
+      termHandleRef.current.write(`mkdir -p ${sq(clean)} && cd ${sq(clean)}\n`);
+    }
+  };
 
   // Auto-select first detected listening port from the guest VM!
   useEffect(() => {
@@ -383,16 +419,35 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             </button>
           </div>
 
-          {/* Workspace Name */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10">
-            <FolderPlus className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="text-[11px] text-zinc-500 font-mono">~/workspace/</span>
-            <input
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              className="bg-transparent text-xs font-mono text-zinc-100 outline-none w-32"
-              placeholder="my-app"
-            />
+          {/* Bidirectional Project / Working Directory Selector */}
+          <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 border border-white/10">
+            <FolderPlus className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <select
+              aria-label="Select Project Workspace"
+              value={workspaceDir}
+              onChange={(e) => {
+                if (e.target.value === "__new__") {
+                  const name = window.prompt("New project folder name inside ~/workspace:", "new-app");
+                  if (name?.trim()) {
+                    const safe = name.trim().replace(/[^a-zA-Z0-9._-]/g, "-");
+                    switchProjectDir(`/home/user/workspace/${safe}`);
+                  }
+                } else {
+                  switchProjectDir(e.target.value);
+                }
+              }}
+              className="bg-transparent text-xs font-mono text-zinc-100 outline-none cursor-pointer max-w-[165px]"
+              title={workspaceDir}
+            >
+              {Array.from(new Set([workspaceDir, ...knownProjects, ...wm.recentWorkspaces])).map((d) => (
+                <option key={d} value={d} className="bg-[#12141f] text-zinc-100">
+                  {d.replace(/^\/home\/user\/workspace\//, "~/workspace/")}
+                </option>
+              ))}
+              <option value="__new__" className="bg-[#12141f] text-amber-300">
+                + New Project Folder...
+              </option>
+            </select>
           </div>
 
           {!creds.githubToken && (
@@ -432,19 +487,34 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
           </button>
           <button
             type="button"
-            onClick={() => wmStore.openApp("toolchain")}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
+            onClick={() => wmStore.openDirInIde(workspaceDir)}
+            className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
+            title="Open project in Code IDE"
           >
-            <Wrench className="w-3.5 h-3.5 text-indigo-400" />
-            Toolchain
+            <Code2 className="w-3.5 h-3.5 text-sky-400" />
+            IDE
           </button>
           <button
             type="button"
-            onClick={() => {
-              wmStore.setWorkspaceDir(workspaceDir);
-              wmStore.openApp("git");
-            }}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
+            onClick={() => wmStore.openDirInExplorer(workspaceDir)}
+            className="hidden xl:flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
+            title="Browse project in File Explorer"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+            Files
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.openApp("toolchain")}
+            className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
+          >
+            <Wrench className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden xl:inline">Toolchain</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.openDirInGit(workspaceDir)}
+            className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 transition"
           >
             <GitBranch className="w-3.5 h-3.5 text-orange-400" />
             Git
@@ -785,18 +855,37 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             mobilePane === "terminal" ? "flex" : "hidden lg:flex"
           }`}
         >
-          <div className="hidden sm:flex items-center justify-between px-3 py-1.5 bg-black/30 border-b border-white/6 text-[11px] text-zinc-400">
+          <div className="hidden sm:flex items-center justify-between px-3 py-1 bg-black/30 border-b border-white/6 text-[11px] text-zinc-400">
             <span className="font-mono flex items-center gap-1.5 truncate">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
               Agent PTY · {workspaceDir}
             </span>
-            <span className="text-[10px] text-zinc-500 shrink-0">WebGPU Kitty Engine</span>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => termHandleRef.current?.write("\x03")}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 hover:bg-rose-500/30 text-[10px] font-mono text-rose-200"
+                title="Interrupt Running Agent (Ctrl+C)"
+              >
+                <Square className="w-2.5 h-2.5" />
+                Stop
+              </button>
+              <button
+                type="button"
+                onClick={() => termHandleRef.current?.clear()}
+                className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white"
+                title="Clear PTY"
+              >
+                <Eraser className="w-3 h-3" />
+              </button>
+            </div>
           </div>
           <div className="flex-1 min-h-0">
             <KittyTerminalPane
               themeId={cfg.kittyTheme}
               fontSize={cfg.terminalFontSize}
               preferWebGpu={cfg.webgpuTerminal}
+              cwd={workspaceDir}
               focused={windowFocused && mobilePane === "terminal"}
               onReady={(h) => {
                 termHandleRef.current = h;
