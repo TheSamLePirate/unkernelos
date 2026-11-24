@@ -551,12 +551,19 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
 
         {tab === "credentials" && (
           <div className="space-y-4 max-w-2xl">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <h2 className="text-sm font-semibold text-white">AI Agent Keys &amp; GitHub Credentials</h2>
-              <span className="flex items-center gap-1 text-[11px] text-emerald-300">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                100% Browser-Local (synced to ~/.unkernelos_env)
-              </span>
+              <button
+                type="button"
+                onClick={() => wmStore.setGithubModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-medium bg-gradient-to-r from-violet-600 to-cyan-500 text-white hover:brightness-110 transition"
+              >
+                Sign in with GitHub (1-Click OAuth)
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-300">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              100% Browser-Local (synced to ~/.unkernelos_env &amp; gh CLI)
             </div>
 
             <div className="space-y-3">

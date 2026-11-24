@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import type { GitRepoState } from "../../core/git-service.ts";
-import { appRuntime, GitService, SettingsService, useSubscriptionRef } from "../../core/runtime.ts";
+import { INITIAL_GITHUB_AUTH } from "../../core/github-auth-service.ts";
+import { appRuntime, GithubAuthService, GitService, SettingsService, useSubscriptionRef } from "../../core/runtime.ts";
 import { DEFAULT_CREDENTIALS } from "../../core/schema.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
 
@@ -21,6 +22,10 @@ export const GitApp: React.FC = () => {
   const creds = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.credsRef),
     DEFAULT_CREDENTIALS
+  );
+  const ghAuth = useSubscriptionRef(
+    Effect.map(GithubAuthService, (g) => g.stateRef),
+    INITIAL_GITHUB_AUTH
   );
 
   const [repoDir, setRepoDir] = useState(wm.activeWorkspaceDir || "/home/user/workspace");
@@ -118,18 +123,36 @@ export const GitApp: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {creds.githubToken ? (
-            <span className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] bg-emerald-500/15 border border-emerald-400/30 text-emerald-300">
+          {ghAuth.status === "authenticated" && ghAuth.user ? (
+            <button
+              type="button"
+              onClick={() => wmStore.setGithubModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25 transition"
+            >
+              {ghAuth.user.avatarUrl ? (
+                <img src={ghAuth.user.avatarUrl} alt="" className="w-3.5 h-3.5 rounded-full" />
+              ) : (
+                <CheckCircle2 className="w-3 h-3" />
+              )}
+              @{ghAuth.user.login}
+            </button>
+          ) : creds.githubToken ? (
+            <button
+              type="button"
+              onClick={() => wmStore.setGithubModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] bg-emerald-500/15 border border-emerald-400/30 text-emerald-300"
+            >
               <CheckCircle2 className="w-3 h-3" />
               GitHub Connected
-            </span>
+            </button>
           ) : (
             <button
               type="button"
-              onClick={() => wmStore.openApp("settings", { tab: "credentials" })}
-              className="px-2.5 py-1 rounded-lg text-xs bg-amber-500/20 border border-amber-400/35 text-amber-200 hover:bg-amber-500/30"
+              onClick={() => wmStore.setGithubModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:brightness-110 shadow transition"
             >
-              Add GitHub Token
+              <GitBranch className="w-3.5 h-3.5" />
+              Connect GitHub
             </button>
           )}
         </div>

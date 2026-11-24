@@ -1,6 +1,7 @@
 import { Effect, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { useEffect, useState } from "react";
 import { GuestFsLive, GuestFsService } from "./fs-service.ts";
+import { GithubAuthLive, GithubAuthService } from "./github-auth-service.ts";
 import { GitLive, GitService } from "./git-service.ts";
 import { SettingsLive, SettingsService } from "./settings.ts";
 import { ToolchainLive, ToolchainService } from "./toolchain-service.ts";
@@ -10,13 +11,15 @@ const VmLayer = VmLive.pipe(Layer.provide(SettingsLive));
 const GuestFsLayer = GuestFsLive.pipe(Layer.provide(VmLayer));
 const ToolchainLayer = ToolchainLive.pipe(Layer.provide(VmLayer));
 const GitLayer = GitLive.pipe(Layer.provide(Layer.mergeAll(VmLayer, SettingsLive)));
+const GithubAuthLayer = GithubAuthLive.pipe(Layer.provide(Layer.mergeAll(VmLayer, SettingsLive)));
 
 export const AppLayer = Layer.mergeAll(
   SettingsLive,
   VmLayer,
   GuestFsLayer,
   ToolchainLayer,
-  GitLayer
+  GitLayer,
+  GithubAuthLayer
 );
 
 export type AppContext =
@@ -24,7 +27,8 @@ export type AppContext =
   | VmService
   | GuestFsService
   | ToolchainService
-  | GitService;
+  | GitService
+  | GithubAuthService;
 
 export const appRuntime = ManagedRuntime.make(AppLayer);
 
@@ -83,4 +87,4 @@ export function useOsEvents(handler: (ev: OsEvent) => void): void {
   }, [handler]);
 }
 
-export { SettingsService, VmService, GuestFsService, ToolchainService, GitService };
+export { SettingsService, VmService, GuestFsService, ToolchainService, GitService, GithubAuthService };

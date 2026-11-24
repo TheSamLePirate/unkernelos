@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import React, { useCallback, useEffect, useRef } from "react";
 import {
   appRuntime,
+  GithubAuthService,
   SettingsService,
   useOsEvents,
   useSubscriptionRef,
@@ -14,6 +15,7 @@ import { useWm, wmStore, type AppId, type WindowInstance } from "../wm/wm-store.
 import { BootOverlay } from "./BootOverlay.tsx";
 import { CommandPalette } from "./CommandPalette.tsx";
 import { Dock } from "./Dock.tsx";
+import { GithubConnectModal } from "./GithubConnectModal.tsx";
 import { TopBar } from "./TopBar.tsx";
 import { WindowFrame } from "./WindowFrame.tsx";
 import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
@@ -88,6 +90,8 @@ export const Desktop: React.FC = () => {
         yield* Effect.sync(() => {
           wmStore.openApp("agent-studio");
         });
+        const ghAuth = yield* GithubAuthService;
+        yield* ghAuth.checkAuth();
       }).pipe(Effect.ignore)
     );
   }, []);
@@ -172,6 +176,9 @@ export const Desktop: React.FC = () => {
 
       {/* Raycast-style ⌘K Command Palette */}
       <CommandPalette />
+
+      {/* 1-Click GitHub OAuth Device Flow Modal */}
+      <GithubConnectModal />
 
       {/* Boot / Recovery Overlay */}
       <BootOverlay />

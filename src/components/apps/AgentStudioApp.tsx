@@ -248,6 +248,16 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             />
           </div>
 
+          {!creds.githubToken && (
+            <button
+              type="button"
+              onClick={() => wmStore.setGithubModal(true)}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md bg-violet-500/20 border border-violet-400/35 text-violet-200 hover:bg-violet-500/30 transition"
+            >
+              <GitBranch className="w-3 h-3" />
+              Connect GitHub
+            </button>
+          )}
           {!hasAgentKey && (
             <button
               type="button"

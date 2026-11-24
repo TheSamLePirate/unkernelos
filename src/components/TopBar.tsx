@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import {
   Command,
   Cpu,
+  GitBranch,
   Globe,
   Pause,
   Play,
@@ -11,11 +12,16 @@ import {
   Wifi,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { appRuntime, useSubscriptionRef, VmService } from "../core/runtime.ts";
+import { INITIAL_GITHUB_AUTH } from "../core/github-auth-service.ts";
+import { appRuntime, GithubAuthService, useSubscriptionRef, VmService } from "../core/runtime.ts";
 import { APP_CATALOG, useWm, wmStore } from "../wm/wm-store.ts";
 
 export const TopBar: React.FC = () => {
   const wm = useWm();
+  const ghAuth = useSubscriptionRef(
+    Effect.map(GithubAuthService, (g) => g.stateRef),
+    INITIAL_GITHUB_AUTH
+  );
   const vm = useSubscriptionRef(
     Effect.map(VmService, (v) => v.stateRef),
     {
@@ -124,6 +130,26 @@ export const TopBar: React.FC = () => {
               </span>
             </>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => wmStore.setGithubModal(true)}
+          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] transition ${
+            ghAuth.status === "authenticated" && ghAuth.user
+              ? "bg-emerald-500/12 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/20"
+              : "bg-white/[0.05] border-white/10 text-zinc-300 hover:bg-white/12"
+          }`}
+          title="Connect GitHub Account"
+        >
+          {ghAuth.status === "authenticated" && ghAuth.user?.avatarUrl ? (
+            <img src={ghAuth.user.avatarUrl} alt="" className="w-3.5 h-3.5 rounded-full" />
+          ) : (
+            <GitBranch className="w-3 h-3 text-violet-300" />
+          )}
+          <span className="max-w-[100px] truncate font-mono">
+            {ghAuth.status === "authenticated" && ghAuth.user ? `@${ghAuth.user.login}` : "GitHub"}
+          </span>
         </button>
 
         <button

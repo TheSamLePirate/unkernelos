@@ -162,6 +162,17 @@ export const CommandPalette: React.FC = () => {
             <button
               type="button"
               onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.setGithubModal(true);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              Connect GitHub Account (1-Click OAuth / Token)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 wmStore.openApp("settings", { tab: "network" });
                 wmStore.setCommandPalette(false);
               }}

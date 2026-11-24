@@ -162,6 +162,7 @@ interface WmState {
   readonly windows: readonly WindowInstance[];
   readonly activeWindowId: string | null;
   readonly commandPaletteOpen: boolean;
+  readonly githubModalOpen: boolean;
   readonly previewPort: number;
   readonly previewPath: string;
   readonly activeWorkspaceDir: string;
@@ -176,6 +177,7 @@ class WindowManagerStore {
     windows: [],
     activeWindowId: null,
     commandPaletteOpen: false,
+    githubModalOpen: false,
     previewPort: 3000,
     previewPath: "/",
     activeWorkspaceDir: "/home/user/workspace",
@@ -318,6 +320,10 @@ class WindowManagerStore {
 
   public setCommandPalette(open: boolean): void {
     this.setState((s) => ({ ...s, commandPaletteOpen: open }));
+  }
+
+  public setGithubModal(open: boolean): void {
+    this.setState((s) => ({ ...s, githubModalOpen: open }));
   }
 
   public toggleCommandPalette(): void {
