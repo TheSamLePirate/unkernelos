@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import {
+  Download,
   LayoutGrid,
   Lock,
   Palette,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import React from "react";
 import { OS_THEMES, WALLPAPER_SHADERS } from "../core/os-themes.ts";
+import { pwaStore, usePwa } from "../core/pwa-service.ts";
 import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../core/runtime.ts";
 import {
   DEFAULT_UNKERNEL_CONFIG,
@@ -25,6 +27,7 @@ import { useWm, wmStore } from "../wm/wm-store.ts";
 
 export const ControlCenter: React.FC = () => {
   const wm = useWm();
+  const pwa = usePwa();
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
     DEFAULT_UNKERNEL_CONFIG
@@ -259,6 +262,32 @@ export const ControlCenter: React.FC = () => {
               className="w-full accent-cyan-400 h-1.5"
             />
           </div>
+        </div>
+
+        {/* Runtime Isolation & PWA Install */}
+        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white/[0.03] border border-white/8 text-[10px] font-mono">
+          <div className="flex items-center gap-1.5 text-zinc-300">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                vm.crossOriginIsolated ? "bg-emerald-400" : "bg-amber-400"
+              }`}
+            />
+            <span>
+              {vm.cpus} vCPU · {vm.transport} · {vm.crossOriginIsolated ? "COI" : "Std"}
+            </span>
+          </div>
+          {pwa.installable && !pwa.installed ? (
+            <button
+              type="button"
+              onClick={() => void pwaStore.promptInstall()}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/30 border border-violet-400/40 text-white hover:bg-violet-500/45 transition"
+            >
+              <Download className="w-2.5 h-2.5" />
+              Install PWA
+            </button>
+          ) : (
+            <span className="text-zinc-500">{pwa.installed ? "PWA Installed" : "PWA Ready"}</span>
+          )}
         </div>
 
         {/* VM Power Controls */}

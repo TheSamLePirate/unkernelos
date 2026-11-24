@@ -3,6 +3,7 @@ import {
   Bell,
   Command,
   Cpu,
+  Download,
   GitBranch,
   Globe,
   Layers,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { INITIAL_GITHUB_AUTH } from "../core/github-auth-service.ts";
+import { pwaStore, usePwa } from "../core/pwa-service.ts";
 import { appRuntime, GithubAuthService, useSubscriptionRef, VmService } from "../core/runtime.ts";
 import { APP_CATALOG, useWm, wmStore, type WorkspaceId } from "../wm/wm-store.ts";
 
@@ -20,6 +22,7 @@ const WORKSPACES: readonly WorkspaceId[] = [1, 2, 3, 4];
 
 export const TopBar: React.FC = () => {
   const wm = useWm();
+  const pwa = usePwa();
   const ghAuth = useSubscriptionRef(
     Effect.map(GithubAuthService, (g) => g.stateRef),
     INITIAL_GITHUB_AUTH
@@ -154,13 +157,16 @@ export const TopBar: React.FC = () => {
           type="button"
           onClick={() => wmStore.openApp("monitor")}
           className="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 text-[11px] font-mono text-zinc-300 transition"
-          title="Open System Monitor"
+          title={`Transport: ${vm.transport} · COI: ${vm.crossOriginIsolated ? "ON" : "OFF"} · Click for System Monitor`}
         >
           <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
           <span className="capitalize">{vm.distro}</span>
           <span className="text-white/20">·</span>
           <Cpu className="w-3 h-3 text-cyan-400" />
           <span>{vm.cpus}c</span>
+          {vm.transport === "shared" && (
+            <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300">SAB</span>
+          )}
           <span className="text-white/20">·</span>
           <span>{vm.memoryMiB}M</span>
           {vm.glStatus && (
@@ -173,6 +179,18 @@ export const TopBar: React.FC = () => {
           )}
         </button>
 
+        {pwa.installable && !pwa.installed && (
+          <button
+            type="button"
+            onClick={() => void pwaStore.promptInstall()}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-violet-600/80 to-cyan-500/80 text-[10px] font-medium text-white hover:brightness-110 transition"
+            title="Install unkernelOS as a native Desktop/Mobile PWA"
+          >
+            <Download className="w-3 h-3" />
+            Install
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => wmStore.setGithubModal(true)}
@@ -184,7 +202,12 @@ export const TopBar: React.FC = () => {
           title="Connect GitHub Account"
         >
           {ghAuth.status === "authenticated" && ghAuth.user?.avatarUrl ? (
-            <img src={ghAuth.user.avatarUrl} alt="" className="w-3.5 h-3.5 rounded-full" />
+            <img
+              src={ghAuth.user.avatarUrl}
+              crossOrigin="anonymous"
+              alt=""
+              className="w-3.5 h-3.5 rounded-full"
+            />
           ) : (
             <GitBranch className="w-3 h-3 text-violet-300" />
           )}

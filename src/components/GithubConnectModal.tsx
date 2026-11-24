@@ -105,6 +105,7 @@ export const GithubConnectModal: React.FC = () => {
                 {auth.user.avatarUrl ? (
                   <img
                     src={auth.user.avatarUrl}
+                    crossOrigin="anonymous"
                     alt={auth.user.login}
                     className="w-11 h-11 rounded-full border border-white/20"
                   />

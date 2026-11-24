@@ -173,7 +173,7 @@ export const GitApp: React.FC = () => {
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25 transition"
             >
               {ghAuth.user.avatarUrl ? (
-                <img src={ghAuth.user.avatarUrl} alt="" className="w-3.5 h-3.5 rounded-full" />
+                <img src={ghAuth.user.avatarUrl} crossOrigin="anonymous" alt="" className="w-3.5 h-3.5 rounded-full" />
               ) : (
                 <CheckCircle2 className="w-3 h-3" />
               )}

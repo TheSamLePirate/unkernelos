@@ -141,7 +141,7 @@ export type CredentialsConfig = typeof CredentialsSchema.Type;
 export const defaultCpus = (): number => {
   if (typeof navigator === "undefined") return 2;
   const hc = navigator.hardwareConcurrency || 4;
-  return Math.max(1, Math.min(4, Math.floor(hc / 2) || 1));
+  return Math.max(2, Math.min(4, Math.floor(hc / 2) || 2));
 };
 
 export const DEFAULT_UNKERNEL_CONFIG: UnkernelConfig = {

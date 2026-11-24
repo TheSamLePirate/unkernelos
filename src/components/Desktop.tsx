@@ -13,7 +13,7 @@ import {
 import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
 import { uiSounds } from "../core/ui-sounds.ts";
 import { WebGpuBackdrop } from "../gpu/webgpu-backdrop.ts";
-import { useWm, wmStore, type AppId, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
+import { APP_CATALOG, useWm, wmStore, type AppId, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
 import { AppLauncherOverlay } from "./AppLauncherOverlay.tsx";
 import { BootOverlay } from "./BootOverlay.tsx";
 import { CommandPalette } from "./CommandPalette.tsx";
@@ -140,14 +140,15 @@ export const Desktop: React.FC = () => {
     backdropInstanceRef.current?.setShader(cfg.wallpaperShader);
   }, [cfg.wallpaperShader]);
 
-  // Boot unkernel automatically on first mount & open Agent Studio
+  // Boot unkernel automatically on first mount & open requested PWA shortcut app (or Agent Studio)
   useEffect(() => {
     appRuntime.runFork(
       Effect.gen(function* () {
         const vm = yield* VmService;
         yield* vm.boot();
         yield* Effect.sync(() => {
-          wmStore.openApp("agent-studio");
+          const requestedApp = new URLSearchParams(window.location.search).get("app") as AppId | null;
+          wmStore.openApp(requestedApp && requestedApp in APP_CATALOG ? requestedApp : "agent-studio");
         });
         const ghAuth = yield* GithubAuthService;
         yield* ghAuth.checkAuth();

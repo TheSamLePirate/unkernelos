@@ -88,6 +88,7 @@ export const LockScreen: React.FC = () => {
           {ghAuth.user?.avatarUrl ? (
             <img
               src={ghAuth.user.avatarUrl}
+              crossOrigin="anonymous"
               alt={ghAuth.user.login}
               className="w-full h-full rounded-full object-cover"
             />

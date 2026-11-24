@@ -362,7 +362,10 @@ export const VmLive = Layer.effect(
 
       const isDebian = cfg.distro === "debian";
       const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
-      const distroUrl = cfg.distro === "none" ? undefined : `${base}distros/${cfg.distro}.erofs`;
+      const distroUrl =
+        cfg.distro === "none"
+          ? undefined
+          : new URL(`${base}distros/${cfg.distro}.erofs`, window.location.href).href;
 
       const cmdParts: string[] = [];
       if (cfg.safeMode) cmdParts.push("kw.root=initramfs");
@@ -513,18 +516,25 @@ export const VmLive = Layer.effect(
           ? cfg.wispUrl.trim() || DEFAULT_WISP_SERVERS[0] || "default"
           : "offline";
 
+        const coi = Boolean(self.crossOriginIsolated);
+        const blocker = webCpuBlocker({ worker: cfg.worker && typeof Worker !== "undefined" });
+
         yield* SubscriptionRef.update(stateRef, (s): VmState => ({
           ...s,
           phase: "booting",
-          bootStage: "Checking browser JSPI & WebAssembly support...",
+          bootStage: "Checking browser JSPI, SharedArrayBuffer & Web Worker support...",
           bootProgress: 8,
           error: null,
           support,
+          crossOriginIsolated: coi,
           distro: cfg.distro,
           memoryMiB: cfg.memoryMiB,
           cpus: cfg.cpus,
           wispActiveUrl: wispDisplay,
-          kernelLogs: [`[unkernelOS] Booting ${cfg.distro} (${cfg.memoryMiB} MiB RAM, ${cfg.cpus} vCPU target, JIT=${cfg.jit ? "on" : "off"}, Wisp=${wispDisplay})`],
+          kernelLogs: [
+            `[unkernelOS] Booting ${cfg.distro} (${cfg.memoryMiB} MiB RAM, target ${cfg.cpus} vCPU, worker=${cfg.worker}, COI=${coi}, JIT=${cfg.jit ? "on" : "off"}, Wisp=${wispDisplay})`,
+            ...(blocker ? [`[unkernelOS] Multi-vCPU note: ${blocker}`] : [`[unkernelOS] SMP multi-vCPU ready (SharedArrayBuffer + Web Workers active)`]),
+          ],
         }));
 
         if (!support.ok) {
@@ -540,18 +550,30 @@ export const VmLive = Layer.effect(
             try {
               return await createKernel(opts as CreateKernelOptions);
             } catch (err) {
-              // Automatic resilient fallback: if worker/SMP failed, retry single-CPU inline
-              if (opts.worker || (opts.cpus && opts.cpus > 1)) {
-                appendLog(`[unkernelOS] Worker/SMP boot failed (${err instanceof Error ? err.message : String(err)}), retrying inline 1-CPU...`);
-                const fallbackOpts: CreateKernelOptions = {
-                  ...opts,
-                  cpus: 1,
-                };
-                delete (fallbackOpts as { worker?: boolean }).worker;
-                delete (fallbackOpts as { shared?: boolean }).shared;
-                return await createKernel(fallbackOpts);
+              const firstMsg = err instanceof Error ? err.message : String(err);
+              // Stage 1 fallback: if multi-vCPU SMP failed, keep Web Worker mode on 1 vCPU!
+              if (opts.worker && opts.cpus && opts.cpus > 1) {
+                appendLog(`[unkernelOS] SMP ${opts.cpus}-vCPU boot failed (${firstMsg}), retrying 1-vCPU Web Worker...`);
+                try {
+                  return await createKernel({
+                    ...opts,
+                    cpus: 1,
+                  } as CreateKernelOptions);
+                } catch (err2) {
+                  appendLog(`[unkernelOS] Web Worker boot failed (${err2 instanceof Error ? err2.message : String(err2)}), retrying inline 1-CPU...`);
+                }
+              } else if (opts.worker) {
+                appendLog(`[unkernelOS] Web Worker boot failed (${firstMsg}), retrying inline 1-CPU...`);
+              } else {
+                throw err;
               }
-              throw err;
+              const fallbackOpts: CreateKernelOptions = {
+                ...opts,
+                cpus: 1,
+              };
+              delete (fallbackOpts as { worker?: boolean }).worker;
+              delete (fallbackOpts as { shared?: boolean }).shared;
+              return await createKernel(fallbackOpts);
             }
           },
           catch: (cause) =>
