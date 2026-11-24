@@ -1,0 +1,35 @@
+{
+  "name": "unkernelos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Full Graphical Linux OS in the Browser powered by unkernel, Bun, TypeScript, Effect-TS & WebGPU",
+  "scripts": {
+    "dev": "bun run server/dev.ts",
+    "dev:vite": "vite",
+    "build": "vite build",
+    "start": "bun run server/index.ts",
+    "fetch-distros": "bun run server/fetch-distros.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xterm/headless": "^5.5.0",
+    "effect": "^3.19.1",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "unkernel": "latest",
+    "wland": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.8",
+    "@types/bun": "latest",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^6.3.0",
+    "@webgpu/types": "^0.1.60",
+    "tailwindcss": "^4.1.8",
+    "typescript": "^5.8.3",
+    "vite": "^8.3.8"
+  }
+}

@@ -1,0 +1,63 @@
+name: Deploy unkernelOS to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Fetch & verify unkernel distro images (Alpine + Debian)
+        run: bun run fetch-distros
+
+      - name: Build static bundle for GitHub Pages
+        env:
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+        run: bun run build
+
+      - name: Bundle verified distro images into dist/distros
+        run: |
+          mkdir -p dist/distros
+          find .cache/distros -name "alpine.erofs" -exec cp {} dist/distros/alpine.erofs \;
+          find .cache/distros -name "debian.erofs" -exec cp {} dist/distros/debian.erofs \;
+          ls -lh dist/distros/ dist/assets/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
