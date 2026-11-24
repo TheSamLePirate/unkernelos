@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,25 +26,48 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Setup Node 24 (for unkernel JSPI image verification)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Fetch & verify unkernel distro images (Alpine + Debian)
+      - name: Fetch base unkernel distro images (Alpine + Debian)
         run: bun run fetch-distros
+
+      - name: Cache pre-installed Debian Dev + AI EROFS image
+        id: cache-debian-dev
+        uses: actions/cache@v4
+        with:
+          path: .cache/custom-distros/debian-full.erofs
+          key: debian-full-v1-${{ hashFiles('scripts/build-debian-dev.sh', 'bun.lock') }}
+
+      - name: Build full pre-installed Debian EROFS (git, gh, python, pip, node, npm, bun, pi, claude, mesa/gl, foot)
+        if: steps.cache-debian-dev.outputs.cache-hit != 'true'
+        run: |
+          BASE_DEBIAN=$(find .cache/distros -name "debian.erofs" | head -n1)
+          chmod +x scripts/build-debian-dev.sh
+          mkdir -p .cache/custom-distros
+          ./scripts/build-debian-dev.sh "$BASE_DEBIAN" .cache/custom-distros/debian-full.erofs
+
+      - name: Verify pre-installed Debian image boots & runs all tools in unkernel.wasm
+        run: node scripts/verify-debian-image.ts .cache/custom-distros/debian-full.erofs
 
       - name: Build static bundle for GitHub Pages
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
         run: bun run build
 
-      - name: Bundle verified distro images into dist/distros
+      - name: Bundle distro images into dist/distros
         run: |
           mkdir -p dist/distros
           find .cache/distros -name "alpine.erofs" -exec cp {} dist/distros/alpine.erofs \;
-          find .cache/distros -name "debian.erofs" -exec cp {} dist/distros/debian.erofs \;
+          cp .cache/custom-distros/debian-full.erofs dist/distros/debian.erofs
           ls -lh dist/distros/ dist/assets/
 
       - name: Setup Pages
