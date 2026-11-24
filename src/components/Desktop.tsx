@@ -45,6 +45,7 @@ import { FileExplorerApp } from "./apps/FileExplorerApp.tsx";
 import { GitApp } from "./apps/GitApp.tsx";
 import { GlViewportWindow } from "./apps/GlViewportWindow.tsx";
 import { KittyTerminalApp } from "./apps/KittyTerminalApp.tsx";
+import { MediaStudioApp } from "./apps/MediaStudioApp.tsx";
 import { NotesStudioApp } from "./apps/NotesStudioApp.tsx";
 import { PreviewBrowserApp } from "./apps/PreviewBrowserApp.tsx";
 import { ProcessManagerApp } from "./apps/ProcessManagerApp.tsx";
@@ -79,6 +80,8 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
       return <NotesStudioApp />;
     case "whiteboard":
       return <WhiteboardApp />;
+    case "media-studio":
+      return <MediaStudioApp />;
     case "dev-utils":
       return <DevUtilitiesApp />;
     case "processes":

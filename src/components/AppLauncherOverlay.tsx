@@ -7,6 +7,7 @@ import {
   Cpu,
   Database,
   FileText,
+  Film,
   FolderOpen,
   GitBranch,
   Globe,
@@ -41,6 +42,7 @@ const APP_META: Record<
   services: { icon: PlayCircle, category: "dev" },
   notes: { icon: FileText, category: "creative" },
   whiteboard: { icon: PenTool, category: "creative" },
+  "media-studio": { icon: Film, category: "creative" },
   "dev-utils": { icon: Wrench, category: "dev" },
   processes: { icon: Cpu, category: "system" },
   "shader-synth": { icon: Sparkles, category: "creative" },
@@ -117,7 +119,7 @@ export const AppLauncherOverlay: React.FC = () => {
                 wmStore.setLauncher(false);
               }
             }}
-            placeholder="Search 20 WebOS apps..."
+            placeholder="Search 21 WebOS apps..."
             className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
           />
           <kbd className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-mono text-zinc-400">

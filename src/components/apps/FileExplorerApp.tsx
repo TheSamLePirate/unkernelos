@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FsEntry } from "../../core/fs-service.ts";
+import { hostMountManager, useHostMounts } from "../../core/host-mount.ts";
 import { appRuntime, GuestFsService, VmService } from "../../core/runtime.ts";
 import { useIsMobile } from "../../core/use-viewport.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
@@ -80,6 +81,7 @@ function guessMime(name: string): string {
 
 export const FileExplorerApp: React.FC = () => {
   const wm = useWm();
+  const hostMounts = useHostMounts();
   const isMobile = useIsMobile();
 
   const [cwd, setCwd] = useState(wm.activeWorkspaceDir || "/home/user/workspace");
@@ -630,6 +632,18 @@ export const FileExplorerApp: React.FC = () => {
             <FolderGit2 className="w-3 h-3" />
             Git
           </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const m = await hostMountManager.mountLocalFolder();
+              if (m) void loadDir(m.mountPath, true);
+            }}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-emerald-200 transition"
+            title="Mount a real folder from your Mac/PC into /mnt/host via 9P"
+          >
+            <HardDrive className="w-3 h-3" />
+            Mount Local PC Folder
+          </button>
         </div>
 
         {clipboard && (
@@ -703,6 +717,32 @@ export const FileExplorerApp: React.FC = () => {
                   >
                     <Folder className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                     <span className="truncate font-mono">{p.split("/").pop()}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {hostMounts.length > 0 && (
+              <div className="space-y-0.5">
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400/80">
+                  Host 9P Mounts
+                </div>
+                {hostMounts.map((m) => (
+                  <button
+                    key={m.mountPath}
+                    type="button"
+                    onClick={() => {
+                      void loadDir(m.mountPath, true);
+                      if (isMobile) setSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs transition ${
+                      cwd === m.mountPath
+                        ? "bg-emerald-500/22 text-emerald-100 border border-emerald-400/35"
+                        : "text-emerald-300/80 hover:bg-white/6 hover:text-white"
+                    }`}
+                  >
+                    <HardDrive className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate font-mono">{m.name}</span>
                   </button>
                 ))}
               </div>

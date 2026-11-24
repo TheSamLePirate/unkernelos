@@ -13,6 +13,7 @@ export type AppId =
   | "services"
   | "notes"
   | "whiteboard"
+  | "media-studio"
   | "dev-utils"
   | "processes"
   | "shader-synth"
@@ -164,6 +165,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minWidth: 580,
     minHeight: 400,
     accent: "from-pink-500 to-violet-600",
+  },
+  "media-studio": {
+    id: "media-studio",
+    title: "Media, PDF & Capture Studio",
+    shortTitle: "Media",
+    description: "Play Video/Audio/PDF/Images from Linux, record screen/webcam to workspace & Focus Timer",
+    defaultWidth: 960,
+    defaultHeight: 640,
+    minWidth: 560,
+    minHeight: 400,
+    accent: "from-rose-500 via-pink-500 to-fuchsia-600",
   },
   "dev-utils": {
     id: "dev-utils",
@@ -359,6 +371,7 @@ interface WmState {
   readonly activeWorkspaceDir: string;
   readonly recentWorkspaces: readonly string[];
   readonly ideOpenFilePath: string | null;
+  readonly mediaOpenFilePath: string | null;
   readonly explorerTargetDir: string | null;
   readonly terminalLaunchRequest: TerminalLaunchRequest | null;
   readonly toasts: readonly ToastItem[];
@@ -424,6 +437,7 @@ class WindowManagerStore {
     activeWorkspaceDir: initialWorkspace.active,
     recentWorkspaces: initialWorkspace.recent,
     ideOpenFilePath: null,
+    mediaOpenFilePath: null,
     explorerTargetDir: null,
     terminalLaunchRequest: null,
     toasts: [],
@@ -870,6 +884,15 @@ class WindowManagerStore {
 
   public clearIdeOpenFile(): void {
     this.setState((s) => ({ ...s, ideOpenFilePath: null }));
+  }
+
+  public openFileInMedia(filePath: string): void {
+    this.setState((s) => ({ ...s, mediaOpenFilePath: filePath }));
+    this.openApp("media-studio", { filePath });
+  }
+
+  public clearMediaOpenFile(): void {
+    this.setState((s) => ({ ...s, mediaOpenFilePath: null }));
   }
 
   public openDirInIde(dir: string): void {

@@ -8,11 +8,14 @@ import {
   FolderGit2,
   FolderOpen,
   FolderPlus,
+  HardDrive,
   PlayCircle,
   RefreshCw,
   Terminal,
+  Unplug,
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
+import { hostMountManager, useHostMounts } from "../core/host-mount.ts";
 import { appRuntime, GuestFsService, VmService } from "../core/runtime.ts";
 import { useWm, wmStore } from "../wm/wm-store.ts";
 
@@ -23,6 +26,7 @@ import { useWm, wmStore } from "../wm/wm-store.ts";
  */
 export const WorkspaceSwitcher: React.FC = () => {
   const wm = useWm();
+  const hostMounts = useHostMounts();
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState<readonly string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -170,6 +174,44 @@ export const WorkspaceSwitcher: React.FC = () => {
                 <FolderPlus className="w-3.5 h-3.5" />
                 Create
               </button>
+            </div>
+
+            {/* Real Local Host Folder 9P Mount (/mnt/host) */}
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await hostMountManager.mountLocalFolder();
+                  if (res) setOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 hover:from-emerald-500/30 hover:to-cyan-500/30 border border-emerald-400/35 text-[11px] font-medium text-emerald-200 transition"
+              >
+                <HardDrive className="w-3.5 h-3.5" />
+                Mount Real Local Folder (9P → /mnt/host)
+              </button>
+              {hostMounts.map((m) => (
+                <div
+                  key={m.mountPath}
+                  className="flex items-center justify-between gap-2 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-400/25 text-[11px]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => selectWorkspace(m.mountPath)}
+                    className="flex items-center gap-1.5 min-w-0 text-left text-emerald-200 hover:text-white"
+                  >
+                    <HardDrive className="w-3 h-3 shrink-0" />
+                    <span className="font-mono truncate">{m.mountPath}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void hostMountManager.unmount(m.mountPath)}
+                    className="p-0.5 text-zinc-400 hover:text-rose-300 shrink-0"
+                    title="Unmount 9P Folder"
+                  >
+                    <Unplug className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
             </div>
 
             {/* Project List */}

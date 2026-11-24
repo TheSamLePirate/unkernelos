@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { useSyncExternalStore } from "react";
 import type { HostCommandContext, KernelHandle } from "unkernel";
 import { clipboardStore } from "./clipboard-store.ts";
+import { hostMountManager } from "./host-mount.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "./os-themes.ts";
 import { pwaStore } from "./pwa-service.ts";
 import {
@@ -629,6 +630,24 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
       },
     },
     example: { name: "Vite Dev", command: "bun run dev -- --host 0.0.0.0", port: 5173, start: true },
+  },
+  {
+    method: "mount.list",
+    category: "workspace",
+    summary: "List all real host PC/Mac folders mounted into Linux /mnt/host via 9P.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "media.open",
+    category: "workspace",
+    summary: "Open any Linux Image, PDF, Video, or Audio file directly in Media & Capture Studio.",
+    paramsSchema: {
+      type: "object",
+      required: ["path"],
+      properties: { path: { type: "string" } },
+    },
+    example: { path: "/home/user/workspace/demo.pdf" },
   },
 ];
 
@@ -1299,6 +1318,20 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
         );
       }
       return { added: entry, started: Boolean(p.start) };
+    }
+
+    case "mount.list": {
+      return {
+        supported: hostMountManager.isSupported(),
+        mounts: hostMountManager.getSnapshot(),
+      };
+    }
+
+    case "media.open": {
+      const filePath = String(p.path ?? "").trim();
+      if (!filePath) throw new Error("path is required");
+      wmStore.openFileInMedia(filePath);
+      return { openedInMedia: filePath };
     }
 
     default:
