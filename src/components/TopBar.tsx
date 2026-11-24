@@ -17,6 +17,7 @@ import { INITIAL_GITHUB_AUTH } from "../core/github-auth-service.ts";
 import { pwaStore, usePwa } from "../core/pwa-service.ts";
 import { appRuntime, GithubAuthService, useSubscriptionRef, VmService } from "../core/runtime.ts";
 import { APP_CATALOG, useWm, wmStore, type WorkspaceId } from "../wm/wm-store.ts";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher.tsx";
 
 const WORKSPACES: readonly WorkspaceId[] = [1, 2, 3, 4];
 
@@ -96,6 +97,9 @@ export const TopBar: React.FC = () => {
 
         <span className="text-white/20 hidden sm:inline">/</span>
         <span className="font-medium text-zinc-200 max-w-[100px] sm:max-w-[110px] truncate">{activeTitle}</span>
+
+        {/* Global Active Workspace / Project Switcher */}
+        <WorkspaceSwitcher />
 
         {/* Workspaces 1–4 Switcher */}
         <div className="hidden sm:flex items-center gap-0.5 ml-1 p-0.5 rounded-full bg-white/[0.05] border border-white/10">

@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { AppWindow, Box, Globe, Layers, Lock, Palette, Pause, RotateCcw, Search, Sparkles } from "lucide-react";
+import { AppWindow, Box, Code2, FolderOpen, Globe, Layers, Lock, Palette, Pause, RotateCcw, Search, Sparkles, Terminal } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { OS_THEMES } from "../core/os-themes.ts";
 import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../core/runtime.ts";
@@ -170,6 +170,45 @@ export const CommandPalette: React.FC = () => {
               </div>
             </div>
           )}
+
+          <div className="pt-1 mt-1 border-t border-white/8">
+            <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Active Workspace ({wm.activeWorkspaceDir})
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.openTerminalInDir(wm.activeWorkspaceDir);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+              New Terminal Tab in {wm.activeWorkspaceDir}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.openDirInExplorer(wm.activeWorkspaceDir);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+              Browse Active Workspace in File Explorer
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                wmStore.setCommandPalette(false);
+                wmStore.openDirInIde(wm.activeWorkspaceDir);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs text-zinc-200"
+            >
+              <Code2 className="w-3.5 h-3.5 text-sky-400" />
+              Open Active Workspace in Code IDE
+            </button>
+          </div>
 
           <div className="pt-1 mt-1 border-t border-white/8">
             <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">

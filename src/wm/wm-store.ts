@@ -320,6 +320,13 @@ export interface ContextMenuState {
   readonly appId?: AppId;
 }
 
+export interface TerminalLaunchRequest {
+  readonly id: number;
+  readonly cwd: string;
+  readonly command?: string;
+  readonly title?: string;
+}
+
 interface WmState {
   readonly windows: readonly WindowInstance[];
   readonly activeWindowId: string | null;
@@ -336,7 +343,10 @@ interface WmState {
   readonly previewPort: number;
   readonly previewPath: string;
   readonly activeWorkspaceDir: string;
+  readonly recentWorkspaces: readonly string[];
   readonly ideOpenFilePath: string | null;
+  readonly explorerTargetDir: string | null;
+  readonly terminalLaunchRequest: TerminalLaunchRequest | null;
   readonly toasts: readonly ToastItem[];
   readonly notificationHistory: readonly ToastItem[];
   readonly unreadNotifications: number;
@@ -344,6 +354,41 @@ interface WmState {
 
 const TOP_BAR_H = 36;
 const DOCK_RESERVE = 82;
+const WORKSPACE_STORAGE_KEY = "unkernelos:workspace:v1";
+
+function normalizeWorkspacePath(dir: string): string {
+  const trimmed = dir.trim().replace(/\/+/g, "/");
+  if (!trimmed || trimmed === "/") return "/";
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+}
+
+function loadStoredWorkspace(): { active: string; recent: string[] } {
+  const fallback = { active: "/home/user/workspace/my-ai-app", recent: ["/home/user/workspace/my-ai-app", "/home/user/workspace"] };
+  if (typeof localStorage === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as { active?: string; recent?: string[] };
+    const active = parsed.active ? normalizeWorkspacePath(parsed.active) : fallback.active;
+    const recent = Array.isArray(parsed.recent) && parsed.recent.length > 0
+      ? Array.from(new Set([active, ...parsed.recent.map(normalizeWorkspacePath)])).slice(0, 8)
+      : [active, "/home/user/workspace"];
+    return { active, recent };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveStoredWorkspace(active: string, recent: readonly string[]): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ active, recent }));
+  } catch {
+    // ignore
+  }
+}
+
+const initialWorkspace = loadStoredWorkspace();
 
 class WindowManagerStore {
   private state: WmState = {
@@ -361,12 +406,17 @@ class WindowManagerStore {
     contextMenu: null,
     previewPort: 3000,
     previewPath: "/",
-    activeWorkspaceDir: "/home/user/workspace",
+    activeWorkspaceDir: initialWorkspace.active,
+    recentWorkspaces: initialWorkspace.recent,
     ideOpenFilePath: null,
+    explorerTargetDir: null,
+    terminalLaunchRequest: null,
     toasts: [],
     notificationHistory: [],
     unreadNotifications: 0,
   };
+
+  private terminalReqCounter = 1;
 
   private zCounter = 10;
   private listeners = new Set<() => void>();
@@ -765,12 +815,62 @@ class WindowManagerStore {
 
   public openFileInIde(filePath: string): void {
     const parent = filePath.split("/").slice(0, -1).join("/") || "/home/user";
-    this.setState((s) => ({ ...s, activeWorkspaceDir: parent, ideOpenFilePath: filePath }));
+    const normParent = normalizeWorkspacePath(parent);
+    const nextRecent = Array.from(new Set([normParent, ...this.state.recentWorkspaces])).slice(0, 8);
+    saveStoredWorkspace(normParent, nextRecent);
+    this.setState((s) => ({
+      ...s,
+      activeWorkspaceDir: normParent,
+      recentWorkspaces: nextRecent,
+      ideOpenFilePath: filePath,
+    }));
     this.openApp("ide", { filePath });
   }
 
   public clearIdeOpenFile(): void {
     this.setState((s) => ({ ...s, ideOpenFilePath: null }));
+  }
+
+  public openDirInIde(dir: string): void {
+    this.setWorkspaceDir(dir);
+    this.openApp("ide");
+  }
+
+  public openDirInStudio(dir: string): void {
+    this.setWorkspaceDir(dir);
+    this.openApp("agent-studio");
+  }
+
+  public openDirInGit(dir: string): void {
+    this.setWorkspaceDir(dir);
+    this.openApp("git");
+  }
+
+  public openDirInExplorer(dir: string): void {
+    const clean = normalizeWorkspacePath(dir);
+    this.setState((s) => ({ ...s, explorerTargetDir: clean }));
+    this.openApp("explorer");
+  }
+
+  public clearExplorerTargetDir(): void {
+    this.setState((s) => ({ ...s, explorerTargetDir: null }));
+  }
+
+  public openTerminalInDir(dir: string, command?: string, title?: string): void {
+    const clean = normalizeWorkspacePath(dir);
+    const req: TerminalLaunchRequest = {
+      id: ++this.terminalReqCounter,
+      cwd: clean,
+      command,
+      title,
+    };
+    this.setState((s) => ({ ...s, terminalLaunchRequest: req }));
+    this.openApp("terminal");
+  }
+
+  public clearTerminalLaunchRequest(id: number): void {
+    if (this.state.terminalLaunchRequest?.id !== id) return;
+    this.setState((s) => ({ ...s, terminalLaunchRequest: null }));
   }
 
   public setLocked(locked: boolean): void {
@@ -798,7 +898,15 @@ class WindowManagerStore {
   }
 
   public setWorkspaceDir(dir: string): void {
-    this.setState((s) => ({ ...s, activeWorkspaceDir: dir }));
+    const clean = normalizeWorkspacePath(dir);
+    if (!clean) return;
+    const nextRecent = Array.from(new Set([clean, ...this.state.recentWorkspaces])).slice(0, 8);
+    saveStoredWorkspace(clean, nextRecent);
+    this.setState((s) => ({
+      ...s,
+      activeWorkspaceDir: clean,
+      recentWorkspaces: nextRecent,
+    }));
   }
 
   public pushToast(
