@@ -8,6 +8,9 @@ export type AppId =
   | "explorer"
   | "api-client"
   | "notes"
+  | "dev-utils"
+  | "processes"
+  | "shader-synth"
   | "preview"
   | "screen"
   | "git"
@@ -110,6 +113,39 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minWidth: 580,
     minHeight: 400,
     accent: "from-amber-500 to-rose-500",
+  },
+  "dev-utils": {
+    id: "dev-utils",
+    title: "Dev Utilities Suite",
+    shortTitle: "Utils",
+    description: "JSON, JWT, Base64/URL, Regex, UUID/SHA-256, Color Glass, Diff & Cron",
+    defaultWidth: 920,
+    defaultHeight: 600,
+    minWidth: 560,
+    minHeight: 400,
+    accent: "from-lime-400 to-emerald-600",
+  },
+  processes: {
+    id: "processes",
+    title: "Process & Network Manager",
+    shortTitle: "Procs",
+    description: "Live Linux processes (SIGTERM/SIGKILL), open vsock ports, df & env inspector",
+    defaultWidth: 920,
+    defaultHeight: 590,
+    minWidth: 560,
+    minHeight: 380,
+    accent: "from-rose-500 to-orange-600",
+  },
+  "shader-synth": {
+    id: "shader-synth",
+    title: "WebGPU Shader & Synth Studio",
+    shortTitle: "Shader",
+    description: "Live 60fps WGSL shader playground + polyphonic WebAudio synth & oscilloscope",
+    defaultWidth: 1000,
+    defaultHeight: 640,
+    minWidth: 620,
+    minHeight: 420,
+    accent: "from-fuchsia-500 to-purple-600",
   },
   preview: {
     id: "preview",

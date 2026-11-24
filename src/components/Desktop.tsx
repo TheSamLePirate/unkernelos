@@ -29,13 +29,16 @@ import { WindowFrame } from "./WindowFrame.tsx";
 import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
 import { ApiClientApp } from "./apps/ApiClientApp.tsx";
 import { CodeIdeApp } from "./apps/CodeIdeApp.tsx";
+import { DevUtilitiesApp } from "./apps/DevUtilitiesApp.tsx";
 import { FileExplorerApp } from "./apps/FileExplorerApp.tsx";
 import { GitApp } from "./apps/GitApp.tsx";
 import { KittyTerminalApp } from "./apps/KittyTerminalApp.tsx";
 import { NotesStudioApp } from "./apps/NotesStudioApp.tsx";
 import { PreviewBrowserApp } from "./apps/PreviewBrowserApp.tsx";
+import { ProcessManagerApp } from "./apps/ProcessManagerApp.tsx";
 import { ScreenDisplayApp } from "./apps/ScreenDisplayApp.tsx";
 import { SettingsApp } from "./apps/SettingsApp.tsx";
+import { ShaderSynthApp } from "./apps/ShaderSynthApp.tsx";
 import { SystemMonitorApp } from "./apps/SystemMonitorApp.tsx";
 import { ToolchainInstallerApp } from "./apps/ToolchainInstallerApp.tsx";
 
@@ -53,6 +56,12 @@ const renderWindowApp = (win: WindowInstance, focused: boolean): React.ReactNode
       return <ApiClientApp />;
     case "notes":
       return <NotesStudioApp />;
+    case "dev-utils":
+      return <DevUtilitiesApp />;
+    case "processes":
+      return <ProcessManagerApp />;
+    case "shader-synth":
+      return <ShaderSynthApp />;
     case "preview":
       return <PreviewBrowserApp />;
     case "screen":

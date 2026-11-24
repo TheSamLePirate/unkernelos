@@ -3,6 +3,7 @@ import {
   Activity,
   Bot,
   Code2,
+  Cpu,
   FileText,
   FolderOpen,
   GitBranch,
@@ -12,7 +13,9 @@ import {
   Package,
   Send,
   Settings,
+  Sparkles,
   Terminal,
+  Wrench,
 } from "lucide-react";
 import React, { useRef, useState } from "react";
 import { SettingsService, useSubscriptionRef } from "../core/runtime.ts";
@@ -26,6 +29,9 @@ const DOCK_ITEMS: readonly { id: AppId; icon: React.ComponentType<{ className?: 
   { id: "explorer", icon: FolderOpen },
   { id: "api-client", icon: Send },
   { id: "notes", icon: FileText },
+  { id: "dev-utils", icon: Wrench },
+  { id: "processes", icon: Cpu },
+  { id: "shader-synth", icon: Sparkles },
   { id: "preview", icon: Globe },
   { id: "screen", icon: Monitor },
   { id: "git", icon: GitBranch },
@@ -64,12 +70,12 @@ export const Dock: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50">
+    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-16px)]">
       <nav
         ref={navRef}
         onMouseMove={(e) => setMouseX(e.clientX)}
         onMouseLeave={() => setMouseX(null)}
-        className="glass-dock px-3 py-2 rounded-2xl flex items-end gap-2"
+        className="glass-dock px-2.5 py-2 rounded-2xl flex items-end gap-1.5 overflow-x-auto no-scrollbar"
       >
         {DOCK_ITEMS.map(({ id, icon: Icon }, idx) => {
           const def = APP_CATALOG[id];
