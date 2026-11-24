@@ -61,11 +61,23 @@ export class WaylandDesktopHost {
 
     const link = createStreamLink(listener);
 
+    const gpu = vm.gl?.gpu
+      ? {
+          resolve: (ref: { resource: number }) => vm.gl!.gpu!.image(ref.resource),
+          release: (img: CanvasImageSource) => {
+            if (typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap) {
+              img.close();
+            }
+          },
+        }
+      : undefined;
+
     try {
       this.wl = await createWland({
         container,
         link,
         buffers,
+        gpu,
         decorations: "client",
         clipboard: true,
         autoFocus: true,

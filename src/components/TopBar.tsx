@@ -116,6 +116,14 @@ export const TopBar: React.FC = () => {
           <span>{vm.cpus}c</span>
           <span className="text-white/20">·</span>
           <span>{vm.memoryMiB}M</span>
+          {vm.glStatus && (
+            <>
+              <span className="text-white/20">·</span>
+              <span className={vm.glStatus.state === "ready" ? "text-emerald-300" : "text-cyan-300"}>
+                GL:{vm.glStatus.state === "ready" ? "ON" : vm.glStatus.state}
+              </span>
+            </>
+          )}
         </button>
 
         <button

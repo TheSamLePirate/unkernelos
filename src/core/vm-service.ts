@@ -450,9 +450,9 @@ export const VmLive = Layer.effect(
         },
       };
 
-      // Append kernel cmdline cleanly without wiping bundled initramfs defaults
+      // Preserve bundled initramfs boot command line (console=hvc0 rdinit=/init)
       if (cmdParts.length > 0) {
-        opts.cmdline = `console=hvc0 ${cmdParts.join(" ")}`;
+        opts.cmdline = `console=hvc0 rdinit=/init ${cmdParts.join(" ")}`;
       }
 
       // Host commands (only supported in inline mode; in worker mode we handle via vsock/CLI)

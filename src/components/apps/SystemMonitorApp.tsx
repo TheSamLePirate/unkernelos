@@ -125,7 +125,21 @@ export const SystemMonitorApp: React.FC = () => {
         </div>
         <div>
           <span className="text-zinc-500">Guest GL: </span>
-          <span className="text-cyan-300">{vm.glStatus?.state ?? "off"}</span>
+          <span
+            className={
+              vm.glStatus?.state === "ready"
+                ? "text-emerald-300"
+                : vm.glStatus?.state === "idle" || vm.glStatus?.state === "loading"
+                ? "text-cyan-300"
+                : "text-amber-300"
+            }
+          >
+            {vm.glStatus
+              ? vm.glStatus.state === "idle"
+                ? "standby (on-demand)"
+                : vm.glStatus.state
+              : "off"}
+          </span>
         </div>
       </div>
 

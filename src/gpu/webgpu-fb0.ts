@@ -127,7 +127,10 @@ export class WebGpuFb0Renderer {
     this.tex = this.device.createTexture({
       size: [w, h, 1],
       format: "rgba8unorm",
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      usage:
+        GPUTextureUsage.TEXTURE_BINDING |
+        GPUTextureUsage.COPY_DST |
+        GPUTextureUsage.RENDER_ATTACHMENT,
     });
     this.texW = w;
     this.texH = h;
@@ -193,6 +196,56 @@ export class WebGpuFb0Renderer {
       this.ctx2d.imageSmoothingEnabled = this.scaling !== "crisp";
       const copy = new Uint8ClampedArray(rgba);
       this.ctx2d.putImageData(new ImageData(copy, width, height), 0, 0);
+    }
+  }
+
+  /**
+   * Present a 3D VirGL KMS scanout canvas/ImageBitmap directly into WebGPU (zero readback) or Canvas2D.
+   */
+  public presentSource(source: HTMLCanvasElement | OffscreenCanvas | ImageBitmap, width: number, height: number): void {
+    if (this.disposed || width <= 0 || height <= 0) return;
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this.canvas.width = width;
+      this.canvas.height = height;
+    }
+
+    if (this.mode === "webgpu" && this.device && this.gpuCtx && this.pipeline && this.uniformBuf) {
+      this.ensureTexture(width, height);
+      if (!this.tex || !this.bindGroup) return;
+
+      this.device.queue.copyExternalImageToTexture(
+        { source },
+        { texture: this.tex },
+        [width, height]
+      );
+      this.device.queue.writeBuffer(
+        this.uniformBuf,
+        0,
+        new Float32Array([this.scaling === "crt" ? 1 : 0, width, height, 0])
+      );
+
+      const enc = this.device.createCommandEncoder();
+      const pass = enc.beginRenderPass({
+        colorAttachments: [
+          {
+            view: this.gpuCtx.getCurrentTexture().createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            loadOp: "clear",
+            storeOp: "store",
+          },
+        ],
+      });
+      pass.setPipeline(this.pipeline);
+      pass.setBindGroup(0, this.bindGroup);
+      pass.draw(6);
+      pass.end();
+      this.device.queue.submit([enc.finish()]);
+      return;
+    }
+
+    if (this.ctx2d) {
+      this.ctx2d.imageSmoothingEnabled = this.scaling !== "crisp";
+      this.ctx2d.drawImage(source, 0, 0, width, height);
     }
   }
 

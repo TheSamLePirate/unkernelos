@@ -110,7 +110,7 @@ export const DEFAULT_UNKERNEL_CONFIG: UnkernelConfig = {
   displayHeight: 640,
   gpu: true,
   gl: true,
-  glEager: false,
+  glEager: true,
   glStrictWaits: false,
   wayland: true,
   sound: true,

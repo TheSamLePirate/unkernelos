@@ -26,52 +26,80 @@ interface KittyTerminalPaneProps {
   onTitleChange?: (title: string) => void;
 }
 
-function keyEventToAnsi(e: KeyboardEvent): string | null {
+function keyEventToAnsi(e: KeyboardEvent, appCursorMode: boolean): string | null {
   if (e.metaKey) return null; // keep macOS Cmd+C / Cmd+V / Cmd+K for browser/OS
+
+  // On Windows/Linux, AltGr sends ctrlKey && altKey with a printable character (e.g. @, #, {, }, [, ], \, |, ~, €)
+  if (e.ctrlKey && e.altKey && e.key.length === 1) {
+    return e.key;
+  }
+
+  // On macOS, Option (Alt) produces composed printable characters (e.g. Option+( -> {, Option+Shift+L -> |, Option+N -> ~)
+  // Distinguish real Alt+<letter> shortcuts from macOS Option-composed symbols:
+  if (e.altKey && !e.ctrlKey && e.key.length === 1) {
+    const isAsciiLetterOrDigit = /^[a-zA-Z0-9]$/.test(e.key);
+    const matchesPhysicalKey =
+      (e.code.startsWith("Key") && e.code.slice(3).toLowerCase() === e.key.toLowerCase()) ||
+      (e.code.startsWith("Digit") && e.code.slice(5) === e.key);
+    // If the OS composed a different symbol (AZERTY/macOS {, }, |, ~, \, [, ], €, etc.), send that symbol verbatim!
+    if (!isAsciiLetterOrDigit && !matchesPhysicalKey) {
+      return e.key;
+    }
+    return `\x1b${e.key}`;
+  }
+
+  const mod = 1 + (e.shiftKey ? 1 : 0) + (e.altKey ? 2 : 0) + (e.ctrlKey ? 4 : 0);
 
   if (e.ctrlKey && !e.altKey) {
     const k = e.key.toLowerCase();
     if (k === "c" && window.getSelection()?.toString()) return null;
+    if (k === "backspace") return "\x08";
     if (k.length === 1 && k >= "a" && k <= "z") {
       return String.fromCharCode(k.charCodeAt(0) - 96);
     }
-    if (e.key === "[") return "\x1b";
-    if (e.key === "\\") return "\x1c";
-    if (e.key === "]") return "\x1d";
-    if (e.key === " ") return "\x00";
+    if (e.key === "[" || e.key === "3") return "\x1b";
+    if (e.key === "\\" || e.key === "4") return "\x1c";
+    if (e.key === "]" || e.key === "5") return "\x1d";
+    if (e.key === "^" || e.key === "6") return "\x1e";
+    if (e.key === "_" || e.key === "7" || e.key === "/") return "\x1f";
+    if (e.key === " " || e.key === "@" || e.key === "2") return "\x00";
   }
+
+  const csiMod = (letter: string, ss3 = false): string => {
+    if (mod > 1) return `\x1b[1;${mod}${letter}`;
+    return ss3 ? `\x1bO${letter}` : `\x1b[${letter}`;
+  };
+
+  const tildeMod = (num: number): string =>
+    mod > 1 ? `\x1b[${num};${mod}~` : `\x1b[${num}~`;
 
   switch (e.key) {
-    case "Enter": return "\r";
-    case "Backspace": return "\x7f";
+    case "Enter": return e.altKey ? "\x1b\r" : "\r";
+    case "Backspace": return e.altKey ? "\x1b\x7f" : "\x7f";
     case "Tab": return e.shiftKey ? "\x1b[Z" : "\t";
     case "Escape": return "\x1b";
-    case "ArrowUp": return "\x1b[A";
-    case "ArrowDown": return "\x1b[B";
-    case "ArrowRight": return "\x1b[C";
-    case "ArrowLeft": return "\x1b[D";
-    case "Home": return "\x1b[H";
-    case "End": return "\x1b[F";
-    case "Delete": return "\x1b[3~";
-    case "Insert": return "\x1b[2~";
-    case "PageUp": return "\x1b[5~";
-    case "PageDown": return "\x1b[6~";
-    case "F1": return "\x1bOP";
-    case "F2": return "\x1bOQ";
-    case "F3": return "\x1bOR";
-    case "F4": return "\x1bOS";
-    case "F5": return "\x1b[15~";
-    case "F6": return "\x1b[17~";
-    case "F7": return "\x1b[18~";
-    case "F8": return "\x1b[19~";
-    case "F9": return "\x1b[20~";
-    case "F10": return "\x1b[21~";
-    case "F11": return "\x1b[23~";
-    case "F12": return "\x1b[24~";
-  }
-
-  if (e.altKey && e.key.length === 1) {
-    return `\x1b${e.key}`;
+    case "ArrowUp": return csiMod("A", appCursorMode);
+    case "ArrowDown": return csiMod("B", appCursorMode);
+    case "ArrowRight": return csiMod("C", appCursorMode);
+    case "ArrowLeft": return csiMod("D", appCursorMode);
+    case "Home": return csiMod("H", appCursorMode);
+    case "End": return csiMod("F", appCursorMode);
+    case "Insert": return tildeMod(2);
+    case "Delete": return tildeMod(3);
+    case "PageUp": return tildeMod(5);
+    case "PageDown": return tildeMod(6);
+    case "F1": return csiMod("P", true);
+    case "F2": return csiMod("Q", true);
+    case "F3": return csiMod("R", true);
+    case "F4": return csiMod("S", true);
+    case "F5": return tildeMod(15);
+    case "F6": return tildeMod(17);
+    case "F7": return tildeMod(18);
+    case "F8": return tildeMod(19);
+    case "F9": return tildeMod(20);
+    case "F10": return tildeMod(21);
+    case "F11": return tildeMod(23);
+    case "F12": return tildeMod(24);
   }
 
   if (e.key.length === 1) {
@@ -79,6 +107,17 @@ function keyEventToAnsi(e: KeyboardEvent): string | null {
   }
 
   return null;
+}
+
+function encodeSgrMouse(
+  btnCode: number,
+  col: number,
+  row: number,
+  pressed: boolean,
+  e: { shiftKey: boolean; altKey: boolean; ctrlKey: boolean }
+): string {
+  const mods = (e.shiftKey ? 4 : 0) + (e.altKey ? 8 : 0) + (e.ctrlKey ? 16 : 0);
+  return `\x1b[<${btnCode | mods};${col + 1};${row + 1}${pressed ? "M" : "m"}`;
 }
 
 const LOCAL_URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})(\/[^\s"'<>)]*)?/i;
@@ -272,7 +311,12 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     };
   }, [preferWebGpu]);
 
+  const composingRef = useRef(false);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (composingRef.current || e.nativeEvent.isComposing || e.key === "Process" || e.key === "Dead") {
+      return;
+    }
     if ((e.metaKey || (e.ctrlKey && e.shiftKey)) && e.key.toLowerCase() === "c") {
       const text = extractSelectedText();
       if (text) {
@@ -289,7 +333,7 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
       return;
     }
 
-    const seq = keyEventToAnsi(e.nativeEvent);
+    const seq = keyEventToAnsi(e.nativeEvent, Boolean(termRef.current?.modes.applicationCursorKeysMode));
     if (seq !== null) {
       e.preventDefault();
       e.stopPropagation();
@@ -299,15 +343,57 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     }
   };
 
+  const writePaste = (text: string) => {
+    if (!text || !ptyRef.current) return;
+    const bracketed = Boolean(termRef.current?.modes.bracketedPasteMode);
+    const payload = bracketed ? `\x1b[200~${text}\x1b[201~` : text;
+    ptyRef.current.write(payload).catch(() => {});
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (composingRef.current) return;
+    const val = e.target.value;
+    if (val) {
+      e.target.value = "";
+      termRef.current?.scrollToBottom();
+      ptyRef.current?.write(val).catch(() => {});
+      rendererRef.current?.markDirty();
+    }
+  };
+
+  const handleCompositionStart = () => {
+    composingRef.current = true;
+  };
+
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLTextAreaElement>) => {
+    composingRef.current = false;
+    const val = e.currentTarget.value || e.data;
+    e.currentTarget.value = "";
+    if (val) {
+      termRef.current?.scrollToBottom();
+      ptyRef.current?.write(val).catch(() => {});
+      rendererRef.current?.markDirty();
+    }
+  };
+
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = e.clipboardData.getData("text/plain");
     if (text) {
       e.preventDefault();
-      ptyRef.current?.write(text).catch(() => {});
+      writePaste(text);
     }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
+    if (mode !== "none" && !e.shiftKey && canvasRef.current && rendererRef.current) {
+      e.preventDefault();
+      const rect = canvasRef.current.getBoundingClientRect();
+      const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+      const btn = e.deltaY < 0 ? 64 : 65;
+      ptyRef.current?.write(encodeSgrMouse(btn, cell.col, cell.row, true, e)).catch(() => {});
+      return;
+    }
     const lines = Math.round(e.deltaY / 28);
     if (lines !== 0 && termRef.current) {
       termRef.current.scrollLines(lines);
@@ -316,6 +402,8 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   };
 
   const dragSelect = useRef(false);
+  const mouseDownBtn = useRef<number | null>(null);
+  const lastMouseCell = useRef<{ col: number; row: number } | null>(null);
 
   const extractSelectedText = (): string => {
     const sel = rendererRef.current?.selection;
@@ -344,6 +432,24 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect || !rendererRef.current) return;
     const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+
+    const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
+    if (mode !== "none" && !e.shiftKey) {
+      e.preventDefault();
+      const btn = e.button === 1 ? 1 : e.button === 2 ? 2 : 0;
+      mouseDownBtn.current = btn;
+      lastMouseCell.current = cell;
+      ptyRef.current?.write(encodeSgrMouse(btn, cell.col, cell.row, true, e)).catch(() => {});
+      return;
+    }
+
+    // Middle-click paste when not in mouse tracking mode
+    if (e.button === 1) {
+      e.preventDefault();
+      navigator.clipboard.readText().then((t) => writePaste(t)).catch(() => {});
+      return;
+    }
+
     dragSelect.current = true;
     rendererRef.current.selection = {
       startCol: cell.col,
@@ -355,15 +461,45 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!dragSelect.current || !canvasRef.current || !rendererRef.current?.selection) return;
-    const rect = canvasRef.current.getBoundingClientRect();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect || !rendererRef.current) return;
     const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+
+    const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
+    if (mode !== "none" && !e.shiftKey) {
+      const moved =
+        !lastMouseCell.current ||
+        lastMouseCell.current.col !== cell.col ||
+        lastMouseCell.current.row !== cell.row;
+      if (!moved) return;
+      lastMouseCell.current = cell;
+      if (mode === "any" || (mode === "drag" && mouseDownBtn.current !== null)) {
+        const baseBtn = mouseDownBtn.current !== null ? mouseDownBtn.current : 3;
+        ptyRef.current?.write(encodeSgrMouse(baseBtn | 32, cell.col, cell.row, true, e)).catch(() => {});
+      }
+      return;
+    }
+
+    if (!dragSelect.current || !rendererRef.current.selection) return;
     rendererRef.current.selection.endCol = cell.col;
     rendererRef.current.selection.endRow = cell.row;
     rendererRef.current.markDirty();
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent) => {
+    const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
+    if (mode !== "none" && !e.shiftKey && mouseDownBtn.current !== null && canvasRef.current && rendererRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+      const btn = mouseDownBtn.current;
+      mouseDownBtn.current = null;
+      if (mode !== "x10") {
+        ptyRef.current?.write(encodeSgrMouse(btn, cell.col, cell.row, false, e)).catch(() => {});
+      }
+      return;
+    }
+    mouseDownBtn.current = null;
+
     if (!dragSelect.current) return;
     dragSelect.current = false;
     const sel = rendererRef.current?.selection;
@@ -373,12 +509,20 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
+    if (mode !== "none" && !e.shiftKey) {
+      e.preventDefault();
+    }
+  };
+
   return (
     <div
       ref={containerRef}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onContextMenu={handleContextMenu}
       onWheel={handleWheel}
       style={{ backgroundColor: theme.bg }}
       className={`relative w-full h-full overflow-hidden cursor-text transition-shadow ${
@@ -396,6 +540,9 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
         autoComplete="off"
         autoCorrect="off"
         onKeyDown={handleKeyDown}
+        onChange={handleInputChange}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
         onPaste={handlePaste}
         aria-label="Terminal Input"
         className="absolute opacity-0 w-1 h-1 pointer-events-none top-0 left-0"

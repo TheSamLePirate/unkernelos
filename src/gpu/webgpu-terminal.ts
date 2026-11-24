@@ -188,11 +188,9 @@ fn vs_main(@builtin(vertex_index) vIdx: u32, inst: CellInstance) -> VsOut {
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
-  if (in.textured > 0.5) {
-    let a = textureSample(atlasTex, atlasSamp, in.uv).a;
-    return vec4<f32>(in.color.rgb, in.color.a * a);
-  }
-  return in.color;
+  let glyphAlpha = textureSampleLevel(atlasTex, atlasSamp, in.uv, 0.0).a;
+  let alpha = select(in.color.a, in.color.a * glyphAlpha, in.textured > 0.5);
+  return vec4<f32>(in.color.rgb * alpha, alpha);
 }
 `;
 
@@ -343,6 +341,10 @@ export class KittyWebGpuRenderer {
             gpuCtx.configure({ device, format, alphaMode: "premultiplied" });
 
             const module = device.createShaderModule({ code: TERM_WGSL });
+            const info = await module.getCompilationInfo();
+            if (info.messages.some((m) => m.type === "error")) {
+              throw new Error(info.messages.map((m) => m.message).join("; "));
+            }
             const pipeline = device.createRenderPipeline({
               layout: "auto",
               vertex: {
@@ -367,7 +369,7 @@ export class KittyWebGpuRenderer {
                   {
                     format,
                     blend: {
-                      color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
+                      color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
                       alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
                     },
                   },

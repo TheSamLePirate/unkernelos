@@ -55,13 +55,17 @@ export const ScreenDisplayApp: React.FC = () => {
   const [glInfoText, setGlInfoText] = useState<string>("");
   const [waylandReady, setWaylandReady] = useState(false);
   const [captured, setCaptured] = useState(false);
+  const [pointerLocked, setPointerLocked] = useState(false);
+  const [scanoutActive, setScanoutActive] = useState<{ width: number; height: number; kind: "fb0" | "3d-gl" } | null>(null);
 
   const fbCanvasRef = useRef<HTMLCanvasElement>(null);
   const fbRendererRef = useRef<WebGpuFb0Renderer | null>(null);
   const waylandContainerRef = useRef<HTMLDivElement>(null);
   const waylandHostRef = useRef<WaylandDesktopHost | null>(null);
+  const heldKeysRef = useRef<Set<number>>(new Set());
+  const glStageRef = useRef<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null>(null);
 
-  // WebGPU /dev/fb0 presentation loop
+  // WebGPU /dev/fb0 + 3D VirGL KMS scanout presentation loop
   useEffect(() => {
     const canvas = fbCanvasRef.current;
     if (!canvas) return;
@@ -79,9 +83,42 @@ export const ScreenDisplayApp: React.FC = () => {
       if (disposed) return;
       const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
       if (vm) {
+        // 1. Check for hardware 3D VirGL KMS scanout first (e.g. kmscube, Mesa EGL/GBM)
+        const gpu = vm.gl?.gpu;
+        const scanout = gpu?.scanout;
+        if (gpu && scanout && scanout.width > 0 && scanout.height > 0) {
+          if (!glStageRef.current) {
+            const c = document.createElement("canvas");
+            const ctx = c.getContext("2d")!;
+            glStageRef.current = { canvas: c, ctx };
+          }
+          const st = glStageRef.current;
+          if (st.canvas.width !== scanout.width || st.canvas.height !== scanout.height) {
+            st.canvas.width = scanout.width;
+            st.canvas.height = scanout.height;
+          }
+          const drew = gpu.drawFrame(st.ctx);
+          if (drew !== null) {
+            renderer.presentSource(st.canvas, scanout.width, scanout.height);
+            setScanoutActive((prev) =>
+              prev?.kind === "3d-gl" && prev.width === scanout.width && prev.height === scanout.height
+                ? prev
+                : { width: scanout.width, height: scanout.height, kind: "3d-gl" }
+            );
+            raf = requestAnimationFrame(loop);
+            return;
+          }
+        }
+
+        // 2. Otherwise present /dev/fb0 or 2D KMS dumb-buffer frame
         const frame = vm.frame();
         if (frame && frame.data.byteLength > 0) {
           renderer.present(frame.data, frame.width, frame.height);
+          setScanoutActive((prev) =>
+            prev?.kind === "fb0" && prev.width === frame.width && prev.height === frame.height
+              ? prev
+              : { width: frame.width, height: frame.height, kind: "fb0" }
+          );
         }
       }
       raf = requestAnimationFrame(loop);
@@ -99,6 +136,17 @@ export const ScreenDisplayApp: React.FC = () => {
   useEffect(() => {
     fbRendererRef.current?.setScaling(cfg.fbScaling);
   }, [cfg.fbScaling]);
+
+  // Track pointer lock changes for relative 3D/game mouse input
+  useEffect(() => {
+    const onLockChange = () => {
+      const locked = document.pointerLockElement === fbCanvasRef.current;
+      setPointerLocked(locked);
+      if (locked) setCaptured(true);
+    };
+    document.addEventListener("pointerlockchange", onLockChange);
+    return () => document.removeEventListener("pointerlockchange", onLockChange);
+  }, []);
 
   // Attach Wayland compositor (wland) when Debian + Wayland enabled
   useEffect(() => {
@@ -119,11 +167,24 @@ export const ScreenDisplayApp: React.FC = () => {
     };
   }, [vmState.phase, cfg.wayland, cfg.distro]);
 
-  // Evdev keyboard/mouse forwarding to /dev/input/event*
+  // Complete evdev keyboard capture (all special keys, modifiers, F1-F12, arrows, Tab, Esc + release-all on blur)
   useEffect(() => {
     if (!captured) return;
+
+    const releaseAll = () => {
+      const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+      if (vm?.evdev) {
+        for (const code of heldKeysRef.current) {
+          vm.evdev.key(code, false);
+        }
+      }
+      heldKeysRef.current.clear();
+    };
+
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
-      if (e.key === "Escape" && e.shiftKey) {
+      if (down && e.key === "Escape" && e.shiftKey) {
+        releaseAll();
+        if (document.pointerLockElement) document.exitPointerLock();
         setCaptured(false);
         return;
       }
@@ -131,16 +192,28 @@ export const ScreenDisplayApp: React.FC = () => {
       const code = domCodeToLinux(e.code);
       if (vm?.evdev && code) {
         e.preventDefault();
+        e.stopPropagation();
+        if (down) heldKeysRef.current.add(code);
+        else heldKeysRef.current.delete(code);
         vm.evdev.key(code, down);
       }
     };
+
     const kd = onKey(true);
     const ku = onKey(false);
-    window.addEventListener("keydown", kd);
-    window.addEventListener("keyup", ku);
+    const onBlur = () => {
+      releaseAll();
+      setCaptured(false);
+    };
+
+    window.addEventListener("keydown", kd, { capture: true });
+    window.addEventListener("keyup", ku, { capture: true });
+    window.addEventListener("blur", onBlur);
     return () => {
-      window.removeEventListener("keydown", kd);
-      window.removeEventListener("keyup", ku);
+      releaseAll();
+      window.removeEventListener("keydown", kd, { capture: true });
+      window.removeEventListener("keyup", ku, { capture: true });
+      window.removeEventListener("blur", onBlur);
     };
   }, [captured]);
 
@@ -148,6 +221,12 @@ export const ScreenDisplayApp: React.FC = () => {
     const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
     const canvas = fbCanvasRef.current;
     if (!vm?.evdev || !canvas) return;
+    if (document.pointerLockElement === canvas) {
+      if (e.movementX !== 0 || e.movementY !== 0) {
+        vm.evdev.move(e.movementX, e.movementY);
+      }
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
     const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / Math.max(1, rect.height)));
@@ -155,10 +234,21 @@ export const ScreenDisplayApp: React.FC = () => {
   };
 
   const handleFbButton = (down: boolean) => (e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     setCaptured(true);
     const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
     const btn = domButtonToLinux(e.button);
     if (vm?.evdev && btn) vm.evdev.button(btn, down);
+  };
+
+  const togglePointerLock = () => {
+    const canvas = fbCanvasRef.current;
+    if (!canvas) return;
+    if (document.pointerLockElement === canvas) {
+      document.exitPointerLock();
+    } else {
+      canvas.requestPointerLock?.();
+    }
   };
 
   const runDemo = (cmd: string, label: string) => {
@@ -293,14 +383,17 @@ export const ScreenDisplayApp: React.FC = () => {
           onMouseMove={handleFbPointer}
           onMouseDown={handleFbButton(true)}
           onMouseUp={handleFbButton(false)}
+          onContextMenu={(e) => e.preventDefault()}
+          onDoubleClick={togglePointerLock}
           onWheel={(e) => {
+            e.preventDefault();
             const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
             vm?.evdev?.wheel(e.deltaY > 0 ? -1 : 1);
           }}
           className="max-w-full max-h-full object-contain cursor-crosshair"
         />
 
-        {!vmState.displayMode && (
+        {!vmState.displayMode && !scanoutActive && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm text-center p-6 space-y-3 pointer-events-none">
             <Monitor className="w-10 h-10 text-pink-400/80" />
             <div className="space-y-1 max-w-sm">
@@ -315,7 +408,9 @@ export const ScreenDisplayApp: React.FC = () => {
         <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[11px] font-mono pointer-events-none">
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded-full bg-black/75 border border-white/15 text-zinc-300">
-              {vmState.displayMode
+              {scanoutActive
+                ? `${scanoutActive.width}×${scanoutActive.height} (${scanoutActive.kind === "3d-gl" ? "3D VirGL" : "/dev/fb0"})`
+                : vmState.displayMode
                 ? `${vmState.displayMode.width}×${vmState.displayMode.height}`
                 : `${cfg.displayWidth}×${cfg.displayHeight} (idle)`}
             </span>
@@ -325,7 +420,11 @@ export const ScreenDisplayApp: React.FC = () => {
             </span>
           </div>
           <span className="px-2 py-0.5 rounded-full bg-black/75 border border-white/15 text-zinc-400">
-            {captured ? "Input Captured (Shift+Esc to release)" : "Click canvas to send evdev keys"}
+            {pointerLocked
+              ? "Pointer Locked + Keyboard Captured (Esc / Shift+Esc)"
+              : captured
+              ? "evdev Captured (Shift+Esc release · Dbl-click Pointer Lock)"
+              : "Click canvas for evdev keys/mouse · Dbl-click Pointer Lock"}
           </span>
         </div>
       </div>
