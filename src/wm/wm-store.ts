@@ -306,6 +306,7 @@ export interface WindowInstance {
   readonly zIndex: number;
   readonly minimized: boolean;
   readonly maximized: boolean;
+  readonly pinned?: boolean;
   readonly snap: SnapZone;
   readonly props?: Record<string, unknown>;
 }
@@ -350,6 +351,7 @@ interface WmState {
   readonly controlCenterOpen: boolean;
   readonly launcherOpen: boolean;
   readonly notificationCenterOpen: boolean;
+  readonly clipboardOpen: boolean;
   readonly locked: boolean;
   readonly contextMenu: ContextMenuState | null;
   readonly previewPort: number;
@@ -414,6 +416,7 @@ class WindowManagerStore {
     controlCenterOpen: false,
     launcherOpen: false,
     notificationCenterOpen: false,
+    clipboardOpen: false,
     locked: false,
     contextMenu: null,
     previewPort: 3000,
@@ -674,6 +677,32 @@ class WindowManagerStore {
           : w
       ),
     }));
+  }
+
+  public togglePinWindow(id: string, pinned?: boolean): void {
+    uiSounds.playClick();
+    const zIndex = ++this.zCounter;
+    this.setState((s) => ({
+      ...s,
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, pinned: pinned ?? !w.pinned, zIndex } : w
+      ),
+    }));
+  }
+
+  public setClipboardOpen(open: boolean): void {
+    if (open) uiSounds.playClick();
+    this.setState((s) => ({
+      ...s,
+      clipboardOpen: open,
+      commandPaletteOpen: false,
+      controlCenterOpen: false,
+      contextMenu: null,
+    }));
+  }
+
+  public toggleClipboard(): void {
+    this.setClipboardOpen(!this.state.clipboardOpen);
   }
 
   public snapWindow(id: string, snap: SnapZone): void {

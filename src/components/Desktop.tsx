@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { X } from "lucide-react";
 import React, { useCallback, useEffect, useRef } from "react";
 import { attachAgentOsBridge, detachAgentOsBridge } from "../core/agent-os-api.ts";
+import { clipboardStore } from "../core/clipboard-store.ts";
 import { applyOsThemeToDocument } from "../core/os-themes.ts";
 import {
   appRuntime,
@@ -18,6 +19,7 @@ import { WebGpuBackdrop } from "../gpu/webgpu-backdrop.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
 import { AppLauncherOverlay } from "./AppLauncherOverlay.tsx";
 import { BootOverlay } from "./BootOverlay.tsx";
+import { ClipboardOverlay } from "./ClipboardOverlay.tsx";
 import { CommandPalette } from "./CommandPalette.tsx";
 import { ContextMenu } from "./ContextMenu.tsx";
 import { ControlCenter } from "./ControlCenter.tsx";
@@ -30,6 +32,7 @@ import { MobileNavBar } from "./MobileNavBar.tsx";
 import { NotificationCenter } from "./NotificationCenter.tsx";
 import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
+import { VoiceOrbOverlay } from "./VoiceOrbOverlay.tsx";
 import { WindowFrame } from "./WindowFrame.tsx";
 import { WindowSwitcherHud } from "./WindowSwitcherHud.tsx";
 import { AgentApiApp } from "./apps/AgentApiApp.tsx";
@@ -360,14 +363,27 @@ export const Desktop: React.FC = () => {
         wmStore.setLocked(true);
         return;
       }
+      if (k === "v" && e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        wmStore.toggleClipboard();
+        return;
+      }
       const appId = shortcutMap[k];
       if (appId && !e.shiftKey && !e.altKey && e.metaKey) {
         e.preventDefault();
         wmStore.openApp(appId);
       }
     };
+    const onCopy = () => {
+      const sel = window.getSelection()?.toString();
+      if (sel && sel.trim()) clipboardStore.record(sel, "host");
+    };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("copy", onCopy);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("copy", onCopy);
+    };
   }, []);
 
   return (
@@ -440,6 +456,12 @@ export const Desktop: React.FC = () => {
 
       {/* Raycast-style ⌘K Command Palette */}
       <CommandPalette />
+
+      {/* Universal Clipboard History (⌘⇧V) */}
+      <ClipboardOverlay />
+
+      {/* Futuristic Voice OS Reactive Orb */}
+      <VoiceOrbOverlay />
 
       {/* 1-Click GitHub OAuth Device Flow Modal */}
       <GithubConnectModal />

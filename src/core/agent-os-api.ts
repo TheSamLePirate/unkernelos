@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { useSyncExternalStore } from "react";
 import type { HostCommandContext, KernelHandle } from "unkernel";
+import { clipboardStore } from "./clipboard-store.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "./os-themes.ts";
 import { pwaStore } from "./pwa-service.ts";
 import {
@@ -110,13 +111,20 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
   {
     method: "system.clipboard.write",
     category: "system",
-    summary: "Write text directly to the user's host OS clipboard.",
+    summary: "Write text directly to the user's host OS clipboard and record in Clipboard History.",
     paramsSchema: {
       type: "object",
       required: ["text"],
       properties: { text: { type: "string" } },
     },
     example: { text: "Hello from unkernelOS Agent!" },
+  },
+  {
+    method: "system.clipboard.history",
+    category: "system",
+    summary: "Read the persistent Universal Clipboard History shared across host, Linux & agents.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
   },
   {
     method: "system.speak",
@@ -263,6 +271,20 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
       },
     },
     example: { windowId: "ide-abc12", zone: "left" },
+  },
+  {
+    method: "wm.pin",
+    category: "wm",
+    summary: "Pin or unpin a window as Always-on-Top Picture-in-Picture (PiP).",
+    paramsSchema: {
+      type: "object",
+      required: ["windowId"],
+      properties: {
+        windowId: { type: "string" },
+        pinned: { type: "boolean" },
+      },
+    },
+    example: { windowId: "preview-abc12", pinned: true },
   },
   {
     method: "wm.moveResize",
@@ -770,8 +792,13 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
 
     case "system.clipboard.write": {
       const text = String(p.text ?? "");
-      await navigator.clipboard.writeText(text);
+      clipboardStore.record(text, "agent");
+      await navigator.clipboard.writeText(text).catch(() => {});
       return { written: true, length: text.length };
+    }
+
+    case "system.clipboard.history": {
+      return { entries: clipboardStore.getSnapshot() };
     }
 
     case "system.speak": {
@@ -939,6 +966,13 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       if (!windowId) throw new Error("windowId is required");
       wmStore.snapWindow(windowId, zone);
       return { windowId, zone };
+    }
+
+    case "wm.pin": {
+      const windowId = String(p.windowId ?? "");
+      if (!windowId) throw new Error("windowId is required");
+      wmStore.togglePinWindow(windowId, typeof p.pinned === "boolean" ? p.pinned : undefined);
+      return { windowId, pinned: p.pinned ?? true };
     }
 
     case "wm.moveResize": {

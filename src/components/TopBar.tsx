@@ -7,6 +7,7 @@ import {
   GitBranch,
   Globe,
   Layers,
+  Mic,
   SlidersHorizontal,
   Volume2,
   VolumeX,
@@ -16,7 +17,9 @@ import React, { useEffect, useState } from "react";
 import { INITIAL_GITHUB_AUTH } from "../core/github-auth-service.ts";
 import { pwaStore, usePwa } from "../core/pwa-service.ts";
 import { appRuntime, GithubAuthService, useSubscriptionRef, VmService } from "../core/runtime.ts";
+import { voiceOsEngine } from "../core/voice-os.ts";
 import { APP_CATALOG, useWm, wmStore, type WorkspaceId } from "../wm/wm-store.ts";
+import { DynamicIsland } from "./DynamicIsland.tsx";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher.tsx";
 
 const WORKSPACES: readonly WorkspaceId[] = [1, 2, 3, 4];
@@ -158,8 +161,19 @@ export const TopBar: React.FC = () => {
         )}
       </div>
 
+      {/* Center: Futuristic Dynamic Island Live Hub */}
+      <DynamicIsland />
+
       {/* Right: Live VM Telemetry Pills + Quick Controls + Control Center */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <button
+          type="button"
+          onClick={() => voiceOsEngine.toggleOpen()}
+          className="flex lg:hidden p-1 rounded-md text-violet-300 hover:text-white hover:bg-white/10 transition"
+          title="Voice OS"
+        >
+          <Mic className="w-3.5 h-3.5" />
+        </button>
         {/* Compact Mobile VM Telemetry Pill */}
         <button
           type="button"

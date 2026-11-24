@@ -1,4 +1,4 @@
-import { Layers, Maximize2, Minimize2, Minus, PanelLeft, PanelRight, X } from "lucide-react";
+import { Layers, Maximize2, Minimize2, Minus, PanelLeft, PanelRight, Pin, X } from "lucide-react";
 import React, { useRef } from "react";
 import { useViewport } from "../core/use-viewport.ts";
 import { APP_CATALOG, wmStore, type SnapZone, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
@@ -171,7 +171,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           width: win.width,
           height: win.height,
         }),
-    zIndex: win.zIndex,
+    zIndex: win.pinned ? win.zIndex + 5000 : win.zIndex,
     display: !visible || win.minimized ? "none" : "flex",
   };
 
@@ -279,6 +279,16 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => wmStore.togglePinWindow(win.id)}
+                title={win.pinned ? "Unpin from Always-on-Top (PiP)" : "Pin Always-on-Top (PiP)"}
+                className={`p-1 rounded hover:bg-white/10 transition ${
+                  win.pinned ? "text-amber-300 bg-amber-500/15" : "text-zinc-500 hover:text-zinc-200"
+                }`}
+              >
+                <Pin className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => wmStore.snapWindow(win.id, win.snap === "left" ? "none" : "left")}
