@@ -36,14 +36,14 @@ if [ -n "$MKFS_EROFS" ] && [ -n "$FSCK_EROFS" ]; then
 fi
 
 if [ "$needs_erofs_build" = "1" ]; then
-  echo "Building erofs-utils 1.8.5 with libzstd support..."
+  echo "Building erofs-utils 1.9.4 with libzstd support..."
   sudo apt-get update -qq
-  sudo apt-get install -y -qq build-essential autoconf automake libtool pkg-config uuid-dev libzstd-dev liblz4-dev zlib1g-dev curl tar xz-utils
-  curl -fsSL "https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.8.5.tar.gz" | tar -xz -C "$WORK_DIR"
+  sudo apt-get install -y -qq build-essential autoconf automake libtool pkg-config uuid-dev libzstd-dev liblz4-dev zlib1g-dev libxxhash-dev curl tar xz-utils
+  curl -fsSL "https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-1.9.4.tar.gz" | tar -xz -C "$WORK_DIR"
   (
-    cd "$WORK_DIR/erofs-utils-1.8.5"
+    cd "$WORK_DIR/erofs-utils-1.9.4"
     ./autogen.sh >/dev/null
-    ./configure --prefix="$EROFS_BIN_DIR" --enable-zstd --disable-lz4 --without-selinux >/dev/null
+    ./configure --prefix="$EROFS_BIN_DIR" --with-libzstd --disable-lz4 --without-selinux >/dev/null
     make -j"$(nproc)" >/dev/null
     make install >/dev/null
   )
@@ -51,6 +51,7 @@ if [ "$needs_erofs_build" = "1" ]; then
   FSCK_EROFS="$EROFS_BIN_DIR/bin/fsck.erofs"
 fi
 echo "Using mkfs.erofs: $MKFS_EROFS ($("$MKFS_EROFS" -V 2>&1 | head -n1))"
+"$MKFS_EROFS" --help 2>&1 | grep -i zstd || { echo "ERROR: mkfs.erofs built without zstd!" >&2; exit 1; }
 
 echo "=== [2/7] Extracting base Debian EROFS ($BASE_EROFS) ==="
 sudo "$FSCK_EROFS" --extract="$ROOTFS" --overwrite "$BASE_EROFS"
