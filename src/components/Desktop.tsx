@@ -37,6 +37,7 @@ import { WindowFrame } from "./WindowFrame.tsx";
 import { WindowSwitcherHud } from "./WindowSwitcherHud.tsx";
 import { AgentApiApp } from "./apps/AgentApiApp.tsx";
 import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
+import { AgentSwarmApp } from "./apps/AgentSwarmApp.tsx";
 import { ApiClientApp } from "./apps/ApiClientApp.tsx";
 import { AutomationsApp } from "./apps/AutomationsApp.tsx";
 import { CodeIdeApp } from "./apps/CodeIdeApp.tsx";
@@ -64,6 +65,8 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
   switch (win.appId) {
     case "agent-studio":
       return <AgentStudioApp windowFocused={focused} />;
+    case "agent-swarm":
+      return <AgentSwarmApp windowFocused={focused} />;
     case "agent-api":
       return <AgentApiApp />;
     case "ide":

@@ -5,6 +5,7 @@ import { waylandDesktopManager } from "../core/wayland-host.ts";
 
 export type AppId =
   | "agent-studio"
+  | "agent-swarm"
   | "agent-api"
   | "ide"
   | "terminal"
@@ -66,6 +67,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minHeight: 460,
     accent: "from-violet-500 to-fuchsia-500",
     shortcut: "⌘1",
+  },
+  "agent-swarm": {
+    id: "agent-swarm",
+    title: "Multi-Agent Swarm Ops",
+    shortTitle: "Swarm",
+    description: "Run parallel Claude Code & Pi agents in a live PTY grid with Kanban & inter-agent bus",
+    defaultWidth: 1140,
+    defaultHeight: 700,
+    minWidth: 700,
+    minHeight: 460,
+    accent: "from-fuchsia-500 via-purple-600 to-cyan-500",
   },
   "agent-api": {
     id: "agent-api",

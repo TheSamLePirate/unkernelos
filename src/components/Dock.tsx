@@ -15,6 +15,7 @@ import {
   Grid2x2,
   Layers,
   Monitor,
+  Network,
   Package,
   PenTool,
   PlayCircle,
@@ -33,6 +34,7 @@ import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
 
 const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string }>> = {
   "agent-studio": Bot,
+  "agent-swarm": Network,
   "agent-api": Workflow,
   ide: Code2,
   terminal: Terminal,
@@ -60,14 +62,13 @@ const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string }>> = {
 
 const PINNED_DOCK_IDS: readonly AppId[] = [
   "agent-studio",
+  "agent-swarm",
   "agent-api",
   "ide",
   "terminal",
   "explorer",
-  "api-client",
-  "database",
-  "services",
-  "notes",
+  "automations",
+  "media-studio",
   "preview",
   "screen",
   "git",
@@ -130,7 +131,7 @@ export const Dock: React.FC = () => {
           className="group relative flex flex-col items-center justify-end shrink-0"
         >
           <span className="pointer-events-none absolute -top-11 px-2.5 py-1 rounded-lg bg-[#0d1018]/95 border border-white/15 text-[11px] font-medium text-white whitespace-nowrap opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-xl z-20">
-            All Apps (22) <span className="ml-1 text-zinc-500 font-mono">F4</span>
+            All Apps (23) <span className="ml-1 text-zinc-500 font-mono">F4</span>
           </span>
           <div
             style={{

@@ -6,6 +6,7 @@ import { dynamicAppsStore } from "./dynamic-apps-store.ts";
 import { hostMountManager } from "./host-mount.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "./os-themes.ts";
 import { pwaStore } from "./pwa-service.ts";
+import { swarmStore } from "./swarm-store.ts";
 import { workflowsStore } from "./workflows-store.ts";
 import {
   appRuntime,
@@ -719,6 +720,62 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
       properties: { id: { type: "string" } },
     },
     example: { id: "wf-env-audit" },
+  },
+  // ─── MULTI-AGENT SWARM ORCHESTRATION ─────────────────────────────────
+  {
+    method: "swarm.status",
+    category: "system",
+    summary: "Inspect active parallel Swarm agents, Kanban tasks, and inter-agent bus messages.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "swarm.spawn",
+    category: "system",
+    summary: "Spawn a new parallel agent pane inside Multi-Agent Swarm Ops.",
+    paramsSchema: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: { type: "string" },
+        role: { type: "string" },
+        harness: { type: "string", enum: ["claude", "pi", "shell"] },
+        cwd: { type: "string" },
+        initialCommand: { type: "string" },
+      },
+    },
+    example: { name: "QA Bot", role: "E2E Tests", harness: "shell", initialCommand: "bun test" },
+  },
+  {
+    method: "swarm.post",
+    category: "system",
+    summary: "Post a message to the shared inter-agent Swarm Message Bus.",
+    paramsSchema: {
+      type: "object",
+      required: ["text"],
+      properties: {
+        from: { type: "string" },
+        to: { type: "string" },
+        text: { type: "string" },
+      },
+    },
+    example: { from: "Frontend", to: "Backend", text: "UI is live on :3000, ready for API hookup." },
+  },
+  {
+    method: "swarm.task",
+    category: "system",
+    summary: "Create or update a task on the shared Multi-Agent Swarm Kanban board.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["add", "move"] },
+        id: { type: "string" },
+        title: { type: "string" },
+        assignee: { type: "string" },
+        status: { type: "string", enum: ["todo", "doing", "done"] },
+      },
+    },
+    example: { action: "add", title: "Verify responsive layout", assignee: "QA Bot" },
   },
 ];
 
@@ -1455,6 +1512,50 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       const id = String(p.id ?? "").trim();
       if (!id) throw new Error("id is required");
       return await workflowsStore.run(id);
+    }
+
+    case "swarm.status": {
+      return swarmStore.getSnapshot();
+    }
+
+    case "swarm.spawn": {
+      const name = String(p.name ?? "Worker").trim();
+      const harness = (["claude", "pi", "shell"].includes(String(p.harness))
+        ? String(p.harness)
+        : "claude") as "claude" | "pi" | "shell";
+      const worker = swarmStore.addWorker({
+        name,
+        role: String(p.role || "Specialist"),
+        harness,
+        cwd: String(p.cwd || wmStore.getSnapshot().activeWorkspaceDir),
+        initialCommand: typeof p.initialCommand === "string" ? p.initialCommand : undefined,
+      });
+      wmStore.openApp("agent-swarm");
+      return { spawned: worker };
+    }
+
+    case "swarm.post": {
+      const text = String(p.text ?? "").trim();
+      if (!text) throw new Error("text is required");
+      const msg = swarmStore.postMessage(String(p.from || "agent"), String(p.to || "all"), text);
+      return { posted: msg };
+    }
+
+    case "swarm.task": {
+      const action = String(p.action ?? "add");
+      if (action === "move") {
+        const id = String(p.id ?? "");
+        const status = (["todo", "doing", "done"].includes(String(p.status))
+          ? String(p.status)
+          : "done") as "todo" | "doing" | "done";
+        if (!id) throw new Error("id is required for move");
+        swarmStore.moveTask(id, status);
+        return { moved: id, status };
+      }
+      const title = String(p.title ?? "").trim();
+      if (!title) throw new Error("title is required");
+      const task = swarmStore.addTask(title, String(p.assignee || "all"));
+      return { created: task };
     }
 
     default:
