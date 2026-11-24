@@ -2,12 +2,15 @@ import { Effect } from "effect";
 import {
   Activity,
   Bot,
+  Code2,
+  FileText,
   FolderOpen,
   GitBranch,
   Globe,
   Layers,
   Monitor,
   Package,
+  Send,
   Settings,
   Terminal,
 } from "lucide-react";
@@ -18,8 +21,11 @@ import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
 
 const DOCK_ITEMS: readonly { id: AppId; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "agent-studio", icon: Bot },
+  { id: "ide", icon: Code2 },
   { id: "terminal", icon: Terminal },
   { id: "explorer", icon: FolderOpen },
+  { id: "api-client", icon: Send },
+  { id: "notes", icon: FileText },
   { id: "preview", icon: Globe },
   { id: "screen", icon: Monitor },
   { id: "git", icon: GitBranch },

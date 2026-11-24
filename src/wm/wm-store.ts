@@ -3,8 +3,11 @@ import { uiSounds } from "../core/ui-sounds.ts";
 
 export type AppId =
   | "agent-studio"
+  | "ide"
   | "terminal"
   | "explorer"
+  | "api-client"
+  | "notes"
   | "preview"
   | "screen"
   | "git"
@@ -50,6 +53,18 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     accent: "from-violet-500 to-fuchsia-500",
     shortcut: "⌘1",
   },
+  ide: {
+    id: "ide",
+    title: "Code IDE",
+    shortTitle: "Code",
+    description: "Multi-tab code editor with syntax highlighting, ripgrep search & integrated terminal",
+    defaultWidth: 1100,
+    defaultHeight: 680,
+    minWidth: 680,
+    minHeight: 440,
+    accent: "from-sky-500 to-indigo-600",
+    shortcut: "⌘9",
+  },
   terminal: {
     id: "terminal",
     title: "Kitty Terminal (WebGPU)",
@@ -73,6 +88,28 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minHeight: 380,
     accent: "from-amber-400 to-orange-500",
     shortcut: "⌘3",
+  },
+  "api-client": {
+    id: "api-client",
+    title: "HTTP / API Client",
+    shortTitle: "API",
+    description: "Bruno/Insomnia-style REST client for guest VM servers (vsock) & external APIs",
+    defaultWidth: 1020,
+    defaultHeight: 650,
+    minWidth: 620,
+    minHeight: 420,
+    accent: "from-teal-400 to-cyan-600",
+  },
+  notes: {
+    id: "notes",
+    title: "Notes & Markdown Studio",
+    shortTitle: "Notes",
+    description: "Split Markdown studio with live preview & checklists persisted in ~/notes",
+    defaultWidth: 960,
+    defaultHeight: 620,
+    minWidth: 580,
+    minHeight: 400,
+    accent: "from-amber-500 to-rose-500",
   },
   preview: {
     id: "preview",

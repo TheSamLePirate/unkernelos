@@ -27,9 +27,12 @@ import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
 import { WindowFrame } from "./WindowFrame.tsx";
 import { AgentStudioApp } from "./apps/AgentStudioApp.tsx";
+import { ApiClientApp } from "./apps/ApiClientApp.tsx";
+import { CodeIdeApp } from "./apps/CodeIdeApp.tsx";
 import { FileExplorerApp } from "./apps/FileExplorerApp.tsx";
 import { GitApp } from "./apps/GitApp.tsx";
 import { KittyTerminalApp } from "./apps/KittyTerminalApp.tsx";
+import { NotesStudioApp } from "./apps/NotesStudioApp.tsx";
 import { PreviewBrowserApp } from "./apps/PreviewBrowserApp.tsx";
 import { ScreenDisplayApp } from "./apps/ScreenDisplayApp.tsx";
 import { SettingsApp } from "./apps/SettingsApp.tsx";
@@ -40,10 +43,16 @@ const renderWindowApp = (win: WindowInstance, focused: boolean): React.ReactNode
   switch (win.appId) {
     case "agent-studio":
       return <AgentStudioApp windowFocused={focused} />;
+    case "ide":
+      return <CodeIdeApp windowFocused={focused} />;
     case "terminal":
       return <KittyTerminalApp windowFocused={focused} />;
     case "explorer":
       return <FileExplorerApp />;
+    case "api-client":
+      return <ApiClientApp />;
+    case "notes":
+      return <NotesStudioApp />;
     case "preview":
       return <PreviewBrowserApp />;
     case "screen":
@@ -154,6 +163,7 @@ export const Desktop: React.FC = () => {
       "6": "git",
       "7": "toolchain",
       "8": "monitor",
+      "9": "ide",
       ",": "settings",
     };
 
