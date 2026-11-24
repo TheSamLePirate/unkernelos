@@ -13,6 +13,9 @@ export interface KittyTerminalHandle {
   write: (data: string) => void;
   focus: () => void;
   clear: () => void;
+  search: (query: string, dir?: 1 | -1) => { total: number; current: number };
+  clearSearch: () => void;
+  getVisibleText: () => string;
 }
 
 interface KittyTerminalPaneProps {
@@ -22,6 +25,7 @@ interface KittyTerminalPaneProps {
   initialCommand?: string;
   cwd?: string;
   focused?: boolean;
+  forceTouchBar?: boolean;
   onFocus?: () => void;
   onReady?: (handle: KittyTerminalHandle) => void;
   onTitleChange?: (title: string) => void;
@@ -133,6 +137,7 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   initialCommand,
   cwd,
   focused = true,
+  forceTouchBar = false,
   onFocus,
   onReady,
   onTitleChange,
@@ -151,10 +156,11 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   const [hasDomFocus, setHasDomFocus] = useState(false);
   const [ctrlArmed, setCtrlArmed] = useState(false);
   const { isMobile, isTouch } = useViewport();
-  const showTouchBar = isMobile || isTouch;
+  const showTouchBar = forceTouchBar || isMobile || isTouch;
   const recentDeviceCodeRef = useRef<string | null>(null);
   const recentTextRef = useRef<string>("");
   const touchScrollYRef = useRef<number | null>(null);
+  const searchStateRef = useRef<{ query: string; index: number }>({ query: "", index: -1 });
 
   const focusInput = () => {
     const el = inputRef.current;
@@ -249,10 +255,73 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
 
     const apiHandle: KittyTerminalHandle = {
       write: writeToPty,
-      focus: () => inputRef.current?.focus(),
+      focus: () => inputRef.current?.focus({ preventScroll: true }),
       clear: () => {
         term.clear();
+        renderer.selection = null;
         renderer.markDirty();
+      },
+      search: (query, dir = 1) => {
+        const q = query.trim().toLowerCase();
+        if (!q) {
+          renderer.selection = null;
+          searchStateRef.current = { query: "", index: -1 };
+          renderer.markDirty();
+          return { total: 0, current: 0 };
+        }
+        const buf = term.buffer.active;
+        const matches: { absRow: number; col: number; len: number }[] = [];
+        for (let r = 0; r < buf.length; r++) {
+          const line = buf.getLine(r);
+          if (!line) continue;
+          const txt = line.translateToString(true);
+          const low = txt.toLowerCase();
+          let pos = low.indexOf(q);
+          while (pos !== -1) {
+            matches.push({ absRow: r, col: pos, len: q.length });
+            pos = low.indexOf(q, pos + q.length);
+          }
+        }
+        if (matches.length === 0) {
+          renderer.selection = null;
+          searchStateRef.current = { query: q, index: -1 };
+          renderer.markDirty();
+          return { total: 0, current: 0 };
+        }
+        let nextIdx =
+          searchStateRef.current.query === q && searchStateRef.current.index >= 0
+            ? (searchStateRef.current.index + dir + matches.length) % matches.length
+            : dir < 0
+            ? matches.length - 1
+            : 0;
+        searchStateRef.current = { query: q, index: nextIdx };
+        const m = matches[nextIdx]!;
+        const targetTop = Math.max(0, m.absRow - Math.floor(term.rows / 2));
+        term.scrollToLine(targetTop);
+        const viewRow = Math.max(0, Math.min(term.rows - 1, m.absRow - buf.viewportY));
+        renderer.selection = {
+          startCol: m.col,
+          startRow: viewRow,
+          endCol: m.col + m.len - 1,
+          endRow: viewRow,
+        };
+        renderer.markDirty();
+        return { total: matches.length, current: nextIdx + 1 };
+      },
+      clearSearch: () => {
+        renderer.selection = null;
+        searchStateRef.current = { query: "", index: -1 };
+        renderer.markDirty();
+      },
+      getVisibleText: () => {
+        const buf = term.buffer.active;
+        const lines: string[] = [];
+        const start = Math.max(0, buf.length - 300);
+        for (let r = start; r < buf.length; r++) {
+          const line = buf.getLine(r);
+          if (line) lines.push(line.translateToString(true));
+        }
+        return lines.join("\n").trimEnd();
       },
     };
     onReady?.(apiHandle);
