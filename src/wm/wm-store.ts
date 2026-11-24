@@ -9,6 +9,7 @@ export type AppId =
   | "agent-api"
   | "ide"
   | "notebook"
+  | "microml"
   | "terminal"
   | "explorer"
   | "api-client"
@@ -115,6 +116,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minWidth: 640,
     minHeight: 440,
     accent: "from-orange-500 via-amber-500 to-cyan-500",
+  },
+  microml: {
+    id: "microml",
+    title: "microML Compiler Explorer",
+    shortTitle: "microML",
+    description: "coucou747's mini-OCaml compiler: every pass, types vs real OCaml, generated C & native run",
+    defaultWidth: 1180,
+    defaultHeight: 720,
+    minWidth: 680,
+    minHeight: 460,
+    accent: "from-amber-400 via-orange-500 to-violet-600",
   },
   terminal: {
     id: "terminal",
@@ -425,6 +437,11 @@ export interface TerminalLaunchRequest {
   readonly title?: string;
 }
 
+export interface MicromlDraft {
+  readonly id: number;
+  readonly source: string;
+}
+
 export interface ApiClientDraft {
   readonly id: number;
   readonly method: string;
@@ -456,6 +473,7 @@ interface WmState {
   readonly mediaOpenFilePath: string | null;
   readonly notebookOpenFilePath: string | null;
   readonly apiClientDraft: ApiClientDraft | null;
+  readonly micromlDraft: MicromlDraft | null;
   readonly explorerTargetDir: string | null;
   readonly terminalLaunchRequest: TerminalLaunchRequest | null;
   readonly toasts: readonly ToastItem[];
@@ -524,6 +542,7 @@ class WindowManagerStore {
     mediaOpenFilePath: null,
     notebookOpenFilePath: null,
     apiClientDraft: null,
+    micromlDraft: null,
     explorerTargetDir: null,
     terminalLaunchRequest: null,
     toasts: [],
@@ -1047,6 +1066,16 @@ class WindowManagerStore {
   public clearApiClientDraft(id: number): void {
     if (this.state.apiClientDraft?.id !== id) return;
     this.setState((s) => ({ ...s, apiClientDraft: null }));
+  }
+
+  public openInMicroml(source: string): void {
+    this.setState((s) => ({ ...s, micromlDraft: { id: ++this.terminalReqCounter, source } }));
+    this.openApp("microml");
+  }
+
+  public clearMicromlDraft(id: number): void {
+    if (this.state.micromlDraft?.id !== id) return;
+    this.setState((s) => ({ ...s, micromlDraft: null }));
   }
 
   public openDirInIde(dir: string): void {

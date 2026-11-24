@@ -1,6 +1,15 @@
 import { Context, Effect, Layer, SubscriptionRef } from "effect";
 import { ToolchainError } from "./errors.ts";
 import { VmService } from "./vm-service.ts";
+import installMicromlScript from "../../scripts/guest/install-microml.sh?raw";
+
+/** Base64 (UTF-8 safe) so a multi-line script survives a single `sh -c` line. */
+const toB64 = (txt: string): string => {
+  const bytes = new TextEncoder().encode(txt);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  return btoa(bin);
+};
 
 export type ToolId =
   | "git"
@@ -12,6 +21,7 @@ export type ToolId =
   | "bun"
   | "rust"
   | "ocaml"
+  | "microml"
   | "sqlite"
   | "claude"
   | "pi"
@@ -128,6 +138,18 @@ export const TOOLCHAIN_SPECS: readonly ToolSpec[] = [
     versionCmd: "ocaml -version",
     installDebian: "sudo apt-get update && sudo apt-get install -y ocaml ocaml-dune gcc libc6-dev",
     installAlpine: "sudo apk add --no-cache ocaml dune build-base",
+  },
+  {
+    id: "microml",
+    name: "microML Compiler (coucou747)",
+    category: "runtime",
+    description: "Mini-OCaml compiler: typer, pattern matching, closures, C backend + Poule proof language",
+    approxSize: "~14 MB",
+    debianOnly: true,
+    checkCmd: "[ -x /opt/microml/bin/microml.exe ] && [ -x /usr/local/bin/microml ]",
+    versionCmd: 'echo "microML $(cat /opt/microml/VERSION)"',
+    installDebian: `sudo apt-get update && sudo apt-get install -y --no-install-recommends ocaml ocaml-dune menhir libmenhir-ocaml-dev gcc libc6-dev git ca-certificates && printf '%s' '${toB64(installMicromlScript)}' | base64 -d | sudo sh`,
+    installAlpine: "echo 'microML requires the Debian distro (menhir + dune packages)' >&2; exit 1",
   },
   {
     id: "py-science",

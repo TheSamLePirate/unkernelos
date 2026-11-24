@@ -63,7 +63,7 @@ sudo mount --bind /dev/pts "$ROOTFS/dev/pts"
 sudo mount -t proc proc "$ROOTFS/proc"
 sudo mount -t sysfs sysfs "$ROOTFS/sys"
 
-echo "=== [4/7] Installing Debian packages (git, gh, python3, science, rust, ocaml, sqlite3, mesa/gl, foot) ==="
+echo "=== [4/7] Installing Debian packages (git, gh, python3, science, rust, ocaml+menhir, sqlite3, mesa/gl, foot) ==="
 sudo chroot "$ROOTFS" /bin/bash -euxo pipefail <<'CHROOT_APT'
 export DEBIAN_FRONTEND=noninteractive
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -85,6 +85,8 @@ apt-get install -y --no-install-recommends \
   cargo \
   ocaml \
   ocaml-dune \
+  menhir \
+  libmenhir-ocaml-dev \
   curl \
   ca-certificates \
   jq \
@@ -166,6 +168,11 @@ which pi && (pi --version || true)
 claude --version
 which eglinfo kmscube foot
 CHROOT_TOOLS
+
+echo "=== [5b/7] Building microML compiler (github.com/coucou747/microML) into /opt/microml ==="
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+sudo install -m 755 "$SCRIPT_DIR/guest/install-microml.sh" "$ROOTFS/tmp/install-microml.sh"
+sudo chroot "$ROOTFS" /bin/sh -c 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; sh /tmp/install-microml.sh && rm -f /tmp/install-microml.sh'
 
 echo "=== [6/7] Updating image metadata & unmounting chroot ==="
 NEW_ID="debian-unkernelos-$(date -u +%Y%m%d%H%M)"

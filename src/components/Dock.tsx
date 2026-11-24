@@ -41,6 +41,7 @@ const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string }>> = {
   "agent-api": Workflow,
   ide: Code2,
   notebook: BookOpen,
+  microml: Layers,
   terminal: Terminal,
   explorer: FolderOpen,
   "api-client": Send,

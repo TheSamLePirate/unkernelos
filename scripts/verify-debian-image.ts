@@ -29,6 +29,7 @@ try {
       'echo "CARGO=$(cargo --version)"',
       'echo "OCAML=$(ocaml -version)"',
       'echo "DUNE=$(dune --version)"',
+      'echo "MICROML=$(cat /opt/microml/VERSION) t04=$(microml --eval /opt/microml/examples/t04.ml)"',
       'echo "NODE=$(node --version)"',
       'echo "NPM=$(npm --version)"',
       'echo "BUN=$(bun --version)"',

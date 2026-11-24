@@ -10,6 +10,7 @@ import {
   Eraser,
   FolderOpen,
   Image as ImageIcon,
+  Layers,
   Loader2,
   Play,
   PlayCircle,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { executeOsAction } from "../../core/agent-os-api.ts";
+import { runMicroml } from "../../core/microml-runner.ts";
 import { appRuntime, GuestFsService, VmService } from "../../core/runtime.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
 
@@ -29,6 +31,7 @@ export type CellLang =
   | "python"
   | "rust"
   | "ocaml"
+  | "microml"
   | "bun"
   | "sql"
   | "bash"
@@ -83,6 +86,12 @@ const LANG_META: Record<
     short: "ML",
     badge: "bg-amber-500/20 text-amber-300 border-amber-400/35",
     dot: "bg-amber-400",
+  },
+  microml: {
+    label: "microML (coucou747)",
+    short: "μML",
+    badge: "bg-orange-500/20 text-orange-200 border-orange-400/40",
+    dot: "bg-orange-400",
   },
   bun: {
     label: "Bun / TypeScript",
@@ -306,6 +315,62 @@ let () =
   Printf.printf "Fib(0..14): %s\\n"
     (String.concat ", " (List.init 15 (fun i -> string_of_int (fib i))))
 `,
+      },
+    ],
+  },
+  {
+    id: "microml-lab",
+    title: "microML Compiler Lab",
+    badge: "microML",
+    description: "coucou747's mini-OCaml compiler: inferred types, interpreter runs & a one-click jump to every compiler pass",
+    cells: [
+      {
+        lang: "markdown",
+        source:
+          "# microML Compiler Lab\n[microML](https://github.com/coucou747/microML) is a small OCaml-like compiler written in OCaml by **coucou747**: polymorphic type inference, sum types, tuples, closures, pattern matching and a C backend.\n\nEach `μML` cell is type-checked and interpreted inside Linux; its inferred top-level types appear as a table. Click **Explore** on a cell to watch every compiler pass, the generated C and the native binary in the Compiler Explorer.",
+      },
+      {
+        lang: "microml",
+        source: `external print_int : int -> unit = "prim_print_int_clot"
+
+type nat = Zero | Succ of nat
+
+let rec of_int n = if n = 0 then Zero else Succ (of_int (n - 1))
+
+let rec to_int n =
+  match n with
+  | Zero -> 0
+  | Succ m -> 1 + to_int m
+
+let rec add a b =
+  match a with
+  | Zero -> b
+  | Succ m -> Succ (add m b)
+
+let out = print_int (to_int (add (of_int 19) (of_int 23)))`,
+      },
+      {
+        lang: "markdown",
+        source:
+          "## Let-polymorphism\nA `let`-bound function is generalised and can be used at several types; a `fun`-bound parameter cannot. The next two cells show both sides.",
+      },
+      {
+        lang: "microml",
+        source: `external print_int : int -> unit = "prim_print_int_clot"
+
+let id x = x
+let pair = (id 1, id true)
+let out = match pair with (n, _) -> print_int n`,
+      },
+      {
+        lang: "microml",
+        source: `let rejected =
+  let use_twice = fun f -> (f 0, f true) in
+  use_twice`,
+      },
+      {
+        lang: "bash",
+        source: `cat /opt/microml/VERSION 2>/dev/null && ls /opt/microml/examples || echo "microML not installed (App Store → Linux Toolchains)"`,
       },
     ],
   },
@@ -606,6 +671,39 @@ export const NotebookApp: React.FC = () => {
           return;
         }
 
+        if (cell.lang === "microml") {
+          const res = await appRuntime.runPromise(Effect.either(runMicroml(cell.source, "cell")));
+          const durationMs = Math.round(performance.now() - t0);
+          const blank = { stdout: "", stderr: "", exitCode: 0, durationMs, images: [], tables: [] };
+          let output: CellOutput;
+          if (res._tag === "Left") {
+            const e = res.left as { _tag?: string; stderr?: string; message?: string };
+            output = { ...blank, stderr: e.stderr || e.message || String(e._tag), exitCode: 1 };
+          } else if (!res.right.installed) {
+            output = {
+              ...blank,
+              stderr: "microML is not installed in this VM. Install it from the App Store → Linux Toolchains (Debian).",
+              exitCode: 127,
+            };
+          } else if (res.right.error) {
+            const { message, loc } = res.right.error;
+            output = { ...blank, stderr: loc ? `line ${loc.line}:${loc.col}  ${message}` : message, exitCode: 2 };
+          } else {
+            const r = res.right;
+            output = {
+              ...blank,
+              stdout: r.evalRun?.stdout ?? "",
+              stderr: r.evalRun?.stderr ?? "",
+              exitCode: r.evalRun?.exitCode ?? 0,
+              tables: r.types.length ? [r.types.map((t) => ({ val: t.name ?? t.vname, type: t.microml }))] : [],
+            };
+          }
+          setCells((prev) =>
+            prev.map((c) => (c.id === cell.id ? { ...c, running: false, execCount: execNo, output } : c))
+          );
+          return;
+        }
+
         const token = `nb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
         const b64 = (txt: string) => {
           const bytes = new TextEncoder().encode(txt);
@@ -746,6 +844,7 @@ export const NotebookApp: React.FC = () => {
       python: "import math\nprint('π =', round(math.pi, 6))",
       rust: 'println!("Hello from native aarch64 Rust!");',
       ocaml: 'Printf.printf "Hello from OCaml! 6 * 7 = %d\\n" (6 * 7);;',
+      microml: 'external print_int : int -> unit = "prim_print_int_clot"\n\nlet square x = x * x\nlet out = print_int (square 7)',
       bun: 'console.log("Bun", Bun.version, new Date().toISOString());',
       sql: "SELECT sqlite_version() AS version, datetime('now') AS utc_now;",
       bash: "uname -a && ls -la",
@@ -1024,6 +1123,17 @@ export const NotebookApp: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {cell.lang === "microml" && (
+                      <button
+                        type="button"
+                        onClick={() => wmStore.openInMicroml(cell.source)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-orange-500/15 hover:bg-orange-500/25 border border-orange-400/35 text-orange-200 transition"
+                        title="Open this cell in the microML Compiler Explorer (every pass, C, native run)"
+                      >
+                        <Layers className="w-3 h-3" />
+                        Explore
+                      </button>
+                    )}
                     {cell.lang !== "markdown" ? (
                       <button
                         type="button"
@@ -1228,7 +1338,7 @@ export const NotebookApp: React.FC = () => {
 
           {/* Bottom Quick-Add Bar */}
           <div className="flex items-center justify-center gap-1.5 flex-wrap pt-2 pb-6">
-            {(["python", "rust", "ocaml", "bun", "sql", "bash", "osctl", "markdown"] as CellLang[]).map(
+            {(["python", "rust", "ocaml", "microml", "bun", "sql", "bash", "osctl", "markdown"] as CellLang[]).map(
               (lang) => (
                 <button
                   key={lang}

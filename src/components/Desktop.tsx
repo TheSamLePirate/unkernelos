@@ -53,6 +53,7 @@ const GitApp = lazy(() => import("./apps/GitApp.tsx").then((m) => ({ default: m.
 const GlViewportWindow = lazy(() => import("./apps/GlViewportWindow.tsx").then((m) => ({ default: m.GlViewportWindow })));
 const KittyTerminalApp = lazy(() => import("./apps/KittyTerminalApp.tsx").then((m) => ({ default: m.KittyTerminalApp })));
 const MediaStudioApp = lazy(() => import("./apps/MediaStudioApp.tsx").then((m) => ({ default: m.MediaStudioApp })));
+const MicromlExplorerApp = lazy(() => import("./apps/MicromlExplorerApp.tsx").then((m) => ({ default: m.MicromlExplorerApp })));
 const NetworkInspectorApp = lazy(() => import("./apps/NetworkInspectorApp.tsx").then((m) => ({ default: m.NetworkInspectorApp })));
 const NotebookApp = lazy(() => import("./apps/NotebookApp.tsx").then((m) => ({ default: m.NotebookApp })));
 const NotesStudioApp = lazy(() => import("./apps/NotesStudioApp.tsx").then((m) => ({ default: m.NotesStudioApp })));
@@ -87,6 +88,8 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
       return <CodeIdeApp windowFocused={focused} />;
     case "notebook":
       return <NotebookApp />;
+    case "microml":
+      return <MicromlExplorerApp />;
     case "terminal":
       return <KittyTerminalApp windowFocused={focused} />;
     case "explorer":
