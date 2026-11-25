@@ -42,6 +42,7 @@ import { VoiceOrbOverlay } from "./VoiceOrbOverlay.tsx";
 import { WindowErrorBoundary } from "./WindowErrorBoundary.tsx";
 import { WindowFrame } from "./WindowFrame.tsx";
 import { WindowSwitcherHud } from "./WindowSwitcherHud.tsx";
+import type { SettingsTab } from "./apps/SettingsApp.tsx";
 
 // Code-split all 23+ WebOS apps via React.lazy for ultra-fast initial boot & PWA load!
 const AgentApiApp = lazy(() => import("./apps/AgentApiApp.tsx").then((m) => ({ default: m.AgentApiApp })));
@@ -156,20 +157,7 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
     case "rune-settings":
       return <RuneLiquidSettingsApp />;
     case "settings":
-      return (
-        <SettingsApp
-          initialTab={
-            win.props?.tab as
-              | "appearance"
-              | "compute"
-              | "network"
-              | "graphics"
-              | "storage"
-              | "credentials"
-              | undefined
-          }
-        />
-      );
+      return <SettingsApp initialTab={win.props?.tab as SettingsTab | undefined} />;
   }
 };
 
