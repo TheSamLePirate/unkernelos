@@ -911,11 +911,11 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
   {
     method: "mod.decorator.set",
     category: "theme",
-    summary: "Live-mod the Window Decorator: style (macos, windows, cyber-hud, retro-95, minimal-swiss, floating-zen, tiling-i3), buttonPosition, radiusPx, titlebarHeightPx, titlebarAccentBar, activeGlowPx.",
+    summary: "Live-mod Window Decorator across 14 styles (macos, macos-classic, windows-95, windows-xp, windows-11, gnome-adwaita, kde-breeze, xfce-lxde, compiz-emerald, visionos-glass, cyber-hud, minimal-swiss, floating-zen, tiling-i3).",
     paramsSchema: {
       type: "object",
       properties: {
-        style: { type: "string", enum: ["macos", "windows", "cyber-hud", "retro-95", "minimal-swiss", "floating-zen", "tiling-i3"] },
+        style: { type: "string", enum: ["macos", "macos-classic", "windows-95", "windows-xp", "windows-11", "gnome-adwaita", "kde-breeze", "xfce-lxde", "compiz-emerald", "visionos-glass", "cyber-hud", "minimal-swiss", "floating-zen", "tiling-i3"] },
         buttonPosition: { type: "string", enum: ["left", "right"] },
         radiusPx: { type: "number" },
         borderWidthPx: { type: "number" },
@@ -928,33 +928,39 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
         unfocusedOpacity: { type: "number" },
       },
     },
-    example: { style: "cyber-hud", buttonPosition: "right", radiusPx: 6, titlebarAccentBar: true },
+    example: { style: "compiz-emerald", buttonPosition: "right", radiusPx: 14, titlebarAccentBar: true },
   },
   {
     method: "mod.shell.set",
     category: "theme",
-    summary: "Live-mod OS Shell: dockStyle (floating-glass, full-taskbar, minimal-pill, cyber-rail, hidden), dockRadiusPx, topBarStyle, brandLabel, showStockWidgets.",
+    summary: "Live-mod OS Shell paradigm: taskbarMode (dock, win95, winxp, win11, kde-plasma, xfce-lxde, ios-springboard, visionos-ornament), dockStyle, topBarStyle, brandLabel, desktopIcons, compizWobbly, compizCube, visionOrnaments, springboardHome.",
     paramsSchema: {
       type: "object",
       properties: {
+        taskbarMode: { type: "string", enum: ["dock", "win95", "winxp", "win11", "kde-plasma", "xfce-lxde", "ios-springboard", "visionos-ornament"] },
         dockStyle: { type: "string", enum: ["floating-glass", "full-taskbar", "minimal-pill", "cyber-rail", "hidden"] },
         dockRadiusPx: { type: "number" },
-        topBarStyle: { type: "string", enum: ["glass", "floating-pills", "retro", "minimal", "hidden"] },
+        topBarStyle: { type: "string", enum: ["glass", "floating-pills", "gnome", "ios", "retro", "minimal", "hidden"] },
         brandLabel: { type: "string" },
         showStockWidgets: { type: "boolean" },
+        desktopIcons: { type: "boolean" },
+        compizWobbly: { type: "boolean" },
+        compizCube: { type: "boolean" },
+        visionOrnaments: { type: "boolean" },
+        springboardHome: { type: "boolean" },
       },
     },
-    example: { dockStyle: "cyber-rail", topBarStyle: "floating-pills", brandLabel: "AgentOS" },
+    example: { taskbarMode: "winxp", desktopIcons: true, compizWobbly: true },
   },
   {
     method: "mod.desktop3d.set",
     category: "theme",
-    summary: "Control the AAA Three.js WebGPU 3D Spatial Desktop: enabled, scene (cyber-observatory, liquid-monolith, cyberpunk-city, kyoto-sanctuary), spatialWindows, interactiveOrbit, cameraSpeed, bloomIntensity, particleDensity, mouseParallax.",
+    summary: "Control the AAA Three.js WebGPU 3D Spatial Desktop: enabled, scene (compiz-cube, vision-horizon, cyber-observatory, liquid-monolith, cyberpunk-city, kyoto-sanctuary), spatialWindows, interactiveOrbit, cameraSpeed, bloomIntensity, particleDensity, mouseParallax.",
     paramsSchema: {
       type: "object",
       properties: {
         enabled: { type: "boolean" },
-        scene: { type: "string", enum: ["cyber-observatory", "liquid-monolith", "cyberpunk-city", "kyoto-sanctuary"] },
+        scene: { type: "string", enum: ["compiz-cube", "vision-horizon", "cyber-observatory", "liquid-monolith", "cyberpunk-city", "kyoto-sanctuary"] },
         spatialWindows: { type: "boolean" },
         interactiveOrbit: { type: "boolean" },
         cameraSpeed: { type: "number" },
@@ -963,7 +969,7 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
         mouseParallax: { type: "number" },
       },
     },
-    example: { enabled: true, scene: "cyber-observatory", spatialWindows: true, interactiveOrbit: false },
+    example: { enabled: true, scene: "compiz-cube", spatialWindows: true, interactiveOrbit: false },
   },
   {
     method: "mod.shader.set",
@@ -2038,7 +2044,19 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
 
     case "mod.shell.set": {
       const patch: Record<string, unknown> = {};
-      for (const k of ["dockStyle", "dockRadiusPx", "topBarStyle", "brandLabel", "showStockWidgets"]) {
+      for (const k of [
+        "taskbarMode",
+        "dockStyle",
+        "dockRadiusPx",
+        "topBarStyle",
+        "brandLabel",
+        "showStockWidgets",
+        "desktopIcons",
+        "compizWobbly",
+        "compizCube",
+        "visionOrnaments",
+        "springboardHome",
+      ]) {
         if (p[k] !== undefined) patch[k] = p[k];
       }
       modStore.setShell(patch as Partial<ShellModConfig>);

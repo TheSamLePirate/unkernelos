@@ -33,6 +33,7 @@ import { LockScreen } from "./LockScreen.tsx";
 import { MissionControlOverlay } from "./MissionControlOverlay.tsx";
 import { MobileNavBar } from "./MobileNavBar.tsx";
 import { NotificationCenter } from "./NotificationCenter.tsx";
+import { ShellTaskbarAndMenu } from "./ShellTaskbarAndMenu.tsx";
 import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
 import { VoiceOrbOverlay } from "./VoiceOrbOverlay.tsx";
@@ -207,6 +208,21 @@ export const Desktop: React.FC = () => {
   const backdropInstanceRef = useRef<WebGpuBackdrop | null>(null);
   const waylandRootRef = useRef<HTMLDivElement>(null);
   const glAutoOpenedRef = useRef(false);
+  const prevWsRef = useRef(wm.activeWorkspace);
+  const [cubeFlip, setCubeFlip] = React.useState<-1 | 0 | 1>(0);
+
+  // Trigger genuine Compiz/Beryl 3D Cube workspace spin transition when switching Desktop 1..4
+  useEffect(() => {
+    if (prevWsRef.current !== wm.activeWorkspace) {
+      const dir: -1 | 1 = wm.activeWorkspace > prevWsRef.current ? 1 : -1;
+      prevWsRef.current = wm.activeWorkspace;
+      if (mods.shell.compizCube) {
+        setCubeFlip(dir);
+        const timer = window.setTimeout(() => setCubeFlip(0), 340);
+        return () => window.clearTimeout(timer);
+      }
+    }
+  }, [wm.activeWorkspace, mods.shell.compizCube]);
 
   // Sync live OS theme, blur, opacity, UI sound preference & active OS Mod overrides
   useEffect(() => {
@@ -506,11 +522,19 @@ export const Desktop: React.FC = () => {
       {/* Magnetic Drag Snap Zone Preview Overlay */}
       <SnapPreviewOverlay />
 
-      {/* Floating Glass Window Layer (with Spatial 3D perspective when 3D Desktop + Spatial Windows active) */}
+      {/* Floating Glass Window Layer (with Spatial 3D perspective & Compiz 3D Cube spin!) */}
       <main
         style={
-          mods.desktop3d.enabled && mods.desktop3d.spatialWindows
-            ? { perspective: "1600px", transformStyle: "preserve-3d" }
+          mods.desktop3d.enabled && mods.desktop3d.spatialWindows || mods.shell.compizCube
+            ? {
+                perspective: "1600px",
+                transformStyle: "preserve-3d",
+                transform:
+                  cubeFlip !== 0
+                    ? `rotateY(${cubeFlip * 24}deg) scale(0.92)`
+                    : "rotateY(0deg) scale(1)",
+                transition: "transform 340ms cubic-bezier(0.22, 1, 0.36, 1)",
+              }
             : undefined
         }
         className="relative z-10 w-full h-full pointer-events-none"
@@ -534,6 +558,9 @@ export const Desktop: React.FC = () => {
 
       {/* Bottom Floating AAA Magnification Dock (Desktop & Tablet) */}
       <Dock />
+
+      {/* Universal Structural Shell Layer (Win95/XP/11 Taskbars, Start Menu, KDE/XFCE Panels, Desktop Icons, iOS SpringBoard, VisionOS Rail, Compiz Cube HUD) */}
+      <ShellTaskbarAndMenu />
 
       {/* AAA Mobile Bottom Navigation Bar (< 768px) */}
       <MobileNavBar />

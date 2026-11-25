@@ -27,7 +27,9 @@ import {
   type DockStyleKind,
   type ModKind,
   type OsMod,
+  type TaskbarModeKind,
   type TopBarStyleKind,
+  type VariantFamily,
   type WindowDecoratorStyle,
 } from "../../core/mod-store.ts";
 import { wmStore } from "../../wm/wm-store.ts";
@@ -35,18 +37,36 @@ import { wmStore } from "../../wm/wm-store.ts";
 type ModTab = "variants" | "desktop3d" | "theme-dec" | "shaders" | "widgets" | "mods";
 
 const DECORATOR_STYLES: readonly { id: WindowDecoratorStyle; label: string; desc: string }[] = [
-  { id: "macos", label: "macOS Traffic", desc: "Pastilles rouge/ambre/vert classiques" },
-  { id: "windows", label: "Fluent / Win", desc: "Boutons compacts à droite" },
-  { id: "cyber-hud", label: "Cyber HUD", desc: "Crochets néon, laser supérieur & cyan" },
-  { id: "retro-95", label: "Retro 95", desc: "Dégradé bleu/rose 90s & boutons 3D" },
-  { id: "minimal-swiss", label: "Swiss Mono", desc: "Industriel mat & accent orange signal" },
-  { id: "floating-zen", label: "Floating Zen", desc: "Arrondis doux & contrôles minimalistes" },
-  { id: "tiling-i3", label: "Tiling i3", desc: "Barre powerline monospace ultra-fine" },
+  { id: "macos", label: "macOS Tahoe", desc: "Traffic lights modernes" },
+  { id: "macos-classic", label: "Mac OS X Aqua", desc: "Gel Aqua & pinstripes" },
+  { id: "windows-95", label: "Windows 95", desc: "Gris 3D biseauté 1995" },
+  { id: "windows-xp", label: "Windows XP", desc: "Luna bleu roi brillant" },
+  { id: "windows-11", label: "Windows 11", desc: "Fluent Mica translucide" },
+  { id: "gnome-adwaita", label: "GNOME 47", desc: "Libadwaita épuré" },
+  { id: "kde-breeze", label: "KDE Plasma", desc: "Breeze accent cyan" },
+  { id: "xfce-lxde", label: "XFCE / LXDE", desc: "Ultra-léger 28px" },
+  { id: "compiz-emerald", label: "Compiz Emerald", desc: "Cristal émeraude 3D" },
+  { id: "visionos-glass", label: "VisionOS", desc: "Verre + grab bar basse" },
+  { id: "cyber-hud", label: "Cyber HUD", desc: "Crochets néon & laser" },
+  { id: "minimal-swiss", label: "Swiss Mono", desc: "Mat & orange #ff4d00" },
+  { id: "floating-zen", label: "Floating Zen", desc: "Arrondis ultra-doux" },
+  { id: "tiling-i3", label: "Tiling i3", desc: "Powerline monospace" },
+];
+
+const TASKBAR_MODES: readonly { id: TaskbarModeKind; label: string }[] = [
+  { id: "dock", label: "Dock macOS/Linux" },
+  { id: "win95", label: "Windows 95 Taskbar" },
+  { id: "winxp", label: "Windows XP Luna" },
+  { id: "win11", label: "Windows 11 Centrée" },
+  { id: "kde-plasma", label: "KDE Plasma Panel" },
+  { id: "xfce-lxde", label: "XFCE / LXDE Panel" },
+  { id: "ios-springboard", label: "iOS SpringBoard" },
+  { id: "visionos-ornament", label: "VisionOS Rail" },
 ];
 
 const DOCK_STYLES: readonly { id: DockStyleKind; label: string }[] = [
   { id: "floating-glass", label: "Floating Glass" },
-  { id: "full-taskbar", label: "Taskbar Pleine Largeur" },
+  { id: "full-taskbar", label: "Pleine Largeur" },
   { id: "minimal-pill", label: "Pilule Minimale" },
   { id: "cyber-rail", label: "Rail Cyber HUD" },
   { id: "hidden", label: "Masqué" },
@@ -54,8 +74,10 @@ const DOCK_STYLES: readonly { id: DockStyleKind; label: string }[] = [
 
 const TOPBAR_STYLES: readonly { id: TopBarStyleKind; label: string }[] = [
   { id: "glass", label: "Barre Verre" },
-  { id: "floating-pills", label: "Barre Flottante" },
-  { id: "retro", label: "Rétro 95" },
+  { id: "floating-pills", label: "Flottante" },
+  { id: "gnome", label: "GNOME Noir" },
+  { id: "ios", label: "iPadOS Transparente" },
+  { id: "retro", label: "Rétro" },
   { id: "minimal", label: "Minimal Mat" },
   { id: "hidden", label: "Masquée" },
 ];
@@ -67,6 +89,20 @@ const SCENES_3D: readonly {
   desc: string;
   gradient: string;
 }[] = [
+  {
+    id: "compiz-cube",
+    name: "Compiz / Beryl 3D Cube",
+    emoji: "🧊",
+    desc: "Véritable Cube 3D translucide 4 faces (Bureaux 1–4) qui pivote automatiquement au changement d'espace !",
+    gradient: "from-emerald-950 via-teal-900/70 to-cyan-950",
+  },
+  {
+    id: "vision-horizon",
+    name: "VisionOS Horizon Spatial",
+    emoji: "🥽",
+    desc: "Paysage crépusculaire haute altitude, piliers de lumière verre, halo orbital & atmosphère spatiale",
+    gradient: "from-sky-950 via-indigo-950 to-slate-950",
+  },
   {
     id: "cyber-observatory",
     name: "Quantum Observatory",
@@ -99,28 +135,28 @@ const SCENES_3D: readonly {
 
 const AGENT_API_EXAMPLES: readonly { title: string; cmd: string }[] = [
   {
-    title: "Passer en variante Cyberpunk 2099",
-    cmd: `osctl call mod.variant.apply '{"id":"cyberpunk-2099"}'`,
+    title: "Activer Compiz / Beryl 3D (Cube + Wobbly Windows)",
+    cmd: `osctl call mod.variant.apply '{"id":"linux-compiz-beryl"}'`,
   },
   {
-    title: "Activer le Bureau 3D Three.js WebGPU (Night City)",
-    cmd: `osctl call mod.desktop3d.set '{"enabled":true,"scene":"cyberpunk-city","spatialWindows":true}'`,
+    title: "Passer en Windows 95, XP ou Windows 11",
+    cmd: `osctl call mod.variant.apply '{"id":"windows-xp"}'`,
   },
   {
-    title: "Changer le Window Decorator en Swiss Industrial",
-    cmd: `osctl call mod.decorator.set '{"style":"minimal-swiss","buttonPosition":"right","radiusPx":4,"titlebarAccentBar":true}'`,
+    title: "Passer en Linux GNOME 47 / KDE Plasma / XFCE",
+    cmd: `osctl call mod.variant.apply '{"id":"linux-kde-plasma"}'`,
   },
   {
-    title: "Compiler un shader WGSL sur le bureau",
-    cmd: `osctl call mod.shader.set '{"id":"shader-event-horizon"}'`,
+    title: "Passer en Apple VisionOS Spatial 3D ou iOS SpringBoard",
+    cmd: `osctl call mod.variant.apply '{"id":"vision-spatial-3d"}'`,
+  },
+  {
+    title: "Activer Wobbly Windows + Cube 3D sur n'importe quel OS",
+    cmd: `osctl call mod.shell.set '{"compizWobbly":true,"compizCube":true,"desktopIcons":true}'`,
   },
   {
     title: "Créer un widget HTML/JS live sur le bureau",
     cmd: `osctl call mod.widget.upsert '{"id":"agent-banner","title":"Agent HUD","emoji":"🤖","x":40,"y":60,"width":240,"height":96,"enabled":true,"html":"<body style=margin:0;padding:12px;color:#22d3ee;font-family:monospace><b>AGENT ONLINE</b><br>Modding via osctl</body>"}'`,
-  },
-  {
-    title: "Injecter un mod CSS personnalisé",
-    cmd: `osctl call mod.css.set '{"id":"my-glow","name":"Cyan Pulse","css":".glass-surface-focused{border-color:#22d3ee!important}"}'`,
   },
 ];
 
@@ -149,6 +185,7 @@ const STARTER_WIDGET_HTML = `<!doctype html><html><head><style>
 export const ModStudioApp: React.FC = () => {
   const mods = useMods();
   const [tab, setTab] = useState<ModTab>("variants");
+  const [familyFilter, setFamilyFilter] = useState<"all" | VariantFamily>("all");
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
   // Save Variant form
@@ -332,11 +369,39 @@ export const ModStudioApp: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
-        {/* ─── TAB 1: OS VARIANTS ─────────────────────────────────────────────── */}
+        {/* ─── TAB 1: OS VARIANTS (16 COMPLETE DESKTOP PARADIGMS) ─────────────── */}
         {tab === "variants" && (
           <div className="space-y-4">
+            {/* Family Filter Bar */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  ["all", `Tous les OS (${mods.variants.length})`],
+                  ["windows", "🪟 Windows (95 → 11)"],
+                  ["linux", "🐧 Linux (XFCE · GNOME · KDE · Compiz · Hyprland)"],
+                  ["apple", "🍎 Apple (macOS · Aqua · iOS · VisionOS)"],
+                  ["creative", "⚡ 3D & Design"],
+                ] as const
+              ).map(([fid, label]) => (
+                <button
+                  key={fid}
+                  type="button"
+                  onClick={() => setFamilyFilter(fid)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition cursor-pointer ${
+                    familyFilter === fid
+                      ? "bg-white/16 border-cyan-400/55 text-white shadow"
+                      : "bg-white/[0.04] hover:bg-white/[0.09] border-white/10 text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {mods.variants.map((v) => {
+              {mods.variants
+                .filter((v) => familyFilter === "all" || v.family === familyFilter)
+                .map((v) => {
                 const active = mods.activeVariantId === v.id;
                 return (
                   <div
@@ -727,12 +792,90 @@ export const ModStudioApp: React.FC = () => {
               </div>
             </div>
 
-            {/* Shell: Dock, TopBar & OS Brand */}
-            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3.5">
+            {/* Shell: Taskbar Paradigm, Dock, TopBar, Compiz Physics & OS Brand */}
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
               <div className="text-xs font-bold uppercase tracking-wider text-violet-300">
-                Shell OS (Dock, Barre Supérieure & Identité)
+                Paradigme Shell, Barre des tâches & Physique Compiz / Spatiale
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              <div className="space-y-1.5">
+                <div className="text-[11px] text-zinc-400">Paradigme de Bureau / Barre des tâches</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {TASKBAR_MODES.map((tm) => (
+                    <button
+                      key={tm.id}
+                      type="button"
+                      onClick={() =>
+                        modStore.setShell({
+                          taskbarMode: tm.id,
+                          dockStyle:
+                            tm.id === "dock" || tm.id === "ios-springboard" ? "floating-glass" : "hidden",
+                          springboardHome: tm.id === "ios-springboard",
+                          visionOrnaments: tm.id === "visionos-ornament",
+                        })
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-[11px] border cursor-pointer ${
+                        mods.shell.taskbarMode === tm.id
+                          ? "bg-cyan-500/25 border-cyan-400 text-white font-semibold"
+                          : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {tm.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Compiz / Spatial / Desktop Feature Toggles */}
+              <div className="flex flex-wrap gap-4 text-xs pt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.shell.compizWobbly}
+                    onChange={(e) => modStore.setShell({ compizWobbly: e.target.checked })}
+                    className="accent-emerald-400"
+                  />
+                  🧊 Fenêtres Molles (Compiz Wobbly)
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.shell.compizCube}
+                    onChange={(e) => modStore.setShell({ compizCube: e.target.checked })}
+                    className="accent-emerald-400"
+                  />
+                  🎲 Cube 3D Bureaux (Compiz/Beryl)
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.shell.desktopIcons}
+                    onChange={(e) => modStore.setShell({ desktopIcons: e.target.checked })}
+                    className="accent-cyan-400"
+                  />
+                  🖥️ Icônes sur le Bureau
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.shell.visionOrnaments}
+                    onChange={(e) => modStore.setShell({ visionOrnaments: e.target.checked })}
+                    className="accent-sky-400"
+                  />
+                  🥽 Barre Grab VisionOS
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.shell.springboardHome}
+                    onChange={(e) => modStore.setShell({ springboardHome: e.target.checked })}
+                    className="accent-fuchsia-400"
+                  />
+                  📱 Écran d'accueil iOS SpringBoard
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
                 <div className="space-y-1.5">
                   <div className="text-[11px] text-zinc-400">Style du Dock</div>
                   <div className="flex flex-wrap gap-1.5">

@@ -5,14 +5,68 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { WebGPURenderer } from "three/webgpu";
 import { modStore, useMods, type Desktop3dSceneKind } from "../core/mod-store.ts";
-import { wmStore } from "../wm/wm-store.ts";
+import { useWm, wmStore } from "../wm/wm-store.ts";
 
 const SCENE_LABELS: readonly { id: Desktop3dSceneKind; label: string; emoji: string }[] = [
   { id: "cyber-observatory", label: "Observatory", emoji: "🪐" },
+  { id: "compiz-cube", label: "Compiz Cube", emoji: "🧊" },
+  { id: "vision-horizon", label: "VisionOS", emoji: "🥽" },
   { id: "liquid-monolith", label: "Monolith", emoji: "💎" },
   { id: "cyberpunk-city", label: "Night City", emoji: "⚡" },
   { id: "kyoto-sanctuary", label: "Kyoto Zen", emoji: "🪷" },
 ];
+
+function createCubeFaceTexture(faceNum: number, accent: string, title: string): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 512;
+  const ctx = c.getContext("2d")!;
+  const bg = ctx.createLinearGradient(0, 0, 512, 512);
+  bg.addColorStop(0, "#08121a");
+  bg.addColorStop(1, "#0d1b2a");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Subtle holographic grid
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 512; i += 32) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, 512);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(512, i);
+    ctx.stroke();
+  }
+
+  // Outer glowing border
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 8;
+  ctx.strokeRect(10, 10, 492, 492);
+
+  // Mock holographic floating window wireframes on each workspace face
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.fillRect(46, 84, 240, 160);
+  ctx.strokeRect(46, 84, 240, 160);
+  ctx.fillRect(216, 220, 250, 180);
+  ctx.strokeRect(216, 220, 250, 180);
+
+  // Big Face Emblem
+  ctx.fillStyle = accent;
+  ctx.font = "700 26px ui-monospace, monospace";
+  ctx.fillText(`COMPIZ // FACE 0${faceNum}`, 46, 56);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 44px system-ui, sans-serif";
+  ctx.fillText(title, 46, 462);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.needsUpdate = true;
+  return tex;
+}
 
 function createGlowSpriteTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
@@ -33,7 +87,7 @@ function createGlowSpriteTexture(): THREE.CanvasTexture {
 
 interface WorldRuntime {
   group: THREE.Group;
-  update: (t: number, dt: number, speed: number) => void;
+  update: (t: number, dt: number, speed: number, activeWorkspace: number) => void;
   dispose: () => void;
 }
 
@@ -108,6 +162,165 @@ function buildWorld(
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -2.85;
   group.add(floor);
+
+  if (kind === "compiz-cube") {
+    const grid = new THREE.GridHelper(72, 48, "#10b981", "#0f2933");
+    grid.position.y = -2.83;
+    group.add(grid);
+
+    // 4-sided Compiz / Beryl Translucent 3D Desktop Cube (rotates smoothly to activeWorkspace!)
+    const f1 = createCubeFaceTexture(1, "#10b981", "Workspace 1");
+    const f2 = createCubeFaceTexture(2, "#22d3ee", "Workspace 2");
+    const f3 = createCubeFaceTexture(3, "#a855f7", "Workspace 3");
+    const f4 = createCubeFaceTexture(4, "#f43f5e", "Workspace 4");
+    const capTex = createCubeFaceTexture(0, "#38bdf8", "Beryl 3D");
+    disposables.push(f1, f2, f3, f4, capTex);
+
+    const makeFaceMat = (map: THREE.Texture) =>
+      trackMat(
+        new THREE.MeshPhysicalMaterial({
+          map,
+          transparent: true,
+          opacity: 0.86,
+          roughness: 0.12,
+          metalness: 0.25,
+          clearcoat: 1.0,
+          side: THREE.DoubleSide,
+        })
+      );
+
+    const cubeGeo = trackGeo(new THREE.BoxGeometry(3.5, 2.65, 3.5));
+    const cubeMats = [
+      makeFaceMat(f2), // +X (Workspace 2)
+      makeFaceMat(f4), // -X (Workspace 4)
+      makeFaceMat(capTex), // +Y cap
+      makeFaceMat(capTex), // -Y cap
+      makeFaceMat(f1), // +Z (Workspace 1)
+      makeFaceMat(f3), // -Z (Workspace 3)
+    ];
+    const cube = new THREE.Mesh(cubeGeo, cubeMats);
+    cube.position.y = 0.25;
+    group.add(cube);
+
+    // Neon glowing wireframe cage around the Desktop Cube
+    const edges = trackGeo(new THREE.EdgesGeometry(cubeGeo));
+    const lineMat = trackMat(new THREE.LineBasicMaterial({ color: "#34d399" }));
+    const cage = new THREE.LineSegments(edges, lineMat);
+    cube.add(cage);
+
+    // Outer Beryl Skydome Energy Ring
+    const ringGeo = trackGeo(new THREE.TorusGeometry(4.1, 0.024, 16, 128));
+    const ringMat = trackMat(
+      new THREE.MeshStandardMaterial({
+        color: "#22d3ee",
+        emissive: "#22d3ee",
+        emissiveIntensity: 2.0,
+      })
+    );
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2.2;
+    ring.position.y = 0.25;
+    group.add(ring);
+
+    let currentYaw = 0;
+    return {
+      group,
+      update: (t, _dt, speed, activeWorkspace) => {
+        const targetYaw = -((activeWorkspace - 1) * (Math.PI / 2));
+        currentYaw += (targetYaw - currentYaw) * 0.08;
+        cube.rotation.y = currentYaw + Math.sin(t * 0.45 * speed) * 0.14;
+        cube.rotation.x = 0.12 + Math.cos(t * 0.35 * speed) * 0.06;
+        cube.position.y = 0.25 + Math.sin(t * 0.85 * speed) * 0.16;
+        ring.rotation.z = t * 0.35 * speed;
+        particles.rotation.y = t * 0.04 * speed;
+      },
+      dispose: () => {
+        for (const d of disposables) d.dispose();
+      },
+    };
+  }
+
+  if (kind === "vision-horizon") {
+    // Apple VisionOS High-Altitude Twilight Mountain Ring + Glass Light Pillars
+    const mountainGeo = trackGeo(new THREE.CylinderGeometry(14, 22, 6.5, 48, 4, true));
+    const mPos = mountainGeo.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < mPos.count; i++) {
+      const y = mPos.getY(i);
+      if (y > 0) {
+        const x = mPos.getX(i);
+        const z = mPos.getZ(i);
+        const ang = Math.atan2(z, x);
+        const peak = Math.sin(ang * 5.0) * 1.4 + Math.cos(ang * 11.0) * 0.65 + Math.sin(ang * 3.0) * 0.9;
+        mPos.setY(i, y + peak);
+      }
+    }
+    mountainGeo.computeVertexNormals();
+    const mountainMat = trackMat(
+      new THREE.MeshStandardMaterial({
+        color: "#0f172a",
+        roughness: 0.72,
+        metalness: 0.25,
+        side: THREE.BackSide,
+      })
+    );
+    const mountains = new THREE.Mesh(mountainGeo, mountainMat);
+    mountains.position.y = -0.3;
+    group.add(mountains);
+
+    // Ethereal VisionOS Floating Glass Halo & Light Pillars
+    const haloGeo = trackGeo(new THREE.TorusGeometry(4.2, 0.035, 24, 140));
+    const haloMat = trackMat(
+      new THREE.MeshPhysicalMaterial({
+        color: "#e0f2fe",
+        emissive: "#38bdf8",
+        emissiveIntensity: 0.95,
+        roughness: 0.06,
+        metalness: 0.85,
+        clearcoat: 1.0,
+      })
+    );
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.rotation.x = Math.PI / 2.3;
+    halo.position.y = 0.8;
+    group.add(halo);
+
+    const pillarGeo = trackGeo(new THREE.CylinderGeometry(0.08, 0.16, 4.8, 24));
+    const pillars: THREE.Mesh[] = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const pMat = trackMat(
+        new THREE.MeshPhysicalMaterial({
+          color: "#bae6fd",
+          emissive: i % 2 === 0 ? "#38bdf8" : "#a855f7",
+          emissiveIntensity: 0.65,
+          transparent: true,
+          opacity: 0.42,
+          roughness: 0.08,
+          metalness: 0.4,
+        })
+      );
+      const mesh = new THREE.Mesh(pillarGeo, pMat);
+      mesh.position.set(Math.cos(a) * 6.8, -0.4, Math.sin(a) * 6.8 - 2.0);
+      group.add(mesh);
+      pillars.push(mesh);
+    }
+
+    return {
+      group,
+      update: (t, _dt, speed) => {
+        const s = t * speed;
+        halo.rotation.z = s * 0.18;
+        halo.position.y = 0.8 + Math.sin(s * 0.6) * 0.18;
+        pillars.forEach((p, i) => {
+          p.position.y = -0.4 + Math.sin(s * 0.7 + i) * 0.25;
+        });
+        particles.rotation.y = s * 0.025;
+      },
+      dispose: () => {
+        for (const d of disposables) d.dispose();
+      },
+    };
+  }
 
   if (kind === "cyber-observatory") {
     const grid = new THREE.GridHelper(64, 48, "#22d3ee", "#1e1b4b");
@@ -460,10 +673,13 @@ function buildWorld(
 }
 
 export const ThreeDesktop3d: React.FC = () => {
+  const wm = useWm();
   const mods = useMods();
   const cfg3d = mods.desktop3d;
   const cfgRef = useRef(cfg3d);
   cfgRef.current = cfg3d;
+  const wsRef = useRef<number>(wm.activeWorkspace);
+  wsRef.current = wm.activeWorkspace;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [backendLabel, setBackendLabel] = useState<"WebGPU" | "WebGL2" | "Init…">("Init…");
@@ -612,7 +828,7 @@ export const ThreeDesktop3d: React.FC = () => {
           violetLight.intensity = 28 * boost;
           roseLight.intensity = 16 * boost;
 
-          worldRef.current?.update(elapsed, dt, cur.cameraSpeed);
+          worldRef.current?.update(elapsed, dt, cur.cameraSpeed, wsRef.current);
 
           if (cur.interactiveOrbit) {
             controls.update();

@@ -44,8 +44,11 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
   const mods = useMods();
   const dec = mods.decorator;
   const spatial3d = mods.desktop3d.enabled && mods.desktop3d.spatialWindows;
+  const wobblyEnabled = mods.shell.compizWobbly;
+  const visionOrnament = mods.shell.visionOrnaments || dec.style === "visionos-glass";
   const { isMobile, isTouch, keyboardInset } = useViewport();
   const [interacting, setInteracting] = useState(false);
+  const [wobble, setWobble] = useState({ skewX: 0, skewY: 0, rot: 0 });
 
   const dragRef = useRef<{
     pointerId: number;
@@ -110,6 +113,8 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
     let rafId = 0;
     let lastX = e.clientX;
     let lastY = e.clientY;
+    let prevX = e.clientX;
+    let prevY = e.clientY;
 
     const flush = () => {
       rafId = 0;
@@ -117,6 +122,17 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       const nx = dragRef.current.origX + (lastX - dragRef.current.startX);
       const ny = Math.max(TOP_BAR_H, dragRef.current.origY + (lastY - dragRef.current.startY));
       wmStore.moveResize(win.id, { x: nx, y: ny });
+      if (wobblyEnabled) {
+        const vx = Math.max(-28, Math.min(28, lastX - prevX));
+        const vy = Math.max(-28, Math.min(28, lastY - prevY));
+        setWobble({
+          skewX: Number((-vx * 0.24).toFixed(2)),
+          skewY: Number((vy * 0.12).toFixed(2)),
+          rot: Number((vx * 0.08).toFixed(2)),
+        });
+      }
+      prevX = lastX;
+      prevY = lastY;
       activePreview = detectSnapZone(lastX, lastY);
       wmStore.setDragSnapPreview(activePreview);
     };
@@ -136,6 +152,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       }
       dragRef.current = null;
       setInteracting(false);
+      if (wobblyEnabled) setWobble({ skewX: 0, skewY: 0, rot: 0 });
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
@@ -252,6 +269,20 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
     bottom: keyboardInset > 0 ? `${keyboardInset}px` : "calc(70px + env(safe-area-inset-bottom))",
   };
 
+  const wobbleTransform =
+    wobblyEnabled && (wobble.skewX !== 0 || wobble.skewY !== 0 || wobble.rot !== 0)
+      ? `skew(${wobble.skewX}deg, ${wobble.skewY}deg) rotate(${wobble.rot}deg)`
+      : "";
+
+  const spatialTransform =
+    !isMobile && spatial3d && !interacting
+      ? focused
+        ? "translate3d(0, 0, 18px) scale(1)"
+        : "translate3d(0, 4px, -36px) scale(0.985)"
+      : "";
+
+  const combinedTransform = [spatialTransform, wobbleTransform].filter(Boolean).join(" ") || undefined;
+
   const style: React.CSSProperties = {
     ...(isMobile
       ? mobileSheetStyle
@@ -270,50 +301,112 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       focused && !isMobile && dec.activeGlowPx > 0
         ? `0 32px 86px -12px rgba(0,0,0,0.86), 0 0 ${dec.activeGlowPx}px -10px var(--window-glow), 0 1px 0 0 rgba(255,255,255,0.22) inset`
         : undefined,
-    transform:
-      !isMobile && spatial3d && !interacting
-        ? focused
-          ? "translate3d(0, 0, 18px) scale(1)"
-          : "translate3d(0, 4px, -36px) scale(0.985)"
-        : undefined,
-    transition: interacting ? "none" : "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease, box-shadow 220ms ease",
-    willChange: interacting ? "left, top, width, height" : undefined,
+    transform: combinedTransform,
+    transition: interacting
+      ? wobblyEnabled
+        ? "transform 95ms ease-out"
+        : "none"
+      : wobblyEnabled
+      ? "transform 460ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease, box-shadow 220ms ease"
+      : "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease, box-shadow 220ms ease",
+    willChange: interacting ? "left, top, width, height, transform" : undefined,
   };
 
   const openWsCount = wm.windows.filter((w) => w.workspace === wm.activeWorkspace).length;
 
   const isCyber = dec.style === "cyber-hud";
-  const isRetro = dec.style === "retro-95";
+  const isWin95 = dec.style === "windows-95";
+  const isWinXp = dec.style === "windows-xp";
+  const isWin11 = dec.style === "windows-11";
+  const isGnome = dec.style === "gnome-adwaita";
+  const isKde = dec.style === "kde-breeze";
+  const isXfce = dec.style === "xfce-lxde";
+  const isCompiz = dec.style === "compiz-emerald";
+  const isVision = dec.style === "visionos-glass";
+  const isAqua = dec.style === "macos-classic";
   const isSwiss = dec.style === "minimal-swiss";
   const isZen = dec.style === "floating-zen";
   const isI3 = dec.style === "tiling-i3";
-  const isWin = dec.style === "windows";
 
   const renderWindowControls = () => {
-    if (isRetro) {
+    if (isWin95) {
       return (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             type="button"
             onClick={() => wmStore.minimizeWindow(win.id)}
-            title="Minimize"
-            className="w-5 h-5 flex items-center justify-center bg-[#272f4a] border border-white/40 border-b-black/70 border-r-black/70 text-[10px] font-bold text-white hover:bg-[#354066] active:scale-95 cursor-pointer"
+            title="Réduire"
+            className="w-5 h-5 flex items-center justify-center bg-[#c0c0c0] border-2 border-white border-r-[#404040] border-b-[#404040] text-[11px] font-bold text-black active:border-[#404040] active:border-r-white active:border-b-white cursor-pointer"
           >
             _
           </button>
           <button
             type="button"
             onClick={() => wmStore.toggleMaximize(win.id)}
-            title="Maximize"
-            className="w-5 h-5 flex items-center justify-center bg-[#272f4a] border border-white/40 border-b-black/70 border-r-black/70 text-white hover:bg-[#354066] active:scale-95 cursor-pointer"
+            title="Agrandir"
+            className="w-5 h-5 flex items-center justify-center bg-[#c0c0c0] border-2 border-white border-r-[#404040] border-b-[#404040] text-black cursor-pointer"
           >
             <Square className="w-2.5 h-2.5" />
           </button>
           <button
             type="button"
             onClick={() => wmStore.closeWindow(win.id)}
-            title="Close"
-            className="w-5 h-5 flex items-center justify-center bg-rose-600/90 border border-white/45 border-b-black/70 border-r-black/70 text-white hover:bg-rose-500 active:scale-95 cursor-pointer"
+            title="Fermer"
+            className="w-5 h-5 flex items-center justify-center bg-[#c0c0c0] border-2 border-white border-r-[#404040] border-b-[#404040] text-black hover:bg-[#d8d8d8] cursor-pointer"
+          >
+            <X className="w-3 h-3 stroke-[2.5]" />
+          </button>
+        </div>
+      );
+    }
+
+    if (isWinXp) {
+      return (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => wmStore.minimizeWindow(win.id)}
+            title="Réduire"
+            className="w-5 h-5 rounded-[4px] flex items-center justify-center bg-gradient-to-b from-[#4993ff] to-[#1a5cd8] border border-white/75 text-white hover:brightness-110 shadow cursor-pointer"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.toggleMaximize(win.id)}
+            title="Agrandir"
+            className="w-5 h-5 rounded-[4px] flex items-center justify-center bg-gradient-to-b from-[#4993ff] to-[#1a5cd8] border border-white/75 text-white hover:brightness-110 shadow cursor-pointer"
+          >
+            <Square className="w-2.5 h-2.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.closeWindow(win.id)}
+            title="Fermer"
+            className="w-5 h-5 rounded-[4px] flex items-center justify-center bg-gradient-to-b from-[#f06e58] to-[#c92a14] border border-white/80 text-white hover:brightness-110 shadow cursor-pointer"
+          >
+            <X className="w-3 h-3 stroke-[2.5]" />
+          </button>
+        </div>
+      );
+    }
+
+    if (isGnome) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => wmStore.toggleMaximize(win.id)}
+            title="Agrandir"
+            className="w-6 h-6 rounded-full bg-white/8 hover:bg-white/16 flex items-center justify-center text-zinc-200 transition cursor-pointer"
+          >
+            <Square className="w-2.5 h-2.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.closeWindow(win.id)}
+            title="Fermer"
+            className="w-6 h-6 rounded-full bg-white/10 hover:bg-rose-500/80 flex items-center justify-center text-white transition cursor-pointer"
           >
             <X className="w-3 h-3" />
           </button>
@@ -321,19 +414,52 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       );
     }
 
-    if (isCyber || isSwiss || isI3 || isWin) {
+    if (isKde || isCompiz) {
       return (
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => wmStore.minimizeWindow(win.id)}
+            title="Réduire"
+            className="w-6 h-6 rounded-full hover:bg-white/14 flex items-center justify-center text-zinc-200 transition cursor-pointer"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.toggleMaximize(win.id)}
+            title="Agrandir"
+            className="w-6 h-6 rounded-full hover:bg-white/14 flex items-center justify-center text-zinc-200 transition cursor-pointer"
+          >
+            <Square className="w-2.5 h-2.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.closeWindow(win.id)}
+            title="Fermer"
+            className={`w-6 h-6 rounded-full flex items-center justify-center text-white transition cursor-pointer ${
+              isCompiz ? "bg-emerald-500/25 hover:bg-rose-500 border border-emerald-300/40" : "hover:bg-rose-500"
+            }`}
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      );
+    }
+
+    if (isCyber || isSwiss || isI3 || isWin11 || isXfce) {
+      return (
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => wmStore.minimizeWindow(win.id)}
             title="Minimize"
-            className={`px-2 py-1 text-zinc-300 hover:text-white transition cursor-pointer ${
+            className={`px-2.5 py-1.5 text-zinc-300 hover:text-white transition cursor-pointer ${
               isCyber
                 ? "border border-cyan-400/35 bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-200"
                 : isSwiss
                 ? "hover:bg-white/10 font-mono text-[10px]"
-                : "rounded-md hover:bg-white/12"
+                : "rounded-md hover:bg-white/10"
             }`}
           >
             <Minus className="w-3 h-3" />
@@ -342,12 +468,12 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
             type="button"
             onClick={() => wmStore.toggleMaximize(win.id)}
             title="Maximize"
-            className={`px-2 py-1 text-zinc-300 hover:text-white transition cursor-pointer ${
+            className={`px-2.5 py-1.5 text-zinc-300 hover:text-white transition cursor-pointer ${
               isCyber
                 ? "border border-cyan-400/35 bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-200"
                 : isSwiss
                 ? "hover:bg-white/10 font-mono text-[10px]"
-                : "rounded-md hover:bg-white/12"
+                : "rounded-md hover:bg-white/10"
             }`}
           >
             <Square className="w-2.5 h-2.5" />
@@ -356,12 +482,12 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
             type="button"
             onClick={() => wmStore.closeWindow(win.id)}
             title="Close"
-            className={`px-2 py-1 transition cursor-pointer ${
+            className={`px-2.5 py-1.5 transition cursor-pointer ${
               isCyber
                 ? "border border-rose-500/55 bg-rose-500/20 hover:bg-rose-500/40 text-rose-200"
                 : isSwiss
-                ? "bg-[#ff4d00]/85 hover:bg-[#ff4d00] text-black font-bold"
-                : "rounded-md hover:bg-rose-500/80 text-zinc-200 hover:text-white"
+                ? "bg-[#ff4d00]/90 hover:bg-[#ff4d00] text-black font-bold"
+                : "rounded-md hover:bg-[#c42b1c] text-zinc-200 hover:text-white"
             }`}
           >
             <X className="w-3 h-3" />
@@ -370,32 +496,32 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       );
     }
 
-    if (isZen) {
+    if (isZen || isVision) {
       return (
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => wmStore.closeWindow(win.id)}
             title="Close"
-            className="w-2.5 h-2.5 rounded-full bg-white/30 hover:bg-rose-400 transition cursor-pointer"
+            className="w-3 h-3 rounded-full bg-white/30 hover:bg-rose-400 transition cursor-pointer"
           />
           <button
             type="button"
             onClick={() => wmStore.minimizeWindow(win.id)}
             title="Minimize"
-            className="w-2.5 h-2.5 rounded-full bg-white/22 hover:bg-amber-300 transition cursor-pointer"
+            className="w-3 h-3 rounded-full bg-white/20 hover:bg-amber-300 transition cursor-pointer"
           />
           <button
             type="button"
             onClick={() => wmStore.toggleMaximize(win.id)}
             title="Maximize"
-            className="w-2.5 h-2.5 rounded-full bg-white/22 hover:bg-emerald-300 transition cursor-pointer"
+            className="w-3 h-3 rounded-full bg-white/20 hover:bg-emerald-300 transition cursor-pointer"
           />
         </div>
       );
     }
 
-    // Default macOS / iPadOS traffic lights
+    // Default macOS / Mac OS X Aqua traffic lights
     return (
       <div className={`flex items-center group ${isTabletTouch ? "gap-1.5" : "gap-2"}`}>
         <button
@@ -408,8 +534,8 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         >
           <span
             className={`${
-              isTabletTouch ? "w-4 h-4" : "w-3 h-3"
-            } rounded-full bg-rose-500/90 hover:bg-rose-400 flex items-center justify-center shadow-inner`}
+              isTabletTouch ? "w-4 h-4" : isAqua ? "w-3.5 h-3.5 ring-1 ring-white/40" : "w-3 h-3"
+            } rounded-full bg-gradient-to-b from-rose-400 to-rose-600 flex items-center justify-center shadow-inner`}
           >
             <X
               className={`${
@@ -428,8 +554,8 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         >
           <span
             className={`${
-              isTabletTouch ? "w-4 h-4" : "w-3 h-3"
-            } rounded-full bg-amber-400/90 hover:bg-amber-300 flex items-center justify-center shadow-inner`}
+              isTabletTouch ? "w-4 h-4" : isAqua ? "w-3.5 h-3.5 ring-1 ring-white/40" : "w-3 h-3"
+            } rounded-full bg-gradient-to-b from-amber-300 to-amber-500 flex items-center justify-center shadow-inner`}
           >
             <Minimize2
               className={`${
@@ -448,8 +574,8 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         >
           <span
             className={`${
-              isTabletTouch ? "w-4 h-4" : "w-3 h-3"
-            } rounded-full bg-emerald-500/90 hover:bg-emerald-400 flex items-center justify-center shadow-inner`}
+              isTabletTouch ? "w-4 h-4" : isAqua ? "w-3.5 h-3.5 ring-1 ring-white/40" : "w-3 h-3"
+            } rounded-full bg-gradient-to-b from-emerald-400 to-emerald-600 flex items-center justify-center shadow-inner`}
           >
             <Maximize2
               className={`${
@@ -462,10 +588,24 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
     );
   };
 
-  const titlebarBg = isRetro
+  const titlebarBg = isWin95
     ? focused
-      ? "bg-gradient-to-r from-[#0c4a6e] via-[#4f46e5] to-[#be185d] border-b border-white/30"
-      : "bg-gradient-to-r from-[#1e293b] to-[#334155] border-b border-white/15"
+      ? "bg-gradient-to-r from-[#000080] to-[#1084d0] border-b border-[#404040]"
+      : "bg-[#808080] border-b border-[#404040]"
+    : isWinXp
+    ? focused
+      ? "bg-gradient-to-b from-[#0a5be0] via-[#2678f5] to-[#0845b8] border-b border-[#003699]"
+      : "bg-gradient-to-b from-[#7a96df] to-[#6982c8] border-b border-[#536bb0]"
+    : isGnome
+    ? "bg-[#242426] border-b border-white/10"
+    : isKde
+    ? "bg-[#232833]/92 border-b border-sky-400/20"
+    : isXfce
+    ? "bg-[#252a34] border-b border-slate-600/40"
+    : isCompiz
+    ? "bg-gradient-to-b from-emerald-400/24 via-cyan-500/12 to-black/35 border-b border-emerald-400/35"
+    : isVision
+    ? "bg-white/[0.04] border-b border-white/10"
     : isCyber
     ? "bg-gradient-to-r from-rose-500/18 via-[#0a0816]/90 to-cyan-500/18 border-b border-cyan-400/25"
     : isSwiss
@@ -479,9 +619,11 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       style={style}
       onPointerDown={() => wmStore.focusWindow(win.id)}
       data-window-decorator={dec.style}
-      className={`fixed flex-col overflow-hidden animate-window-in ${
-        isMobile ? "rounded-t-[20px] border-x-0" : ""
-      } ${focused ? "glass-surface-focused" : "glass-surface"}`}
+      className={`fixed flex-col animate-window-in ${
+        visionOrnament ? "overflow-visible" : "overflow-hidden"
+      } ${isMobile ? "rounded-t-[20px] border-x-0" : ""} ${
+        focused ? "glass-surface-focused" : "glass-surface"
+      }`}
     >
       {/* Optional Laser Accent Bar (Cyber HUD / Swiss / Spatial Mod) */}
       {dec.titlebarAccentBar && focused && !isMobile && (
@@ -630,7 +772,33 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       </div>
 
       {/* Window Content */}
-      <div className="relative flex-1 min-h-0 overflow-hidden window-content-contain">{children}</div>
+      <div
+        style={{ borderBottomLeftRadius: `${dec.radiusPx}px`, borderBottomRightRadius: `${dec.radiusPx}px` }}
+        className="relative flex-1 min-h-0 overflow-hidden window-content-contain"
+      >
+        {children}
+      </div>
+
+      {/* Apple VisionOS Bottom Glass Grab Bar & Circular Close Pill Ornament */}
+      {visionOrnament && !isMobile && !win.maximized && (
+        <div
+          onPointerDown={onHeaderPointerDown}
+          className="absolute -bottom-7 left-1/2 -translate-x-1/2 flex items-center gap-2.5 z-30 cursor-grab active:cursor-grabbing touch-none"
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              wmStore.closeWindow(win.id);
+            }}
+            title="Fermer la fenêtre spatiale"
+            className="w-5 h-5 rounded-full bg-white/25 hover:bg-white/45 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white shadow cursor-pointer"
+          >
+            <X className="w-3 h-3" />
+          </button>
+          <div className="w-28 h-2 rounded-full bg-white/35 hover:bg-white/65 backdrop-blur-xl border border-white/45 shadow transition" />
+        </div>
+      )}
 
       {/* Bottom-right resize handle (Mouse + iPad Touch + Apple Pencil!) */}
       {!isMobile && !win.maximized && win.snap === "none" && (

@@ -90,6 +90,8 @@ export const TopBar: React.FC = () => {
   const isFloatingBar = mods.shell.topBarStyle === "floating-pills";
   const isRetroBar = mods.shell.topBarStyle === "retro";
   const isMinimalBar = mods.shell.topBarStyle === "minimal";
+  const isGnomeBar = mods.shell.topBarStyle === "gnome";
+  const isIosBar = mods.shell.topBarStyle === "ios";
 
   return (
     <header
@@ -97,6 +99,10 @@ export const TopBar: React.FC = () => {
       className={`fixed z-50 glass-bar px-2.5 sm:px-3 flex items-center justify-between text-xs select-none transition-all ${
         isFloatingBar
           ? "top-2 left-3 right-3 min-h-[36px] rounded-2xl border border-white/15"
+          : isGnomeBar
+          ? "top-0 left-0 right-0 min-h-[32px] !bg-black/92 border-b border-white/8"
+          : isIosBar
+          ? "top-0 left-0 right-0 min-h-[36px] !bg-transparent !border-b-0 !shadow-none !backdrop-blur-none"
           : isRetroBar
           ? "top-0 left-0 right-0 min-h-[34px] !bg-[#1a1f36] border-b-2 border-white/35"
           : isMinimalBar
