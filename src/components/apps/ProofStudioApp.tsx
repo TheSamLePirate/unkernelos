@@ -64,6 +64,7 @@ import {
 import { runPoule } from "../../core/poule-runner.ts";
 import { appRuntime, GuestFsService, useSubscriptionRef } from "../../core/runtime.ts";
 import { ToolchainService, type ToolchainSnapshot } from "../../core/toolchain-service.ts";
+import { useViewport } from "../../core/use-viewport.ts";
 import { VmService, type VmState } from "../../core/vm-service.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
 import { StoryView } from "./proof/StoryView.tsx";
@@ -199,12 +200,16 @@ export const ProofStudioApp: React.FC = () => {
   const [guide, setGuideState] = useState<boolean>(loadGuide);
   const [helpOpen, setHelpOpenState] = useState<boolean>(loadWelcome);
 
-  // Resizable & collapsible panels for spacious viewing
+  // Resizable & collapsible panels + mobile/tablet focused mode
+  const { isMobile, isTouch } = useViewport();
+  const [mobilePane, setMobilePane] = useState<"proof" | "code" | "step">("proof");
   const [showEditor, setShowEditor] = useState(true);
   const [showInspector, setShowInspector] = useState(true);
   const [editorRatio, setEditorRatio] = useState(37); // percent width on desktop
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const pinchRef = useRef<{ dist: number; startZoom: number } | null>(null);
+  const touchPanRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
 
   const setHelpOpen = (open: boolean) => {
     setHelpOpenState(open);
@@ -524,6 +529,52 @@ export const ProofStudioApp: React.FC = () => {
     }
   };
 
+  // iPad & Mobile 1-finger pan + 2-finger pinch-to-zoom on Gentzen proof tree!
+  const onCanvasTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (view !== "tree" || !theorem?.ok) return;
+    if (e.touches.length === 2) {
+      const a = e.touches[0]!;
+      const b = e.touches[1]!;
+      pinchRef.current = {
+        dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+        startZoom: zoom,
+      };
+      touchPanRef.current = null;
+      return;
+    }
+    if (e.touches.length === 1 && !(e.target as HTMLElement).closest("button, input, a, select")) {
+      const c = canvasRef.current;
+      const t = e.touches[0]!;
+      if (c) {
+        touchPanRef.current = { x: t.clientX, y: t.clientY, left: c.scrollLeft, top: c.scrollTop };
+      }
+    }
+  };
+
+  const onCanvasTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (view !== "tree" || !theorem?.ok) return;
+    if (e.touches.length === 2 && pinchRef.current) {
+      const a = e.touches[0]!;
+      const b = e.touches[1]!;
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      if (pinchRef.current.dist > 10) {
+        const next = pinchRef.current.startZoom * (dist / pinchRef.current.dist);
+        setZoom(Math.max(0.35, Math.min(1.8, +next.toFixed(2))));
+      }
+      return;
+    }
+    if (e.touches.length === 1 && touchPanRef.current && canvasRef.current) {
+      const t = e.touches[0]!;
+      canvasRef.current.scrollLeft = touchPanRef.current.left - (t.clientX - touchPanRef.current.x);
+      canvasRef.current.scrollTop = touchPanRef.current.top - (t.clientY - touchPanRef.current.y);
+    }
+  };
+
+  const onCanvasTouchEnd = () => {
+    pinchRef.current = null;
+    touchPanRef.current = null;
+  };
+
   // Expert keyboard navigation: ↓ toward the conclusion, ↑ to a premise, ←/→ siblings, [ / ] theorems
   const onTreeKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "[" || e.key === "]") {
@@ -712,13 +763,41 @@ export const ProofStudioApp: React.FC = () => {
         </button>
       </div>
 
+      {/* Mobile Pane Switcher (100% full-height Code / Preuve / Étape on phones) */}
+      {isMobile && (
+        <div className="flex items-center gap-1 px-2.5 py-1.5 border-b border-white/10 bg-black/40 shrink-0">
+          {(
+            [
+              ["proof", "Preuve"],
+              ["code", "Code"],
+              ...(inspectorEligible ? ([["step", "Étape"]] as const) : []),
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setMobilePane(id)}
+              className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 ${
+                mobilePane === id
+                  ? "bg-gradient-to-r from-violet-500/30 to-emerald-500/25 border border-violet-400/40 text-white"
+                  : "bg-white/[0.04] border border-white/8 text-zinc-400"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Main Split Workspace */}
       <div ref={splitContainerRef} className="flex-1 min-h-0 flex flex-col lg:flex-row relative">
         {/* Left: Code Editor */}
-        {showEditor && (
+        {((isMobile && mobilePane === "code") || (!isMobile && showEditor)) && (
           <div
-            style={{ flexBasis: `${editorRatio}%` }}
-            className="lg:shrink-0 h-[38%] lg:h-auto min-h-0 flex flex-col border-b lg:border-b-0 border-white/8 bg-[#070910]"
+            style={isMobile ? undefined : { flexBasis: `${editorRatio}%` }}
+            className={`${
+              isMobile ? "flex-1" : "lg:shrink-0 h-[38%] lg:h-auto"
+            } min-h-0 flex flex-col border-b lg:border-b-0 border-white/8 bg-[#070910]`}
           >
             {/* File subheader */}
             <div className="flex items-center gap-2 px-3 py-1.5 text-[10.5px] text-zinc-400 border-b border-white/8 bg-black/30 shrink-0">
@@ -785,23 +864,26 @@ export const ProofStudioApp: React.FC = () => {
           </div>
         )}
 
-        {/* Draggable Divider (Desktop) */}
-        {showEditor && (
+        {/* Draggable Divider (Desktop & iPad) */}
+        {!isMobile && showEditor && (
           <div
             onPointerDown={(e) => {
               e.preventDefault();
               setIsDraggingSplit(true);
             }}
             title="Glisser pour redimensionner l'éditeur"
-            className={`hidden lg:flex w-1.5 shrink-0 cursor-col-resize items-center justify-center transition-colors ${
+            className={`hidden lg:flex shrink-0 cursor-col-resize items-center justify-center transition-colors touch-none ${
+              isTouch ? "w-3" : "w-1.5"
+            } ${
               isDraggingSplit ? "bg-violet-400/50" : "bg-white/[0.04] hover:bg-violet-400/35"
             }`}
           >
-            <div className="w-0.5 h-10 rounded-full bg-white/20" />
+            <div className="w-0.5 h-10 rounded-full bg-white/25" />
           </div>
         )}
 
         {/* Right: Proof Display Area */}
+        {(!isMobile || mobilePane !== "code") && (
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {helpOpen && <HelpCard onClose={() => setHelpOpen(false)} />}
 
@@ -863,6 +945,7 @@ export const ProofStudioApp: React.FC = () => {
 
           <div className="flex-1 min-h-0 flex flex-col xl:flex-row">
             {/* Proof Stage */}
+            {(!isMobile || mobilePane === "proof") && (
             <div className="flex-1 min-w-0 min-h-0 flex flex-col">
               {/* Fixed Theorem Banner above the Tree canvas (never scrolls away or steals space inside the tree) */}
               {theorem?.ok && view === "tree" && result?.installed && !result.outdated && (
@@ -896,18 +979,21 @@ export const ProofStudioApp: React.FC = () => {
                 </div>
               )}
 
-              {/* Scrollable / Pannable Canvas */}
+              {/* Scrollable / Pannable / Pinch-Zoomable Canvas */}
               <div
                 ref={canvasRef}
                 tabIndex={0}
                 onKeyDown={onTreeKey}
                 onMouseDown={onCanvasMouseDown}
                 onWheel={onCanvasWheel}
+                onTouchStart={onCanvasTouchStart}
+                onTouchMove={onCanvasTouchMove}
+                onTouchEnd={onCanvasTouchEnd}
                 className={`flex-1 min-h-0 overflow-auto outline-none focus-visible:ring-1 focus-visible:ring-violet-400/40 bg-[#06080f] bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.055)_1px,transparent_0)] [background-size:24px_24px] ${
                   view === "tree" && theorem?.ok
                     ? isPanning
-                      ? "cursor-grabbing"
-                      : "cursor-grab"
+                      ? "cursor-grabbing touch-none"
+                      : "cursor-grab touch-none"
                     : ""
                 }`}
               >
@@ -1100,9 +1186,10 @@ export const ProofStudioApp: React.FC = () => {
                 </div>
               )}
             </div>
+            )}
 
             {/* Right: Goal / Step Inspector Panel */}
-            {showInspector && inspectorEligible && selectedNode && (
+            {((isMobile && mobilePane === "step") || (!isMobile && showInspector)) && inspectorEligible && selectedNode && (
               <GoalPanel
                 node={selectedNode}
                 guide={guide}
@@ -1111,11 +1198,15 @@ export const ProofStudioApp: React.FC = () => {
                 types={types}
                 facts={facts}
                 theorems={theorems}
-                onSelect={selectNode}
+                fullHeight={isMobile}
+                onSelect={(n) => {
+                  selectNode(n);
+                }}
               />
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );
@@ -1317,8 +1408,9 @@ const GoalPanel: React.FC<{
   types: Set<string>;
   facts: ReturnType<typeof globalFacts>;
   theorems: readonly PouleTheorem[];
+  fullHeight?: boolean;
   onSelect: (n: DerivNode) => void;
-}> = ({ node, guide, theorem, fmt, types, facts, theorems, onSelect }) => {
+}> = ({ node, guide, theorem, fmt, types, facts, theorems, fullHeight = false, onSelect }) => {
   const { vars, hyps } = contextOf(node, types);
   const rv = ruleView(node.rule);
   const [showGlobals, setShowGlobals] = useState(false);
@@ -1342,7 +1434,11 @@ const GoalPanel: React.FC<{
   const split = (s: string) => [s.slice(0, s.indexOf(" : ")), s.slice(s.indexOf(" : ") + 3)] as const;
 
   return (
-    <div className="xl:w-[330px] h-64 xl:h-auto shrink-0 border-t xl:border-t-0 xl:border-l border-white/10 bg-[#090b13] overflow-auto select-text">
+    <div
+      className={`${
+        fullHeight ? "flex-1 min-h-0" : "xl:w-[330px] h-64 xl:h-auto shrink-0 border-t xl:border-t-0 xl:border-l border-white/10"
+      } bg-[#090b13] overflow-auto select-text`}
+    >
       {/* Header + Breadcrumb */}
       <div className="px-3.5 py-2.5 border-b border-white/8 bg-black/25 space-y-1.5">
         <div className="flex items-center gap-2">

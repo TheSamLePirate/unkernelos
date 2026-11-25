@@ -188,16 +188,44 @@ export class WebGpuBackdrop {
   private uniformBuf: GPUBuffer | null = null;
   private bindGroup: GPUBindGroup | null = null;
   private startTime = performance.now();
+  private lastDrawTime = 0;
   private modeIndex = 0;
+  private readonly uniformData = new Float32Array(4);
+  private readonly reducedMotion: boolean;
+  private readonly frameIntervalMs: number;
+  private renderedStaticFrame = false;
 
   constructor(canvas: HTMLCanvasElement, initialShader: WallpaperShaderId = "aurora") {
     this.canvas = canvas;
     this.modeIndex = WALLPAPER_SHADERS[initialShader]?.modeIndex ?? 0;
+    const isCoarse =
+      typeof window !== "undefined" &&
+      (window.matchMedia?.("(pointer: coarse)").matches || window.innerWidth < 1024);
+    this.reducedMotion =
+      typeof window !== "undefined" &&
+      Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    // 30fps ambient wallpaper on mobile/iPad saves ~60% GPU heat & battery while staying silky
+    this.frameIntervalMs = isCoarse ? 33 : 16;
   }
 
   public setShader(shader: WallpaperShaderId): void {
     this.modeIndex = WALLPAPER_SHADERS[shader]?.modeIndex ?? 0;
+    this.renderedStaticFrame = false;
+    if (this.reducedMotion && !this.disposed) {
+      this.drawFrame(performance.now());
+    }
   }
+
+  private onVisibilityChange = () => {
+    if (this.disposed) return;
+    if (document.hidden) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+    } else if (!this.raf && !this.reducedMotion) {
+      this.lastDrawTime = 0;
+      this.raf = requestAnimationFrame(this.loop);
+    }
+  };
 
   public async init(): Promise<boolean> {
     if (!navigator.gpu) return false;
@@ -247,7 +275,12 @@ export class WebGpuBackdrop {
       this.uniformBuf = uniformBuf;
       this.bindGroup = bindGroup;
 
-      this.loop();
+      document.addEventListener("visibilitychange", this.onVisibilityChange);
+      if (this.reducedMotion) {
+        this.drawFrame(performance.now());
+      } else {
+        this.raf = requestAnimationFrame(this.loop);
+      }
       return true;
     } catch {
       return false;
@@ -255,22 +288,33 @@ export class WebGpuBackdrop {
   }
 
   public resize(width: number, height: number): void {
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const isCoarse =
+      typeof window !== "undefined" &&
+      (window.matchMedia?.("(pointer: coarse)").matches || window.innerWidth < 1024);
+    const maxDpr = isCoarse ? 1.0 : 1.35;
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
     const w = Math.max(1, Math.floor(width * dpr));
     const h = Math.max(1, Math.floor(height * dpr));
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
+      this.renderedStaticFrame = false;
+      if (this.reducedMotion && this.device) {
+        this.drawFrame(performance.now());
+      }
     }
   }
 
-  private loop = () => {
-    if (this.disposed || !this.device || !this.ctx || !this.pipeline || !this.uniformBuf || !this.bindGroup) {
+  private drawFrame(now: number): void {
+    if (!this.device || !this.ctx || !this.pipeline || !this.uniformBuf || !this.bindGroup) {
       return;
     }
-    const elapsed = (performance.now() - this.startTime) / 1000;
-    const data = new Float32Array([elapsed, this.canvas.width, this.canvas.height, this.modeIndex]);
-    this.device.queue.writeBuffer(this.uniformBuf, 0, data);
+    const elapsed = (now - this.startTime) / 1000;
+    this.uniformData[0] = elapsed;
+    this.uniformData[1] = this.canvas.width;
+    this.uniformData[2] = this.canvas.height;
+    this.uniformData[3] = this.modeIndex;
+    this.device.queue.writeBuffer(this.uniformBuf, 0, this.uniformData);
 
     const enc = this.device.createCommandEncoder();
     const view = this.ctx.getCurrentTexture().createView();
@@ -289,13 +333,26 @@ export class WebGpuBackdrop {
     pass.draw(3);
     pass.end();
     this.device.queue.submit([enc.finish()]);
+    this.renderedStaticFrame = true;
+  }
 
+  private loop = (now: number) => {
+    if (this.disposed || document.hidden) {
+      this.raf = 0;
+      return;
+    }
+    if (now - this.lastDrawTime >= this.frameIntervalMs || !this.renderedStaticFrame) {
+      this.lastDrawTime = now;
+      this.drawFrame(now);
+    }
     this.raf = requestAnimationFrame(this.loop);
   };
 
   public dispose(): void {
     this.disposed = true;
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
     cancelAnimationFrame(this.raf);
+    this.raf = 0;
     this.uniformBuf?.destroy();
     this.device?.destroy();
     this.device = null;

@@ -31,9 +31,10 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SettingsService, useSubscriptionRef } from "../core/runtime.ts";
 import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
+import { useViewport } from "../core/use-viewport.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
 
 const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string }>> = {
@@ -74,188 +75,318 @@ const PINNED_DOCK_IDS: readonly AppId[] = [
   "agent-swarm",
   "ide",
   "notebook",
+  "proof-studio",
   "terminal",
   "explorer",
   "network-inspector",
   "app-store",
   "preview",
-  "screen",
   "git",
   "agent-api",
   "settings",
 ];
 
+interface DockSlot {
+  readonly key: string;
+  readonly label: string;
+  readonly shortcut?: string;
+  readonly accent?: string;
+  readonly icon: React.ComponentType<{ className?: string }>;
+  readonly isActive: boolean;
+  readonly isOpen: boolean;
+  readonly isMinimizedOnly: boolean;
+  readonly badgeCount: number;
+  readonly isSystem?: boolean;
+  readonly appId?: AppId;
+  readonly onClick: () => void;
+}
+
+/**
+ * AAA macOS / VisionOS Liquid Glass Dock:
+ * - Zero vertical clipping: frosted glass tray sits behind an overflow-visible icon strip
+ *   so magnified icons & tooltips soar freely above the tray.
+ * - True neighbor-displacing spring magnification (icons expand their slot width smoothly).
+ * - Touch-first iPad adaptation: larger tactile squircles, zero hover glitches, safe-area inset.
+ */
 export const Dock: React.FC = () => {
   const wm = useWm();
+  const { isTouch, width: viewportWidth, keyboardInset } = useViewport();
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
     DEFAULT_UNKERNEL_CONFIG
   );
-  const navRef = useRef<HTMLElement>(null);
-  const [mouseX, setMouseX] = useState<number | null>(null);
 
-  // Include any running non-pinned app dynamically in the Dock (macOS-style)
+  const rowRef = useRef<HTMLDivElement>(null);
+  const slotRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const rafRef = useRef<number>(0);
+  const [pointerX, setPointerX] = useState<number | null>(null);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [bouncingKey, setBouncingKey] = useState<string | null>(null);
+  const [centers, setCenters] = useState<number[]>([]);
+
   const extraRunningIds = Array.from(
-    new Set(
-      wm.windows
-        .map((w) => w.appId)
-        .filter((id) => !PINNED_DOCK_IDS.includes(id))
-    )
+    new Set(wm.windows.map((w) => w.appId).filter((id) => !PINNED_DOCK_IDS.includes(id)))
   );
   const visibleIds: readonly AppId[] = [...PINNED_DOCK_IDS, ...extraRunningIds];
 
-  const getScale = (idx: number): { scale: number; lift: number } => {
-    if (!cfg.dockMagnification || mouseX === null || !navRef.current) {
-      return { scale: 1, lift: 0 };
-    }
-    const items = navRef.current.querySelectorAll<HTMLElement>("[data-dock-idx]");
-    const el = items[idx];
-    if (!el) return { scale: 1, lift: 0 };
-    const rect = el.getBoundingClientRect();
-    const center = rect.left + rect.width / 2;
-    const dist = Math.abs(mouseX - center);
-    const radius = 116;
+  // Compact icon sizing on tighter iPad portrait widths so all icons fit effortlessly without overflow clipping
+  const totalSlots = visibleIds.length + 2;
+  const maxAvailablePerSlot = Math.floor((viewportWidth - 72) / Math.max(1, totalSlots)) - 6;
+  const baseSize = isTouch
+    ? Math.max(36, Math.min(46, maxAvailablePerSlot))
+    : Math.max(38, Math.min(46, maxAvailablePerSlot));
+  const iconGlyphSize = baseSize >= 44 ? "w-[22px] h-[22px]" : "w-[19px] h-[19px]";
+  const magEnabled = cfg.dockMagnification && !isTouch && viewportWidth >= 900;
+
+  const triggerBounce = useCallback((key: string) => {
+    setBouncingKey(key);
+    window.setTimeout(() => {
+      setBouncingKey((cur) => (cur === key ? null : cur));
+    }, 440);
+  }, []);
+
+  const slots: DockSlot[] = [
+    {
+      key: "__launcher__",
+      label: `All Apps (${Object.keys(APP_CATALOG).length - 2})`,
+      shortcut: "F4",
+      icon: Grid2x2,
+      isActive: wm.launcherOpen,
+      isOpen: wm.launcherOpen,
+      isMinimizedOnly: false,
+      badgeCount: 0,
+      isSystem: true,
+      onClick: () => wmStore.toggleLauncher(),
+    },
+    ...visibleIds.map((id): DockSlot => {
+      const def = APP_CATALOG[id];
+      const appWins = wm.windows.filter((w) => w.appId === id);
+      const isOpen = appWins.length > 0;
+      const isMinimizedOnly = isOpen && appWins.every((w) => w.minimized);
+      const isActive = appWins.some((w) => w.id === wm.activeWindowId && !w.minimized);
+      return {
+        key: id,
+        appId: id,
+        label: def.shortTitle,
+        shortcut: def.shortcut,
+        accent: def.accent,
+        icon: APP_ICONS[id] ?? Sparkles,
+        isActive,
+        isOpen,
+        isMinimizedOnly,
+        badgeCount: appWins.length,
+        onClick: () => {
+          triggerBounce(id);
+          wmStore.openApp(id);
+        },
+      };
+    }),
+    {
+      key: "__mission__",
+      label: "Mission Control",
+      shortcut: "⌘E",
+      icon: Layers,
+      isActive: wm.missionControlOpen,
+      isOpen: wm.missionControlOpen,
+      isMinimizedOnly: false,
+      badgeCount: 0,
+      isSystem: true,
+      onClick: () => wmStore.toggleMissionControl(),
+    },
+  ];
+
+  // Snapshot resting icon centers once per layout change (zero layout thrash on mousemove!)
+  const measureCenters = useCallback(() => {
+    const next = slotRefs.current.slice(0, slots.length).map((el) => {
+      if (!el) return 0;
+      const r = el.getBoundingClientRect();
+      return r.left + r.width / 2;
+    });
+    setCenters(next);
+  }, [slots.length]);
+
+  useEffect(() => {
+    measureCenters();
+  }, [measureCenters, viewportWidth, baseSize]);
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!magEnabled || e.pointerType === "touch") return;
+    if (centers.length !== slots.length) measureCenters();
+    const x = e.clientX;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      setPointerX(x);
+    });
+  };
+
+  const handlePointerLeave = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    setPointerX(null);
+    setHoveredKey(null);
+  };
+
+  const getScaleAndLift = (idx: number): { scale: number; lift: number } => {
+    if (!magEnabled || pointerX === null) return { scale: 1, lift: 0 };
+    const center = centers[idx];
+    if (!center) return { scale: 1, lift: 0 };
+    const dist = Math.abs(pointerX - center);
+    const radius = 148;
     if (dist >= radius) return { scale: 1, lift: 0 };
-    const factor = Math.cos((dist / radius) * (Math.PI / 2));
-    const smooth = factor * factor;
+    const t = Math.cos((dist / radius) * (Math.PI / 2));
+    const smooth = t * t;
     return {
-      scale: 1 + smooth * 0.36,
-      lift: smooth * 9,
+      scale: 1 + smooth * 0.52,
+      lift: smooth * 14,
     };
   };
 
+  // Hide dock gracefully on iPad if software keyboard is covering the bottom
+  const hiddenForKeyboard = isTouch && keyboardInset > 100;
+
   return (
-    <div className="hidden md:block fixed bottom-3 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-16px)]">
+    <div
+      style={{
+        bottom: "max(0.75rem, env(safe-area-inset-bottom))",
+      }}
+      className={`hidden md:flex fixed left-1/2 -translate-x-1/2 z-50 justify-center pointer-events-none transition-all duration-200 ${
+        hiddenForKeyboard ? "translate-y-28 opacity-0" : "translate-y-0 opacity-100"
+      }`}
+    >
       <nav
-        ref={navRef}
-        onMouseMove={(e) => setMouseX(e.clientX)}
-        onMouseLeave={() => setMouseX(null)}
-        className="glass-dock px-2.5 py-2 rounded-2xl flex items-end gap-1.5 overflow-x-auto no-scrollbar"
+        onPointerEnter={() => {
+          if (magEnabled) measureCenters();
+        }}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+        className="relative pointer-events-auto flex items-end px-3 pb-2 pt-1 overflow-visible"
       >
-        {/* App Launcher / Launchpad (All 18 Apps) */}
-        <button
-          data-dock-idx={0}
-          type="button"
-          onClick={() => wmStore.toggleLauncher()}
-          className="group relative flex flex-col items-center justify-end shrink-0"
+        {/* Frosted Liquid Glass Tray (sits strictly behind icons so zoom & tooltips are NEVER clipped!) */}
+        <div
+          style={{ height: `${baseSize + 20}px` }}
+          className="glass-dock pointer-events-none absolute inset-x-0 bottom-0 rounded-[22px] transition-all duration-150"
+        />
+
+        {/* Icons Row — overflow-visible! */}
+        <div
+          ref={rowRef}
+          className="relative z-10 flex items-end gap-1.5 overflow-visible"
         >
-          <span className="pointer-events-none absolute -top-11 px-2.5 py-1 rounded-lg bg-[#0d1018]/95 border border-white/15 text-[11px] font-medium text-white whitespace-nowrap opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-xl z-20">
-            All Apps ({Object.keys(APP_CATALOG).length - 2}) <span className="ml-1 text-zinc-500 font-mono">F4</span>
-          </span>
-          <div
-            style={{
-              transform: `translateY(${-getScale(0).lift.toFixed(1)}px) scale(${getScale(0).scale.toFixed(3)})`,
-              transformOrigin: "bottom center",
-            }}
-            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-100 ease-out border ${
-              wm.launcherOpen
-                ? "bg-gradient-to-br from-violet-500 to-cyan-500 border-white/50 text-white shadow-lg"
-                : "bg-white/10 hover:bg-white/18 border-white/15 text-zinc-100"
-            }`}
-          >
-            <Grid2x2 className="w-5 h-5" />
-          </div>
-          <span
-            className={`mt-1 h-1 rounded-full transition-all ${
-              wm.launcherOpen ? "w-3.5 bg-cyan-400 opacity-100" : "w-1 opacity-0"
-            }`}
-          />
-        </button>
+          {slots.map((slot, idx) => {
+            const Icon = slot.icon;
+            const { scale, lift } = getScaleAndLift(idx);
+            const size = Math.round(baseSize * scale);
+            const showDividerAfter = idx === 0 || idx === slots.length - 2;
+            const isHovered = hoveredKey === slot.key && !isTouch;
+            const isBouncing = bouncingKey === slot.key;
 
-        <div className="h-9 w-px bg-white/12 mx-0.5 self-center shrink-0" />
-
-        {visibleIds.map((id, i) => {
-          const idx = i + 1;
-          const def = APP_CATALOG[id];
-          const Icon = APP_ICONS[id] ?? Sparkles;
-          const appWins = wm.windows.filter((w) => w.appId === id);
-          const isOpen = appWins.length > 0;
-          const isMinimizedOnly = isOpen && appWins.every((w) => w.minimized);
-          const isActive = appWins.some((w) => w.id === wm.activeWindowId && !w.minimized);
-          const { scale, lift } = getScale(idx);
-
-          return (
-            <button
-              key={id}
-              data-dock-idx={idx}
-              type="button"
-              onClick={() => wmStore.openApp(id)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                wmStore.setContextMenu({ x: e.clientX, y: e.clientY, kind: "dock", appId: id });
-              }}
-              className="group relative flex flex-col items-center justify-end shrink-0"
-            >
-              <span className="pointer-events-none absolute -top-11 px-2.5 py-1 rounded-lg bg-[#0d1018]/95 border border-white/15 text-[11px] font-medium text-white whitespace-nowrap opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-xl z-20">
-                {def.shortTitle}
-                {def.shortcut && <span className="ml-1.5 text-zinc-500 font-mono">{def.shortcut}</span>}
-              </span>
-
-              <div
-                style={{
-                  transform: `translateY(${-lift.toFixed(1)}px) scale(${scale.toFixed(3)})`,
-                  transformOrigin: "bottom center",
-                }}
-                className={`relative w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-100 ease-out bg-gradient-to-br ${def.accent} ${
-                  isActive
-                    ? "ring-2 ring-white/60 shadow-[0_10px_28px_rgba(0,0,0,0.55)]"
-                    : "opacity-90 group-hover:opacity-100 shadow-md"
-                }`}
-              >
-                <Icon className="w-5 h-5 text-white drop-shadow" />
-                {appWins.length > 1 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 border border-white/30 text-[9px] font-mono text-white flex items-center justify-center">
-                    {appWins.length}
+            return (
+              <React.Fragment key={slot.key}>
+                <button
+                  ref={(el) => {
+                    slotRefs.current[idx] = el;
+                  }}
+                  type="button"
+                  onClick={slot.onClick}
+                  onPointerEnter={(e) => {
+                    if (e.pointerType !== "touch") setHoveredKey(slot.key);
+                  }}
+                  onPointerLeave={() => {
+                    setHoveredKey((cur) => (cur === slot.key ? null : cur));
+                  }}
+                  onContextMenu={(e) => {
+                    if (!slot.appId) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    wmStore.setContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      kind: "dock",
+                      appId: slot.appId,
+                    });
+                  }}
+                  style={{
+                    width: `${size}px`,
+                    transition: pointerX !== null ? "width 75ms ease-out" : "width 210ms cubic-bezier(0.22, 1, 0.36, 1)",
+                  }}
+                  className="group relative flex flex-col items-center justify-end shrink-0 outline-none cursor-pointer touch-manipulation"
+                >
+                  {/* Floating Unclipped Glass Tooltip Pill with Caret */}
+                  <span
+                    style={{
+                      transform: `translateY(${isHovered ? -(lift + 8) : -(lift + 2)}px) scale(${isHovered ? 1 : 0.94})`,
+                    }}
+                    className={`pointer-events-none absolute bottom-full mb-2 px-2.5 py-1 rounded-xl bg-[#0d101c]/95 backdrop-blur-xl border border-white/18 text-[11px] font-medium text-white whitespace-nowrap shadow-[0_12px_30px_rgba(0,0,0,0.7)] transition-all duration-150 z-30 ${
+                      isHovered ? "opacity-100" : "opacity-0"
+                    }`}
+                  >
+                    {slot.label}
+                    {slot.shortcut && (
+                      <span className="ml-1.5 px-1 py-0.2 rounded bg-white/10 text-zinc-300 font-mono text-[10px]">
+                        {slot.shortcut}
+                      </span>
+                    )}
+                    <span className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-2 h-2 rotate-45 bg-[#0d101c] border-r border-b border-white/18" />
                   </span>
+
+                  {/* Glossy Squircle App Icon */}
+                  <div
+                    style={{
+                      width: `${size}px`,
+                      height: `${size}px`,
+                      transform: `translateY(${-lift.toFixed(1)}px)`,
+                      transition:
+                        pointerX !== null
+                          ? "width 75ms ease-out, height 75ms ease-out, transform 75ms ease-out"
+                          : "width 210ms cubic-bezier(0.22, 1, 0.36, 1), height 210ms cubic-bezier(0.22, 1, 0.36, 1), transform 210ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
+                    className={`dock-squircle rounded-[26%] flex items-center justify-center active:scale-90 ${
+                      isBouncing ? "animate-dock-bounce" : ""
+                    } ${
+                      slot.isSystem
+                        ? slot.isActive
+                          ? "bg-gradient-to-br from-violet-500 to-cyan-500 border border-white/45 text-white shadow-[0_10px_28px_rgba(139,92,246,0.45)]"
+                          : "bg-white/12 hover:bg-white/20 border border-white/18 text-zinc-100"
+                        : `bg-gradient-to-br ${slot.accent} ${
+                            slot.isActive
+                              ? "ring-[1.5px] ring-white/75 shadow-[0_14px_32px_rgba(0,0,0,0.65)]"
+                              : "opacity-95 group-hover:opacity-100"
+                          }`
+                    }`}
+                  >
+                    <Icon
+                      className={`${iconGlyphSize} text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] transition-transform duration-100`}
+                    />
+                    {slot.badgeCount > 1 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-black/85 border border-white/35 text-[9px] font-mono font-bold text-white flex items-center justify-center z-10 shadow">
+                        {slot.badgeCount}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Glowing Active / Minimized Indicator Dot */}
+                  <span
+                    className={`mt-1.5 h-[3.5px] rounded-full transition-all duration-200 ${
+                      slot.isActive
+                        ? "w-4 bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)] opacity-100"
+                        : slot.isMinimizedOnly
+                        ? "w-2 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)] opacity-95"
+                        : slot.isOpen
+                        ? "w-1.5 bg-zinc-300 opacity-85"
+                        : "w-1 opacity-0"
+                    }`}
+                  />
+                </button>
+
+                {showDividerAfter && (
+                  <div
+                    style={{ height: `${Math.round(baseSize * 0.72)}px` }}
+                    className="w-px bg-gradient-to-b from-transparent via-white/22 to-transparent mx-1 mb-2.5 shrink-0"
+                  />
                 )}
-              </div>
-
-              <span
-                className={`mt-1 h-1 rounded-full transition-all ${
-                  isActive
-                    ? "w-3.5 bg-white opacity-100"
-                    : isMinimizedOnly
-                    ? "w-1.5 bg-amber-400 opacity-90"
-                    : isOpen
-                    ? "w-1.5 bg-zinc-400 opacity-85"
-                    : "w-1 opacity-0"
-                }`}
-              />
-            </button>
-          );
-        })}
-
-        {/* Divider + Mission Control trigger */}
-        <div className="h-9 w-px bg-white/12 mx-0.5 self-center shrink-0" />
-        <button
-          data-dock-idx={visibleIds.length + 1}
-          type="button"
-          onClick={() => wmStore.toggleMissionControl()}
-          className="group relative flex flex-col items-center justify-end shrink-0"
-        >
-          <span className="pointer-events-none absolute -top-11 px-2.5 py-1 rounded-lg bg-[#0d1018]/95 border border-white/15 text-[11px] font-medium text-white whitespace-nowrap opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-xl z-20">
-            Mission Control <span className="ml-1 text-zinc-500 font-mono">⌘E</span>
-          </span>
-          <div
-            style={{
-              transform: `translateY(${-getScale(visibleIds.length + 1).lift.toFixed(1)}px) scale(${getScale(visibleIds.length + 1).scale.toFixed(3)})`,
-              transformOrigin: "bottom center",
-            }}
-            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-100 ease-out border ${
-              wm.missionControlOpen
-                ? "bg-violet-500/40 border-violet-300/60 text-white"
-                : "bg-white/10 hover:bg-white/18 border-white/15 text-zinc-200"
-            }`}
-          >
-            <Layers className="w-5 h-5" />
-          </div>
-          <span
-            className={`mt-1 h-1 rounded-full transition-all ${
-              wm.missionControlOpen ? "w-3.5 bg-violet-400 opacity-100" : "w-1 opacity-0"
-            }`}
-          />
-        </button>
+              </React.Fragment>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );

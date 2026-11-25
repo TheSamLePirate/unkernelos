@@ -1,5 +1,6 @@
 import { Box, Layers, LayoutGrid, Plus, Save, Trash2, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { useViewport } from "../core/use-viewport.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId, type SnapZone, type WorkspaceId } from "../wm/wm-store.ts";
 
 const WORKSPACES: readonly WorkspaceId[] = [1, 2, 3, 4];
@@ -61,6 +62,7 @@ function loadCustomProfiles(): DesktopProfile[] {
 
 export const MissionControlOverlay: React.FC = () => {
   const wm = useWm();
+  const { isTouch } = useViewport();
   const [spatial3d, setSpatial3d] = useState(true);
   const [tilt, setTilt] = useState({ rx: 4, ry: 0 });
   const [customProfiles, setCustomProfiles] = useState<DesktopProfile[]>(loadCustomProfiles);
@@ -126,7 +128,7 @@ export const MissionControlOverlay: React.FC = () => {
     <div
       onClick={() => wmStore.setMissionControl(false)}
       onMouseMove={(e) => {
-        if (!spatial3d) return;
+        if (!spatial3d || isTouch) return;
         const nx = (e.clientX / window.innerWidth - 0.5) * 2;
         const ny = (e.clientY / window.innerHeight - 0.5) * 2;
         setTilt({ rx: 4 - ny * 5, ry: nx * 6 });

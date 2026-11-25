@@ -8,6 +8,7 @@ import {
   Globe,
   Layers,
   Mic,
+  Search,
   SlidersHorizontal,
   Volume2,
   VolumeX,
@@ -99,7 +100,7 @@ export const TopBar: React.FC = () => {
         </button>
 
         <span className="text-white/20 hidden sm:inline">/</span>
-        <span className="font-medium text-zinc-200 max-w-[100px] sm:max-w-[110px] truncate">{activeTitle}</span>
+        <span className="hidden sm:inline font-medium text-zinc-200 max-w-[110px] truncate">{activeTitle}</span>
 
         {/* Global Active Workspace / Project Switcher */}
         <WorkspaceSwitcher />
@@ -166,10 +167,20 @@ export const TopBar: React.FC = () => {
 
       {/* Right: Live VM Telemetry Pills + Quick Controls + Control Center */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Mobile Spotlight Quick Search */}
+        <button
+          type="button"
+          onClick={() => wmStore.toggleCommandPalette()}
+          className="flex sm:hidden p-1.5 rounded-lg text-zinc-300 active:bg-white/15 transition"
+          title="Spotlight Search"
+        >
+          <Search className="w-3.5 h-3.5" />
+        </button>
+
         <button
           type="button"
           onClick={() => voiceOsEngine.toggleOpen()}
-          className="flex lg:hidden p-1 rounded-md text-violet-300 hover:text-white hover:bg-white/10 transition"
+          className="hidden sm:flex lg:hidden p-1.5 rounded-lg text-violet-300 hover:text-white hover:bg-white/10 active:scale-95 transition"
           title="Voice OS"
         >
           <Mic className="w-3.5 h-3.5" />
@@ -178,14 +189,11 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => wmStore.openApp("monitor")}
-          className="flex md:hidden items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-[10px] font-mono text-zinc-200"
+          className="flex md:hidden items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.07] border border-white/12 text-[10px] font-mono text-zinc-200 active:scale-95 transition"
           title={`Linux ${vm.distro} · ${vm.cpus} vCPU · ${vm.transport}`}
         >
           <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
           <span>{vm.cpus}c</span>
-          {vm.transport === "shared" && (
-            <span className="text-[8px] px-1 rounded bg-emerald-500/20 text-emerald-300">SAB</span>
-          )}
         </button>
 
         <button
@@ -229,7 +237,7 @@ export const TopBar: React.FC = () => {
         <button
           type="button"
           onClick={() => wmStore.setGithubModal(true)}
-          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] transition ${
+          className={`hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] transition ${
             ghAuth.status === "authenticated" && ghAuth.user
               ? "bg-emerald-500/12 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/20"
               : "bg-white/[0.05] border-white/10 text-zinc-300 hover:bg-white/12"

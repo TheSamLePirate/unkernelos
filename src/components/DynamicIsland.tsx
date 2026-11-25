@@ -65,11 +65,11 @@ export const DynamicIsland: React.FC = () => {
   const activePort = vm.detectedPorts[0]?.port;
 
   return (
-    <div className="hidden lg:flex items-center justify-center relative">
+    <div className="hidden md:flex items-center justify-center relative">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className={`group flex items-center gap-2 px-3 h-[26px] rounded-full border transition-all duration-300 ${
+        className={`group flex items-center gap-2 px-3 h-[26px] rounded-full border transition-all duration-300 active:scale-95 ${
           voice.listening
             ? "bg-gradient-to-r from-violet-600/80 via-fuchsia-600/80 to-cyan-500/80 border-white/40 text-white shadow-[0_0_24px_rgba(139,92,246,0.65)] scale-105"
             : recentApiFlash

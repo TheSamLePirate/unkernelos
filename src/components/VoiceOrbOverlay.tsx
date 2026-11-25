@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useVoiceOs, voiceOsEngine } from "../core/voice-os.ts";
 
 const VOICE_PRESETS = [
+  "Ouvre Preuves",
   "Open Code IDE",
   "Theme Cyber Tokyo",
   "Split IDE & Preview",
@@ -12,14 +13,23 @@ const VOICE_PRESETS = [
 
 /**
  * Futuristic Jarvis/visionOS Voice OS Floating Orb & Natural Command Console.
- * Renders a 60fps reactive plasma orb animated by live microphone audio level.
+ * Renders a 60fps reactive plasma orb + auto-focuses text input for macOS Dictation (Fn×2)
+ * whenever browser cloud speech recognition is unavailable or blocked.
  */
 export const VoiceOrbOverlay: React.FC = () => {
   const voice = useVoiceOs();
   const [input, setInput] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const levelRef = useRef(0);
   levelRef.current = voice.audioLevel;
+
+  // Auto-focus the text command input when speech falls back (ready for macOS Fn×2 Dictation!)
+  useEffect(() => {
+    if (voice.open && voice.errorCode) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [voice.open, voice.errorCode]);
 
   useEffect(() => {
     if (!voice.open) return;
@@ -140,16 +150,17 @@ export const VoiceOrbOverlay: React.FC = () => {
         </div>
       </div>
 
-      {/* Text Fallback Input */}
+      {/* Text / macOS Dictation Input */}
       <div className="flex items-center gap-1.5">
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
             if (e.key === "Escape") voiceOsEngine.setOpen(false);
           }}
-          placeholder="e.g. 'Theme Cyber Tokyo' or 'Split IDE & Preview'..."
+          placeholder="Dicte (Fn×2 sur Mac) ou tape ex: 'Ouvre Preuves', 'Theme Cyber Tokyo'..."
           className="flex-1 px-3 py-2 rounded-xl bg-black/55 border border-white/12 focus:border-cyan-400/50 text-xs text-white placeholder:text-zinc-500 outline-none"
         />
         <button

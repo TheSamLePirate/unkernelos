@@ -11,20 +11,35 @@ export interface VoiceState {
   readonly lastResponse: string;
   readonly audioLevel: number; // 0..1
   readonly error: string | null;
+  readonly errorCode: string | null;
 }
 
 interface SpeechRecognitionLike {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
+  maxAlternatives?: number;
   onresult: ((e: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
+  onerror: ((e: { error: string; message?: string }) => void) | null;
+  onaudiostart?: (() => void) | null;
+  onsoundstart?: (() => void) | null;
+  onspeechstart?: (() => void) | null;
+  onspeechend?: (() => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
+  abort?: () => void;
 }
 
 const APP_KEYWORDS: readonly [RegExp, AppId, string][] = [
+  [/\b(preuve|preuves|proof|poule|théorème|theoreme)\b/i, "proof-studio", "Studio de preuves"],
+  [/\b(notebook|jupyter|science|python|rust|ocaml)\b/i, "notebook", "Polyglot Notebook"],
+  [/\b(microml|micro ml|compilateur)\b/i, "microml", "microML Explorer"],
+  [/\b(swarm|essaim|multi-agent)\b/i, "agent-swarm", "Agent Swarm"],
+  [/\b(store|boutique|catalogue|templates?)\b/i, "app-store", "App Store"],
+  [/\b(network|réseau|reseau|http|trafic|inspecteur)\b/i, "network-inspector", "Network Inspector"],
+  [/\b(media|vidéo|video|pdf|webcam|recorder)\b/i, "media-studio", "Media Studio"],
+  [/\b(automation|workflow|automatisation)\b/i, "automations", "Automations"],
   [/\b(studio|agent studio|claude|pi)\b/i, "agent-studio", "Agent Studio"],
   [/\b(api|osctl|bridge|mcp)\b/i, "agent-api", "Agent OS API"],
   [/\b(ide|code|editor|éditeur)\b/i, "ide", "Code IDE"],
@@ -62,6 +77,40 @@ function getRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
     | null;
 }
 
+function normalizeBcp47(raw?: string): string {
+  const l = (raw || "").trim();
+  if (!l) return "fr-FR";
+  if (l.includes("-")) return l;
+  const map: Record<string, string> = {
+    fr: "fr-FR",
+    en: "en-US",
+    es: "es-ES",
+    de: "de-DE",
+    it: "it-IT",
+    pt: "pt-PT",
+    ja: "ja-JP",
+  };
+  return map[l.toLowerCase()] ?? "fr-FR";
+}
+
+function friendlySpeechError(code: string): string {
+  switch (code) {
+    case "network":
+      return "Reconnaissance vocale cloud bloquée par ce navigateur (Brave/Arc/Chrome sans service Google Speech) ou hors-ligne. Utilise la Dictée macOS (touche 🎤 / Fn×2) dans le champ ci-dessous ou tape ta commande.";
+    case "not-allowed":
+    case "service-not-allowed":
+      return "Accès micro refusé — autorise le microphone dans les réglages du navigateur ou tape ta commande ci-dessous.";
+    case "audio-capture":
+      return "Aucun microphone détecté sur cet appareil.";
+    case "no-speech":
+      return "Aucune voix détectée — réessaie en parlant près du micro.";
+    case "aborted":
+      return "";
+    default:
+      return `Erreur vocale (${code}) — tu peux toujours taper ou dicter ta commande ci-dessous.`;
+  }
+}
+
 class VoiceOsEngine {
   private state: VoiceState = {
     open: false,
@@ -71,12 +120,12 @@ class VoiceOsEngine {
     lastResponse: "",
     audioLevel: 0,
     error: null,
+    errorCode: null,
   };
   private listeners = new Set<() => void>();
   private recognition: SpeechRecognitionLike | null = null;
-  private micStream: MediaStream | null = null;
-  private audioCtx: AudioContext | null = null;
-  private rafId = 0;
+  private pulseRaf = 0;
+  private speechActive = false;
 
   public subscribe = (fn: () => void): (() => void) => {
     this.listeners.add(fn);
@@ -92,51 +141,45 @@ class VoiceOsEngine {
 
   public setOpen(open: boolean): void {
     if (!open) this.stopListening();
-    this.setState({ open, error: null });
+    this.setState({ open, error: null, errorCode: null });
   }
 
   public toggleOpen(): void {
     if (this.state.open) {
       this.setOpen(false);
     } else {
-      this.setState({ open: true, error: null });
+      this.setState({ open: true, error: null, errorCode: null });
       if (this.state.supported) void this.startListening();
     }
   }
 
-  private async startMicMeter(): Promise<void> {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.micStream = stream;
-      const ctx = new AudioContext();
-      this.audioCtx = ctx;
-      const src = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      src.connect(analyser);
-      const data = new Uint8Array(analyser.frequencyBinCount);
-
-      const tick = () => {
-        if (!this.state.listening) return;
-        analyser.getByteFrequencyData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) sum += data[i]!;
-        const avg = sum / data.length / 128;
-        this.setState({ audioLevel: Math.min(1, avg) });
-        this.rafId = requestAnimationFrame(tick);
-      };
-      this.rafId = requestAnimationFrame(tick);
-    } catch {
-      // Mic meter optional — recognition can still run
-    }
+  /**
+   * Animate the reactive orb smoothly WITHOUT grabbing a competing getUserMedia()
+   * CoreAudio stream (calling getUserMedia alongside webkitSpeechRecognition on macOS/iOS
+   * conflicts over the mic device and triggers premature disconnects/network errors!).
+   */
+  private startPulseMeter(): void {
+    cancelAnimationFrame(this.pulseRaf);
+    let lastUpdate = 0;
+    const tick = (now: number) => {
+      if (!this.state.listening) return;
+      if (now - lastUpdate > 55) {
+        lastUpdate = now;
+        const base = this.speechActive ? 0.52 : 0.18;
+        const wave =
+          Math.sin(now * 0.008) * (this.speechActive ? 0.25 : 0.08) +
+          Math.cos(now * 0.017) * (this.speechActive ? 0.18 : 0.04);
+        this.setState({ audioLevel: Math.max(0.06, Math.min(1, base + wave)) });
+      }
+      this.pulseRaf = requestAnimationFrame(tick);
+    };
+    this.pulseRaf = requestAnimationFrame(tick);
   }
 
-  private stopMicMeter(): void {
-    cancelAnimationFrame(this.rafId);
-    this.micStream?.getTracks().forEach((t) => t.stop());
-    this.micStream = null;
-    this.audioCtx?.close().catch(() => {});
-    this.audioCtx = null;
+  private stopPulseMeter(): void {
+    cancelAnimationFrame(this.pulseRaf);
+    this.pulseRaf = 0;
+    this.speechActive = false;
     this.setState({ audioLevel: 0 });
   }
 
@@ -146,23 +189,45 @@ class VoiceOsEngine {
       this.setState({
         open: true,
         supported: false,
-        error: "Web Speech Recognition unavailable in this browser — type a natural command below!",
+        errorCode: "unsupported",
+        error: "Web Speech Recognition indisponible dans ce navigateur — tape ou dicte (Fn×2) ta commande ci-dessous.",
       });
       return;
     }
 
     this.stopListening();
     uiSounds.playClick();
+
     const rec = new Ctor();
-    rec.lang = navigator.language || "fr-FR";
+    rec.lang = normalizeBcp47(navigator.language);
     rec.continuous = false;
     rec.interimResults = true;
+    rec.maxAlternatives = 1;
     this.recognition = rec;
 
-    this.setState({ open: true, listening: true, transcript: "", error: null });
-    void this.startMicMeter();
+    this.setState({ open: true, listening: true, transcript: "", error: null, errorCode: null });
+    this.startPulseMeter();
+
+    rec.onaudiostart = () => {
+      if (this.recognition !== rec) return;
+      this.speechActive = false;
+    };
+    rec.onsoundstart = () => {
+      if (this.recognition !== rec) return;
+      this.speechActive = true;
+    };
+    rec.onspeechstart = () => {
+      if (this.recognition !== rec) return;
+      this.speechActive = true;
+    };
+    rec.onspeechend = () => {
+      if (this.recognition !== rec) return;
+      this.speechActive = false;
+    };
 
     rec.onresult = (e) => {
+      if (this.recognition !== rec) return;
+      this.speechActive = true;
       let full = "";
       let isFinal = false;
       for (let i = 0; i < e.results.length; i++) {
@@ -180,11 +245,18 @@ class VoiceOsEngine {
     };
 
     rec.onerror = (e) => {
+      if (this.recognition !== rec) return;
+      const code = e.error || "unknown";
       this.stopListening();
-      this.setState({ error: `Voice error: ${e.error}` });
+      const friendly = friendlySpeechError(code);
+      this.setState({
+        errorCode: code,
+        error: friendly || null,
+      });
     };
 
     rec.onend = () => {
+      if (this.recognition !== rec) return;
       if (this.state.listening) {
         const t = this.state.transcript.trim();
         this.stopListening();
@@ -196,25 +268,34 @@ class VoiceOsEngine {
       rec.start();
     } catch (err) {
       this.stopListening();
-      this.setState({ error: err instanceof Error ? err.message : String(err) });
+      this.setState({
+        errorCode: "start-failed",
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
   public stopListening(): void {
-    try {
-      this.recognition?.stop();
-    } catch {
-      // ignore
-    }
+    const rec = this.recognition;
     this.recognition = null;
-    this.stopMicMeter();
+    if (rec) {
+      rec.onresult = null;
+      rec.onerror = null;
+      rec.onend = null;
+      try {
+        rec.stop();
+      } catch {
+        // ignore
+      }
+    }
+    this.stopPulseMeter();
     this.setState({ listening: false });
   }
 
   public async executeNaturalCommand(raw: string): Promise<string> {
     const text = raw.trim();
     if (!text) return "";
-    this.setState({ transcript: text, error: null });
+    this.setState({ transcript: text, error: null, errorCode: null });
 
     let reply = "";
 
@@ -281,7 +362,7 @@ class VoiceOsEngine {
       }
     }
 
-    // 8. Fallback: run as shell/agent command notification or open Agent Studio
+    // 8. Fallback: open Agent Studio
     if (!reply) {
       await executeOsAction("wm.open", { appId: "agent-studio" }, { source: "ui" });
       await executeOsAction(
