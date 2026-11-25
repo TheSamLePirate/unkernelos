@@ -3,7 +3,7 @@ import { Loader2, X } from "lucide-react";
 import React, { lazy, Suspense, useCallback, useEffect, useRef } from "react";
 import { attachAgentOsBridge, detachAgentOsBridge } from "../core/agent-os-api.ts";
 import { clipboardStore } from "../core/clipboard-store.ts";
-import { modStore, useMods } from "../core/mod-store.ts";
+import { modStore, ULTRA_HD_BACKDROPS, useMods } from "../core/mod-store.ts";
 import { applyOsThemeToDocument } from "../core/os-themes.ts";
 import {
   appRuntime,
@@ -488,6 +488,15 @@ export const Desktop: React.FC = () => {
     };
   }, []);
 
+  const activeBackdropUrl =
+    mods.activeBackdropImageId === "custom"
+      ? mods.customBackdropImageUrl.trim()
+      : mods.activeBackdropImageId
+      ? ULTRA_HD_BACKDROPS.find((b) => b.id === mods.activeBackdropImageId)?.url ?? ""
+      : "";
+  const spatialChromeActive = mods.desktop3d.enabled && mods.desktop3d.spatialChrome3d;
+  const activeWin = wm.windows.find((w) => w.id === wm.activeWindowId);
+
   return (
     <div
       onContextMenu={(e) => {
@@ -497,11 +506,21 @@ export const Desktop: React.FC = () => {
       }}
       className="relative w-screen h-[100dvh] overflow-hidden wallpaper-fallback"
     >
-      {/* AAA 3D WebGPU Three.js Spatial Desktop OR 2D WebGPU Live Shader Backdrop */}
+      {/* AAA 3D WebGPU Three.js Spatial Desktop OR Ultra-HD 2D NASA/4K Image OR 2D WebGPU Live Shader Backdrop */}
       {mods.desktop3d.enabled ? (
         <Suspense fallback={null}>
           <ThreeDesktop3d />
         </Suspense>
+      ) : activeBackdropUrl ? (
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-black">
+          <img
+            src={activeBackdropUrl}
+            crossOrigin="anonymous"
+            alt=""
+            className="w-full h-full object-cover object-center scale-[1.01] transition-opacity duration-500"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/35" />
+        </div>
       ) : (
         cfg.webgpuWallpaper && (
           <canvas
@@ -582,14 +601,118 @@ export const Desktop: React.FC = () => {
               </WindowFrame>
             );
           })}
+
+          {/* FULL 3D SPATIAL GLOBAL MENU BAR (Floating above the 3D windows inside the 3D scene!) */}
+          {spatialChromeActive && (
+            <div
+              ref={(el) => {
+                spatial3dBridge.globalMenu3dEl = el;
+              }}
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                backfaceVisibility: mods.desktop3d.doubleSidedWindows ? "visible" : "hidden",
+                WebkitBackfaceVisibility: mods.desktop3d.doubleSidedWindows ? "visible" : "hidden",
+              }}
+              className="pointer-events-auto flex items-center justify-between gap-4 px-5 py-2.5 min-w-[920px] rounded-full glass-dock border border-white/25 shadow-[0_24px_60px_rgba(0,0,0,0.7)] text-xs text-white select-none"
+            >
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => wmStore.toggleCommandPalette()}
+                  className="flex items-center gap-2 font-bold text-white hover:text-cyan-200 transition cursor-pointer"
+                >
+                  <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 flex items-center justify-center text-xs font-extrabold shadow">
+                    U
+                  </span>
+                  <span>{mods.shell.brandLabel || "unkernelOS"} 3D</span>
+                </button>
+                <span className="text-white/25">|</span>
+                <span className="font-semibold text-cyan-200 max-w-[180px] truncate">
+                  {activeWin ? APP_CATALOG[activeWin.appId].title : "Espace Spatial 3D"}
+                </span>
+                <div className="flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded-full bg-white/8 border border-white/12">
+                  {([1, 2, 3, 4] as WorkspaceId[]).map((ws) => (
+                    <button
+                      key={ws}
+                      type="button"
+                      onClick={() => wmStore.switchWorkspace(ws)}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-mono transition cursor-pointer ${
+                        wm.activeWorkspace === ws
+                          ? "bg-cyan-400 text-black font-bold shadow"
+                          : "text-zinc-300 hover:bg-white/12 hover:text-white"
+                      }`}
+                    >
+                      B{ws}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => wmStore.toggleLauncher()}
+                  className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-[11px] font-medium cursor-pointer"
+                >
+                  Apps
+                </button>
+                <button
+                  type="button"
+                  onClick={() => wmStore.toggleMissionControl()}
+                  className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-[11px] font-medium cursor-pointer"
+                >
+                  Mission Control
+                </button>
+                <button
+                  type="button"
+                  onClick={() => wmStore.openApp("mod-studio")}
+                  className="px-3 py-1 rounded-full bg-fuchsia-500/25 hover:bg-fuchsia-500/40 border border-fuchsia-300/45 text-[11px] font-semibold text-fuchsia-100 cursor-pointer"
+                >
+                  Mod Studio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => wmStore.toggleCommandPalette()}
+                  className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 font-mono text-[11px] cursor-pointer"
+                >
+                  ⌘K
+                </button>
+                <span className="font-mono text-xs text-zinc-200 pl-1 tabular-nums">
+                  {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* FULL 3D SUPER DOCK & TASKBAR (Floating ergonomically below the 3D windows with full magnification & Start Menu!) */}
+          {spatialChromeActive && (
+            <div
+              ref={(el) => {
+                spatial3dBridge.dock3dEl = el;
+              }}
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                backfaceVisibility: mods.desktop3d.doubleSidedWindows ? "visible" : "hidden",
+                WebkitBackfaceVisibility: mods.desktop3d.doubleSidedWindows ? "visible" : "hidden",
+              }}
+              className="pointer-events-auto flex flex-col items-center justify-center overflow-visible"
+            >
+              <Dock embedded3d />
+              <ShellTaskbarAndMenu embedded3d />
+            </div>
+          )}
         </div>
       </main>
 
-      {/* Bottom Floating AAA Magnification Dock (Desktop & Tablet) */}
-      <Dock />
+      {/* Bottom Floating AAA Magnification Dock (2D HUD mode when 3D Spatial Chrome is off) */}
+      {!spatialChromeActive && <Dock />}
 
-      {/* Universal Structural Shell Layer (Win95/XP/11 Taskbars, Start Menu, KDE/XFCE Panels, Desktop Icons, iOS SpringBoard, VisionOS Rail, Compiz Cube HUD) */}
-      <ShellTaskbarAndMenu />
+      {/* Universal Structural Shell Layer (2D Taskbars/Icons/SpringBoard/VisionOS Rail; Taskbar hidden here when mounted in 3D!) */}
+      {!spatialChromeActive && <ShellTaskbarAndMenu />}
 
       {/* AAA Mobile Bottom Navigation Bar (< 768px) */}
       <MobileNavBar />

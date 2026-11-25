@@ -103,7 +103,7 @@ const VISION_RAIL_APPS: readonly AppId[] = [
  * - Apple VisionOS Floating Left Glass Ornament Rail
  * - Compiz / Beryl 3D Cube Workspace Switcher Pill
  */
-export const ShellTaskbarAndMenu: React.FC = () => {
+export const ShellTaskbarAndMenu: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false }) => {
   const wm = useWm();
   const mods = useMods();
   const sh = mods.shell;
@@ -157,7 +157,7 @@ export const ShellTaskbarAndMenu: React.FC = () => {
   return (
     <>
       {/* 1. CLASSIC DESKTOP ICONS GRID (Win95 / WinXP / Win11 / XFCE / KDE / Aqua) */}
-      {sh.desktopIcons && !sh.springboardHome && (
+      {!embedded3d && sh.desktopIcons && !sh.springboardHome && (
         <div
           onClick={() => setSelectedIcon(null)}
           style={{ top: sh.topBarStyle === "hidden" ? "16px" : "48px" }}
@@ -206,7 +206,7 @@ export const ShellTaskbarAndMenu: React.FC = () => {
       )}
 
       {/* 2. AUTHENTIC iOS / iPadOS SPRINGBOARD HOME SCREEN */}
-      {sh.springboardHome && (
+      {!embedded3d && sh.springboardHome && (
         <>
           {!hasVisibleWindow && (
             <div className="fixed inset-0 top-10 bottom-24 z-[8] flex flex-col items-center justify-center px-6 py-4 select-none animate-overlay-fade">
@@ -274,7 +274,7 @@ export const ShellTaskbarAndMenu: React.FC = () => {
       )}
 
       {/* 3. APPLE VISIONOS LEFT FLOATING GLASS ORNAMENT RAIL */}
-      {isVision && (
+      {!embedded3d && isVision && (
         <aside className="fixed left-4 top-1/2 -translate-y-1/2 z-50 hidden md:flex flex-col items-center gap-2 p-2 rounded-[28px] glass-dock border border-white/30 shadow-[0_24px_64px_rgba(0,0,0,0.65)] select-none">
           <button
             type="button"
@@ -308,8 +308,8 @@ export const ShellTaskbarAndMenu: React.FC = () => {
         </aside>
       )}
 
-      {/* 4. COMPIZ / BERYL 3D DESKTOP CUBE QUICK ROTATOR PILL */}
-      {sh.compizCube && (
+      {/* 4. COMPIZ / BERYL 3D DESKTOP CUBE QUICK ROTATOR PILL (2D mode only; 3D mode has its own HUD) */}
+      {!embedded3d && !mods.desktop3d.enabled && sh.compizCube && (
         <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[46] hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full glass-dock border border-emerald-400/40 text-[11px] font-mono text-emerald-100 shadow-[0_0_24px_rgba(16,185,129,0.28)] select-none">
           <button
             type="button"
@@ -336,16 +336,18 @@ export const ShellTaskbarAndMenu: React.FC = () => {
       {isTaskbarShell && menuOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className={`fixed z-[70] select-none animate-window-in ${
+          className={`${embedded3d ? "absolute bottom-14 left-0" : "fixed"} z-[70] select-none animate-window-in ${
             isWin11
-              ? "bottom-14 left-1/2 -translate-x-1/2 w-[480px] max-w-[94vw] rounded-2xl bg-[#181c28]/92 backdrop-blur-2xl border border-white/18 shadow-2xl p-4"
+              ? embedded3d
+                ? "left-1/2 -translate-x-1/2 w-[480px] rounded-2xl bg-[#181c28]/95 backdrop-blur-2xl border border-white/22 shadow-2xl p-4"
+                : "bottom-14 left-1/2 -translate-x-1/2 w-[480px] max-w-[94vw] rounded-2xl bg-[#181c28]/92 backdrop-blur-2xl border border-white/18 shadow-2xl p-4"
               : isWin95
-              ? "bottom-10 left-0 w-72 bg-[#c0c0c0] text-black border-2 border-white border-r-[#404040] border-b-[#404040] shadow-[6px_6px_0_rgba(0,0,0,0.45)] flex overflow-hidden"
+              ? `${embedded3d ? "" : "bottom-10 left-0"} w-72 bg-[#c0c0c0] text-black border-2 border-white border-r-[#404040] border-b-[#404040] shadow-[6px_6px_0_rgba(0,0,0,0.45)] flex overflow-hidden`
               : isWinXp
-              ? "bottom-11 left-0 w-[360px] rounded-t-xl border-2 border-[#0054e3] bg-[#d3e5fa] text-slate-900 shadow-2xl overflow-hidden"
+              ? `${embedded3d ? "" : "bottom-11 left-0"} w-[360px] rounded-t-xl border-2 border-[#0054e3] bg-[#d3e5fa] text-slate-900 shadow-2xl overflow-hidden`
               : isKde
-              ? "bottom-14 left-3 w-[380px] rounded-2xl bg-[#1b1f26]/94 backdrop-blur-2xl border border-sky-400/35 shadow-2xl p-3.5"
-              : "bottom-10 left-1 w-80 rounded-lg bg-[#1d2129] border border-slate-500/40 shadow-2xl p-3"
+              ? `${embedded3d ? "" : "bottom-14 left-3"} w-[380px] rounded-2xl bg-[#1b1f26]/94 backdrop-blur-2xl border border-sky-400/35 shadow-2xl p-3.5`
+              : `${embedded3d ? "" : "bottom-10 left-1"} w-80 rounded-lg bg-[#1d2129] border border-slate-500/40 shadow-2xl p-3`
           }`}
         >
           {/* Win95 Sidebar Banner */}
@@ -462,19 +464,23 @@ export const ShellTaskbarAndMenu: React.FC = () => {
         </div>
       )}
 
-      {/* 6. AUTHENTIC TASKBARS (Win95 · WinXP · Win11 · KDE Plasma · XFCE/LXDE) */}
+      {/* 6. AUTHENTIC TASKBARS (Win95 · WinXP · Win11 · KDE Plasma · XFCE/LXDE — works in 2D AND 3D!) */}
       {isTaskbarShell && (
         <div
-          className={`fixed z-50 hidden md:flex items-center justify-between select-none ${
+          className={`${
+            embedded3d
+              ? "relative flex w-[1120px] rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.75)] pointer-events-auto"
+              : "fixed z-50 hidden md:flex"
+          } items-center justify-between select-none ${
             isWin95
-              ? "inset-x-0 bottom-0 h-10 px-1.5 bg-[#c0c0c0] text-black border-t-2 border-white"
+              ? `${embedded3d ? "h-11 px-2 border-2" : "inset-x-0 bottom-0 h-10 px-1.5 border-t-2"} bg-[#c0c0c0] text-black border-white`
               : isWinXp
-              ? "inset-x-0 bottom-0 h-10 pr-2 bg-gradient-to-b from-[#245edb] via-[#3f8cf3] to-[#1941a5] text-white border-t border-[#5aa0ff]"
+              ? `${embedded3d ? "h-11 pr-2 overflow-hidden border" : "inset-x-0 bottom-0 h-10 pr-2 border-t"} bg-gradient-to-b from-[#245edb] via-[#3f8cf3] to-[#1941a5] text-white border-[#5aa0ff]`
               : isWin11
-              ? "inset-x-0 bottom-0 h-12 px-3 bg-[#141824]/86 backdrop-blur-2xl text-white border-t border-white/12"
+              ? `${embedded3d ? "h-13 px-4 border" : "inset-x-0 bottom-0 h-12 px-3 border-t"} bg-[#141824]/88 backdrop-blur-2xl text-white border-white/18`
               : isKde
-              ? "left-3 right-3 bottom-2 h-11 px-2.5 rounded-2xl bg-[#1a1f28]/88 backdrop-blur-2xl text-white border border-sky-400/28 shadow-2xl"
-              : "inset-x-0 bottom-0 h-9 px-2 bg-[#1c2028] text-zinc-100 border-t border-slate-600/40"
+              ? `${embedded3d ? "h-12 px-3" : "left-3 right-3 bottom-2 h-11 px-2.5"} rounded-2xl bg-[#1a1f28]/90 backdrop-blur-2xl text-white border border-sky-400/35 shadow-2xl`
+              : `${embedded3d ? "h-10 px-2.5 border" : "inset-x-0 bottom-0 h-9 px-2 border-t"} bg-[#1c2028] text-zinc-100 border-slate-500/45`
           }`}
         >
           {/* Left / Center Primary Controls */}

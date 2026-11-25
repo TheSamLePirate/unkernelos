@@ -45,23 +45,22 @@ export type TopBarStyleKind =
   | "hidden";
 
 export type Desktop3dSceneKind =
-  | "cyber-observatory"
-  | "compiz-cube"
-  | "vision-horizon"
-  | "liquid-monolith"
-  | "cyberpunk-city"
-  | "space-station"
-  | "kyoto-sanctuary";
+  | "ocean-sunset"
+  | "alpine-fjord"
+  | "earth-orbit"
+  | "jupiter-orbit"
+  | "lunar-horizon"
+  | "aurora-fjord";
 
 export type HdriPresetId =
-  | "none"
-  | "studio"
-  | "sunset"
-  | "dawn"
-  | "city"
-  | "forest"
-  | "night"
-  | "loft"
+  | "auto"
+  | "venice-4k"
+  | "alpine-4k"
+  | "night-4k"
+  | "clouds-4k"
+  | "twilight-4k"
+  | "clear-sky-4k"
+  | "space-void"
   | "custom";
 
 export interface HdriPresetMeta {
@@ -69,56 +68,135 @@ export interface HdriPresetMeta {
   readonly name: string;
   readonly emoji: string;
   readonly url: string;
+  readonly resolution: string;
 }
 
 export const HDRI_PRESETS: readonly HdriPresetMeta[] = [
   {
-    id: "studio",
-    name: "Studio Softbox",
-    emoji: "💡",
-    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/studio_small_03_1k.hdr",
-  },
-  {
-    id: "sunset",
-    name: "Venice Sunset 360°",
-    emoji: "🌅",
-    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/venice_sunset_1k.hdr",
-  },
-  {
-    id: "dawn",
-    name: "Alpine Dawn 360°",
-    emoji: "🏔️",
-    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/kiara_1_dawn_1k.hdr",
-  },
-  {
-    id: "city",
-    name: "Berlin Plaza 360°",
-    emoji: "🏙️",
-    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/potsdamer_platz_1k.hdr",
-  },
-  {
-    id: "forest",
-    name: "Alpine Forest 360°",
-    emoji: "🌲",
-    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/forest_slope_1k.hdr",
-  },
-  {
-    id: "night",
-    name: "Starry Night 360°",
-    emoji: "🌌",
-    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/dikhololo_night_1k.hdr",
-  },
-  {
-    id: "loft",
-    name: "Architect Loft 360°",
-    emoji: "🏛️",
-    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/lebombo_1k.hdr",
-  },
-  {
-    id: "none",
-    name: "Procédural (Sans HDRI)",
-    emoji: "✨",
+    id: "auto",
+    name: "Auto (Lié au Monde 3D)",
+    emoji: "🎬",
     url: "",
+    resolution: "4K",
+  },
+  {
+    id: "venice-4k",
+    name: "Venice Sunset 4K Ultra",
+    emoji: "🌅",
+    url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/venice_sunset_4k.hdr",
+    resolution: "4K",
+  },
+  {
+    id: "alpine-4k",
+    name: "Drakensberg Alpine 4K",
+    emoji: "🏔️",
+    url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/drakensberg_solitary_mountain_4k.hdr",
+    resolution: "4K",
+  },
+  {
+    id: "night-4k",
+    name: "Voie Lactée Nocturne 4K",
+    emoji: "🌌",
+    url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/rogland_clear_night_4k.hdr",
+    resolution: "4K",
+  },
+  {
+    id: "clouds-4k",
+    name: "Ciel Nuageux Cinéma 4K",
+    emoji: "⛅",
+    url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
+    resolution: "4K",
+  },
+  {
+    id: "twilight-4k",
+    name: "Crépuscule Doré 4K",
+    emoji: "🌇",
+    url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/kloppenheim_02_puresky_4k.hdr",
+    resolution: "4K",
+  },
+  {
+    id: "clear-sky-4k",
+    name: "Zénith Azur 4K",
+    emoji: "☀️",
+    url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/syferfontein_0d_clear_puresky_4k.hdr",
+    resolution: "4K",
+  },
+  {
+    id: "space-void",
+    name: "Espace Profond Étoilé",
+    emoji: "🪐",
+    url: "",
+    resolution: "∞",
+  },
+];
+
+export interface UltraHdBackdropPreset {
+  readonly id: string;
+  readonly name: string;
+  readonly emoji: string;
+  readonly category: "space" | "nature";
+  readonly url: string;
+  readonly scene3dHint: Desktop3dSceneKind;
+  readonly hdriHint: HdriPresetId;
+}
+
+/**
+ * Verified Ultra-HD NASA Space & 4K Landscape Backdrops (CORS-safe under COEP for BOTH 2D & 3D!).
+ */
+export const ULTRA_HD_BACKDROPS: readonly UltraHdBackdropPreset[] = [
+  {
+    id: "backdrop-earth-apollo",
+    name: "Terre — NASA Apollo 17 (Blue Marble)",
+    emoji: "🌍",
+    category: "space",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/The_Earth_seen_from_Apollo_17.jpg/1920px-The_Earth_seen_from_Apollo_17.jpg",
+    scene3dHint: "earth-orbit",
+    hdriHint: "space-void",
+  },
+  {
+    id: "backdrop-moon-nasa",
+    name: "Pleine Lune — Ultra-HD NASA",
+    emoji: "🌕",
+    category: "space",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/FullMoon2010.jpg/1920px-FullMoon2010.jpg",
+    scene3dHint: "lunar-horizon",
+    hdriHint: "space-void",
+  },
+  {
+    id: "backdrop-jupiter-hubble",
+    name: "Jupiter & Grande Tache Rouge — Hubble",
+    emoji: "🪐",
+    category: "space",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Jupiter_and_its_shrunken_Great_Red_Spot.jpg/1920px-Jupiter_and_its_shrunken_Great_Red_Spot.jpg",
+    scene3dHint: "jupiter-orbit",
+    hdriHint: "space-void",
+  },
+  {
+    id: "backdrop-saturn-cassini",
+    name: "Saturne Équinoxe — NASA Cassini",
+    emoji: "💫",
+    category: "space",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Saturn_during_Equinox.jpg/1920px-Saturn_during_Equinox.jpg",
+    scene3dHint: "jupiter-orbit",
+    hdriHint: "space-void",
+  },
+  {
+    id: "backdrop-galaxy-hubble",
+    name: "Galaxie Spirale NGC 4414 — Hubble",
+    emoji: "🌌",
+    category: "space",
+    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/NGC_4414_%28NASA-med%29.jpg/1920px-NGC_4414_%28NASA-med%29.jpg",
+    scene3dHint: "aurora-fjord",
+    hdriHint: "night-4k",
+  },
+  {
+    id: "backdrop-venice-sunset",
+    name: "Océan & Coucher de Soleil — 4K",
+    emoji: "🌅",
+    category: "nature",
+    url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/venice_sunset.jpg",
+    scene3dHint: "ocean-sunset",
+    hdriHint: "venice-4k",
   },
 ];
 
@@ -133,6 +211,7 @@ export interface Desktop3dModConfig {
   readonly hdriBackground: boolean;
   readonly shadowsEnabled: boolean;
   readonly doubleSidedWindows: boolean;
+  readonly spatialChrome3d: boolean; // Full 3D Super Dock / Taskbar / Global Menu inside the 3D scene!
   readonly moveSpeed: number; // 0.3..3
   readonly spatialWindows: boolean;
   readonly interactiveOrbit: boolean;
@@ -275,6 +354,8 @@ export interface ModState {
   readonly shell: ShellModConfig;
   readonly desktop3d: Desktop3dModConfig;
   readonly fx: WindowFxConfig;
+  readonly activeBackdropImageId: string | null; // Ultra-HD 2D NASA/4K backdrop (Earth, Moon, Jupiter, etc.)
+  readonly customBackdropImageUrl: string;
   readonly activeShaderModId: string | null;
   readonly shaderCompileError: string | null;
   readonly mods: readonly OsMod[];
@@ -289,12 +370,13 @@ const STORAGE_KEY = "unkernelos:mods:v2";
 export const DEFAULT_DESKTOP_3D: Desktop3dModConfig = {
   enabled: false,
   layout: "curved-cockpit",
-  scene: "cyber-observatory",
-  hdriPreset: "studio",
+  scene: "ocean-sunset",
+  hdriPreset: "auto",
   hdriUrl: "",
   hdriBackground: true,
   shadowsEnabled: true,
   doubleSidedWindows: true,
+  spatialChrome3d: true,
   moveSpeed: 1.0,
   spatialWindows: true,
   interactiveOrbit: true,
@@ -1763,7 +1845,7 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
     desktop3d: {
       enabled: true,
       layout: "compiz-cube",
-      scene: "compiz-cube",
+      scene: "aurora-fjord",
       spatialWindows: true,
       interactiveOrbit: true,
       cameraSpeed: 0.75,
@@ -2040,7 +2122,7 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
     desktop3d: {
       enabled: true,
       layout: "curved-cockpit",
-      scene: "vision-horizon",
+      scene: "alpine-fjord",
       spatialWindows: true,
       interactiveOrbit: true,
       cameraSpeed: 0.65,
@@ -2104,7 +2186,7 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
     desktop3d: {
       enabled: true,
       layout: "studio-desk",
-      scene: "cyberpunk-city",
+      scene: "earth-orbit",
       spatialWindows: true,
       interactiveOrbit: true,
       cameraSpeed: 0.85,
@@ -2218,7 +2300,7 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
     desktop3d: {
       enabled: true,
       layout: "gallery-ring",
-      scene: "kyoto-sanctuary",
+      scene: "ocean-sunset",
       spatialWindows: true,
       interactiveOrbit: true,
       cameraSpeed: 0.6,
@@ -2240,6 +2322,8 @@ function createDefaultState(): ModState {
     shell: { ...DEFAULT_SHELL },
     desktop3d: { ...DEFAULT_DESKTOP_3D },
     fx: { ...DEFAULT_WINDOW_FX },
+    activeBackdropImageId: null,
+    customBackdropImageUrl: "",
     activeShaderModId: null,
     shaderCompileError: null,
     mods: BUILTIN_MODS.map((m) => ({ ...m })),
@@ -2263,6 +2347,34 @@ function mergeById<T extends { readonly id: string }>(builtins: readonly T[], sa
   return Array.from(map.values());
 }
 
+const VALID_SCENES = new Set<Desktop3dSceneKind>([
+  "ocean-sunset",
+  "alpine-fjord",
+  "earth-orbit",
+  "jupiter-orbit",
+  "lunar-horizon",
+  "aurora-fjord",
+]);
+
+const VALID_HDRIS = new Set<HdriPresetId>([
+  "auto",
+  "venice-4k",
+  "alpine-4k",
+  "night-4k",
+  "clouds-4k",
+  "twilight-4k",
+  "clear-sky-4k",
+  "space-void",
+  "custom",
+]);
+
+function normalizeDesktop3d(raw?: Partial<Desktop3dModConfig>): Desktop3dModConfig {
+  const merged = { ...DEFAULT_DESKTOP_3D, ...(raw ?? {}) };
+  const scene = VALID_SCENES.has(merged.scene) ? merged.scene : "ocean-sunset";
+  const hdriPreset = VALID_HDRIS.has(merged.hdriPreset) ? merged.hdriPreset : "auto";
+  return { ...merged, scene, hdriPreset };
+}
+
 function loadModState(): ModState {
   const def = createDefaultState();
   if (typeof localStorage === "undefined") return def;
@@ -2275,8 +2387,10 @@ function loadModState(): ModState {
       theme: { ...def.theme, ...(p.theme ?? {}) },
       decorator: { ...def.decorator, ...(p.decorator ?? {}) },
       shell: { ...def.shell, ...(p.shell ?? {}) },
-      desktop3d: { ...def.desktop3d, ...(p.desktop3d ?? {}) },
+      desktop3d: normalizeDesktop3d(p.desktop3d),
       fx: { ...def.fx, ...(p.fx ?? {}) },
+      activeBackdropImageId: typeof p.activeBackdropImageId === "string" ? p.activeBackdropImageId : null,
+      customBackdropImageUrl: typeof p.customBackdropImageUrl === "string" ? p.customBackdropImageUrl : "",
       activeShaderModId: typeof p.activeShaderModId === "string" ? p.activeShaderModId : null,
       shaderCompileError: null,
       mods: mergeById(BUILTIN_MODS, p.mods),
@@ -2388,6 +2502,14 @@ class ModEngineStore {
 
   public setFx(patch: Partial<WindowFxConfig>): void {
     this.setState((s) => ({ ...s, fx: { ...s.fx, ...patch } }));
+  }
+
+  public setBackdropImage(id: string | null, customUrl?: string): void {
+    this.setState((s) => ({
+      ...s,
+      activeBackdropImageId: id,
+      customBackdropImageUrl: customUrl !== undefined ? customUrl : s.customBackdropImageUrl,
+    }));
   }
 
   public setUserCss(css: string): void {
@@ -2570,6 +2692,8 @@ class ModEngineStore {
         shell: this.state.shell,
         desktop3d: this.state.desktop3d,
         fx: this.state.fx,
+        activeBackdropImageId: this.state.activeBackdropImageId,
+        customBackdropImageUrl: this.state.customBackdropImageUrl,
         activeShaderModId: this.state.activeShaderModId,
         userCss: this.state.userCss,
         mods: this.state.mods,
@@ -2591,8 +2715,12 @@ class ModEngineStore {
         theme: data.theme ? { ...s.theme, ...data.theme } : s.theme,
         decorator: data.decorator ? { ...s.decorator, ...data.decorator } : s.decorator,
         shell: data.shell ? { ...s.shell, ...data.shell } : s.shell,
-        desktop3d: data.desktop3d ? { ...s.desktop3d, ...data.desktop3d } : s.desktop3d,
+        desktop3d: data.desktop3d ? normalizeDesktop3d({ ...s.desktop3d, ...data.desktop3d }) : s.desktop3d,
         fx: data.fx ? { ...s.fx, ...data.fx } : s.fx,
+        activeBackdropImageId:
+          data.activeBackdropImageId !== undefined ? data.activeBackdropImageId : s.activeBackdropImageId,
+        customBackdropImageUrl:
+          typeof data.customBackdropImageUrl === "string" ? data.customBackdropImageUrl : s.customBackdropImageUrl,
         activeShaderModId:
           data.activeShaderModId !== undefined ? data.activeShaderModId : s.activeShaderModId,
         userCss: typeof data.userCss === "string" ? data.userCss : s.userCss,

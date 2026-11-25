@@ -987,20 +987,34 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
     example: { openAnimation: "flip3d", wobblyDrag: true, burnClose: true, hoverTilt3d: true, chromaBorder: true },
   },
   {
+    method: "mod.backdrop.set",
+    category: "theme",
+    summary: "Set an Ultra-HD 2D NASA Space or 4K Nature Desktop Wallpaper (backdrop-earth-apollo, backdrop-moon-nasa, backdrop-jupiter-hubble, backdrop-saturn-cassini, backdrop-galaxy-hubble, backdrop-venice-sunset, custom URL, or null for WebGPU shaders).",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        id: { type: ["string", "null"] },
+        url: { type: "string" },
+      },
+    },
+    example: { id: "backdrop-earth-apollo" },
+  },
+  {
     method: "mod.desktop3d.set",
     category: "theme",
-    summary: "Control the True Spatial 3D WebGPU Desktop: enabled, layout (curved-cockpit, spatial-grid, compiz-cube, studio-desk, gallery-ring), scene (compiz-cube, vision-horizon, cyber-observatory, space-station, liquid-monolith, cyberpunk-city, kyoto-sanctuary), hdriPreset (studio, sunset, dawn, city, forest, night, loft, none, custom), hdriUrl, hdriBackground, shadowsEnabled, doubleSidedWindows, moveSpeed, camera (focus, overview, reset).",
+    summary: "Control the True Spatial 3D WebGPU Desktop: enabled, layout (curved-cockpit, spatial-grid, compiz-cube, studio-desk, gallery-ring), scene (ocean-sunset, alpine-fjord, earth-orbit, jupiter-orbit, lunar-horizon, aurora-fjord), hdriPreset (auto, venice-4k, alpine-4k, night-4k, clouds-4k, twilight-4k, clear-sky-4k, space-void, custom), hdriUrl, hdriBackground, shadowsEnabled, doubleSidedWindows, spatialChrome3d, moveSpeed, camera (focus, overview, reset).",
     paramsSchema: {
       type: "object",
       properties: {
         enabled: { type: "boolean" },
         layout: { type: "string", enum: ["curved-cockpit", "spatial-grid", "compiz-cube", "studio-desk", "gallery-ring"] },
-        scene: { type: "string", enum: ["compiz-cube", "vision-horizon", "cyber-observatory", "space-station", "liquid-monolith", "cyberpunk-city", "kyoto-sanctuary"] },
-        hdriPreset: { type: "string", enum: ["studio", "sunset", "dawn", "city", "forest", "night", "loft", "none", "custom"] },
+        scene: { type: "string", enum: ["ocean-sunset", "alpine-fjord", "earth-orbit", "jupiter-orbit", "lunar-horizon", "aurora-fjord"] },
+        hdriPreset: { type: "string", enum: ["auto", "venice-4k", "alpine-4k", "night-4k", "clouds-4k", "twilight-4k", "clear-sky-4k", "space-void", "custom"] },
         hdriUrl: { type: "string" },
         hdriBackground: { type: "boolean" },
         shadowsEnabled: { type: "boolean" },
         doubleSidedWindows: { type: "boolean" },
+        spatialChrome3d: { type: "boolean" },
         moveSpeed: { type: "number" },
         camera: { type: "string", enum: ["focus", "overview", "reset"] },
         cameraSpeed: { type: "number" },
@@ -1008,7 +1022,7 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
         particleDensity: { type: "number" },
       },
     },
-    example: { enabled: true, layout: "spatial-grid", scene: "space-station", hdriPreset: "sunset", shadowsEnabled: true, doubleSidedWindows: true },
+    example: { enabled: true, layout: "spatial-grid", scene: "earth-orbit", spatialChrome3d: true, shadowsEnabled: true, doubleSidedWindows: true },
   },
   {
     method: "mod.shader.set",
@@ -2133,6 +2147,20 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       return { fx: modStore.getSnapshot().fx };
     }
 
+    case "mod.backdrop.set": {
+      if (p.id === null) {
+        modStore.setBackdropImage(null);
+        return { activeBackdropImageId: null };
+      }
+      if (typeof p.url === "string" && p.url.trim()) {
+        modStore.setBackdropImage("custom", p.url.trim());
+        return { activeBackdropImageId: "custom", customBackdropImageUrl: p.url.trim() };
+      }
+      const id = String(p.id ?? "").trim() || null;
+      modStore.setBackdropImage(id);
+      return { activeBackdropImageId: id };
+    }
+
     case "mod.desktop3d.set": {
       const patch: Record<string, unknown> = {};
       for (const k of [
@@ -2144,6 +2172,7 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
         "hdriBackground",
         "shadowsEnabled",
         "doubleSidedWindows",
+        "spatialChrome3d",
         "moveSpeed",
         "spatialWindows",
         "interactiveOrbit",

@@ -1,10 +1,13 @@
 import {
   Box,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Compass,
   Crosshair,
   Eye,
+  LayoutPanelTop,
   Monitor,
   RotateCcw,
   SlidersHorizontal,
@@ -36,22 +39,34 @@ import {
   type SpatialWindowPose,
 } from "./spatial-3d-bridge.ts";
 
+// Verified CORS + CORP 4K NASA Planet Textures (jsDelivr — 100% COEP safe!)
+const PLANET_TEX = {
+  earthSurface: "https://cdn.jsdelivr.net/gh/rikyoz/SolarSystemSimulator@master/textures/4k_earth_surface.jpg",
+  earthNormal: "https://cdn.jsdelivr.net/gh/rikyoz/SolarSystemSimulator@master/textures/4k_earth_normal.jpg",
+  earthSpecular: "https://cdn.jsdelivr.net/gh/rikyoz/SolarSystemSimulator@master/textures/4k_earth_specular.jpg",
+  earthClouds: "https://cdn.jsdelivr.net/gh/turban/webgl-earth@master/images/fair_clouds_4k.png",
+  moonSurface: "https://cdn.jsdelivr.net/gh/rikyoz/SolarSystemSimulator@master/textures/4k_moon_surface.jpg",
+  moonNormal: "https://cdn.jsdelivr.net/gh/rikyoz/SolarSystemSimulator@master/textures/4k_moon_normal.jpg",
+  jupiterSurface: "https://cdn.jsdelivr.net/gh/rikyoz/SolarSystemSimulator@master/textures/4k_jupiter.jpg",
+  jupiterBump: "https://cdn.jsdelivr.net/gh/rikyoz/SolarSystemSimulator@master/textures/4k_jupiter_bump.jpg",
+  lensFlare: "https://cdn.jsdelivr.net/gh/rikyoz/SolarSystemSimulator@master/textures/lensFlare.png",
+} as const;
+
 const LAYOUT_BUTTONS: readonly { id: Spatial3dLayoutKind; label: string; emoji: string }[] = [
   { id: "curved-cockpit", label: "Arc", emoji: "🥽" },
-  { id: "spatial-grid", label: "Grille 3D", emoji: "⊞" },
-  { id: "compiz-cube", label: "Cube 4", emoji: "🧊" },
-  { id: "studio-desk", label: "Bureau", emoji: "🖥️" },
-  { id: "gallery-ring", label: "Anneau", emoji: "🪐" },
+  { id: "spatial-grid", label: "Grille", emoji: "⊞" },
+  { id: "compiz-cube", label: "Cube", emoji: "🧊" },
+  { id: "studio-desk", label: "Ailes", emoji: "🖥️" },
+  { id: "gallery-ring", label: "360°", emoji: "🪐" },
 ];
 
-const ENV_BUTTONS: readonly { id: Desktop3dSceneKind; label: string }[] = [
-  { id: "cyber-observatory", label: "Studio Loft" },
-  { id: "compiz-cube", label: "Compiz Arena" },
-  { id: "vision-horizon", label: "Alpine Horizon" },
-  { id: "space-station", label: "Space Station" },
-  { id: "cyberpunk-city", label: "Night City 2099" },
-  { id: "kyoto-sanctuary", label: "Kyoto Sanctuary" },
-  { id: "liquid-monolith", label: "Chrome Monolith" },
+const WORLD_BUTTONS: readonly { id: Desktop3dSceneKind; label: string }[] = [
+  { id: "ocean-sunset", label: "🌊 Océan & Coucher de Soleil" },
+  { id: "alpine-fjord", label: "🏔️ Fjord Alpin & Lac Miroir" },
+  { id: "earth-orbit", label: "🌍 Orbite Terrestre (NASA 4K)" },
+  { id: "jupiter-orbit", label: "🪐 Orbite Jupiter (NASA 4K)" },
+  { id: "lunar-horizon", label: "🌙 Horizon Lunaire & Terre 4K" },
+  { id: "aurora-fjord", label: "🌌 Aurores Boréales & Mer Glacée" },
 ];
 
 interface PhysicalWindowMesh {
@@ -63,6 +78,21 @@ interface PhysicalWindowMesh {
 }
 
 const hdriTextureCache = new Map<string, THREE.DataTexture>();
+const imageTextureCache = new Map<string, THREE.Texture>();
+
+function loadCachedTexture(url: string, srgb = true, maxAniso = 8): THREE.Texture {
+  const key = `${url}|${srgb ? "s" : "l"}`;
+  const existing = imageTextureCache.get(key);
+  if (existing) return existing;
+  const loader = new THREE.TextureLoader();
+  loader.setCrossOrigin("anonymous");
+  const tex = loader.load(url);
+  tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  tex.anisotropy = maxAniso;
+  tex.needsUpdate = true;
+  imageTextureCache.set(key, tex);
+  return tex;
+}
 
 function isTypingTarget(el: Element | null): boolean {
   if (!el) return false;
@@ -73,14 +103,47 @@ function isTypingTarget(el: Element | null): boolean {
   return false;
 }
 
+/** Deterministic smooth 2D hash & FBM value noise for cinematic alpine mountains, islands & craters! */
+function hash2(ix: number, iz: number): number {
+  const n = Math.sin(ix * 127.1 + iz * 311.7) * 43758.5453123;
+  return n - Math.floor(n);
+}
+
+function vnoise2(x: number, z: number): number {
+  const ix = Math.floor(x);
+  const iz = Math.floor(z);
+  const fx = x - ix;
+  const fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uz = fz * fz * (3 - 2 * fz);
+  const a = hash2(ix, iz);
+  const b = hash2(ix + 1, iz);
+  const c = hash2(ix, iz + 1);
+  const d = hash2(ix + 1, iz + 1);
+  return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
+}
+
+function fbm2(x: number, z: number, octaves = 5): number {
+  let sum = 0;
+  let amp = 0.5;
+  let freq = 1;
+  for (let i = 0; i < octaves; i++) {
+    sum += amp * vnoise2(x * freq, z * freq);
+    freq *= 2.04;
+    amp *= 0.49;
+  }
+  return sum;
+}
+
 function createStarTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = 64;
   c.height = 64;
   const ctx = c.getContext("2d")!;
-  const g = ctx.createRadialGradient(32, 32, 1, 32, 32, 30);
+  const g = ctx.createRadialGradient(32, 32, 0.5, 32, 32, 30);
   g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.35, "rgba(186,230,253,0.72)");
+  g.addColorStop(0.22, "rgba(224,242,254,0.85)");
+  g.addColorStop(0.55, "rgba(147,197,253,0.18)");
   g.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 64, 64);
@@ -89,50 +152,135 @@ function createStarTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function createFloorGridTexture(accentHex: string, bgHex: string): THREE.CanvasTexture {
+function createSunGlowTexture(innerHex: string, midHex: string): THREE.CanvasTexture {
   const c = document.createElement("canvas");
-  c.width = 512;
-  c.height = 512;
+  c.width = 256;
+  c.height = 256;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = bgHex;
-  ctx.fillRect(0, 0, 512, 512);
-  ctx.strokeStyle = "rgba(255,255,255,0.065)";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 512; i += 32) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i, 512);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, i);
-    ctx.lineTo(512, i);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = accentHex;
-  ctx.globalAlpha = 0.28;
-  ctx.lineWidth = 2.5;
-  ctx.strokeRect(0, 0, 512, 512);
+  const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 126);
+  g.addColorStop(0, innerHex);
+  g.addColorStop(0.24, midHex);
+  g.addColorStop(0.6, "rgba(251,146,60,0.16)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(64, 64);
-  tex.anisotropy = 8;
   tex.needsUpdate = true;
   return tex;
 }
 
+function createAuroraTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  const grad = ctx.createLinearGradient(0, 256, 0, 0);
+  grad.addColorStop(0, "rgba(16, 185, 129, 0)");
+  grad.addColorStop(0.18, "rgba(52, 211, 153, 0.92)");
+  grad.addColorStop(0.45, "rgba(34, 211, 238, 0.72)");
+  grad.addColorStop(0.74, "rgba(168, 85, 247, 0.45)");
+  grad.addColorStop(1, "rgba(139, 92, 246, 0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 256);
+
+  // Add fine vertical luminous curtain streaks
+  for (let x = 0; x < 512; x += 3) {
+    const a = 0.06 + 0.28 * Math.pow(Math.abs(Math.sin(x * 0.085) * Math.cos(x * 0.031)), 1.5);
+    ctx.fillStyle = `rgba(210, 255, 245, ${a.toFixed(3)})`;
+    ctx.fillRect(x, 22, 2, 195);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function createStarfield(count: number, radiusMin: number, radiusMax: number, starTex: THREE.Texture): THREE.Points {
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  const palette = [
+    new THREE.Color("#ffffff"),
+    new THREE.Color("#bae6fd"),
+    new THREE.Color("#fde68a"),
+    new THREE.Color("#fbcfe8"),
+    new THREE.Color("#c4b5fd"),
+  ];
+  for (let i = 0; i < count; i++) {
+    const u = Math.random();
+    const v = Math.random();
+    const theta = u * 2 * Math.PI;
+    const phi = Math.acos(2 * v - 1);
+    const r = radiusMin + Math.random() * (radiusMax - radiusMin);
+    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = r * Math.cos(phi);
+    pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    const c = palette[i % palette.length]!;
+    col[i * 3] = c.r;
+    col[i * 3 + 1] = c.g;
+    col[i * 3 + 2] = c.b;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return new THREE.Points(
+    g,
+    new THREE.PointsMaterial({
+      size: 62,
+      map: starTex,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+  );
+}
+
+/** Resolves the sharpest 4K HDRI URL for a given preset & active cinematic world! */
+function resolveHdriUrl(preset: HdriPresetId, customUrl: string, sceneKind: Desktop3dSceneKind): string {
+  if (preset === "space-void") return "";
+  if (preset === "custom") return customUrl.trim();
+  if (preset === "auto") {
+    if (sceneKind === "ocean-sunset") {
+      return HDRI_PRESETS.find((h) => h.id === "venice-4k")?.url ?? "";
+    }
+    if (sceneKind === "alpine-fjord") {
+      return HDRI_PRESETS.find((h) => h.id === "alpine-4k")?.url ?? "";
+    }
+    if (sceneKind === "aurora-fjord") {
+      return HDRI_PRESETS.find((h) => h.id === "night-4k")?.url ?? "";
+    }
+    // Space worlds (Earth Orbit, Jupiter Orbit, Lunar Horizon) look crispest against pure deep black starspace!
+    return "";
+  }
+  return HDRI_PRESETS.find((h) => h.id === preset)?.url ?? "";
+}
+
 interface EnvRuntime {
   group: THREE.Group;
+  fogColor: string;
+  fogDensity: number;
+  sunPos: [number, number, number];
+  sunColor: string;
+  sunIntensity: number;
+  hemiSky: string;
+  hemiGround: string;
   update: (t: number, speed: number) => void;
   dispose: () => void;
 }
 
 /**
- * Builds vast explorable AAA 3D architectural worlds scaled 1:1 with the real 3D DOM windows
- * (1 world unit = 1 CSS pixel, floor at y = -480, desk top at y = -390, real shadow casting & receiving!).
+ * Builds 6 genuinely breathtaking, film-grade cinematic 3D worlds (NO boring boxes or office desks!):
+ * 1. ocean-sunset   — Animated Gerstner wave ocean, golden sunset reflections & volcanic islands
+ * 2. alpine-fjord   — Sculpted multi-octave FBM snow-capped alpine mountains & glacial mirror lake
+ * 3. earth-orbit    — Colossal 4K NASA rotating Earth, 4K clouds, Rayleigh atmosphere, 4K Moon & Sun flare
+ * 4. jupiter-orbit  — Colossal 4K NASA Jupiter, amber limb glow, ring, orbiting Io & Europa moons
+ * 5. lunar-horizon  — 4K NASA cratered lunar surface ridge with colossal 4K Earthrise above the horizon
+ * 6. aurora-fjord   — Animated 3D volumetric Aurora Borealis curtains reflected on icy arctic sea + icebergs
  */
-function buildRoomEnvironment(
-  envKind: Desktop3dSceneKind,
+function buildCinematicWorld(
+  world: Desktop3dSceneKind,
   layout: Spatial3dLayoutKind,
   particleDensity: number,
   starTex: THREE.Texture
@@ -147,146 +295,9 @@ function buildRoomEnvironment(
     disposables.push(m);
     return m;
   };
+  const updaters: Array<(t: number, speed: number) => void> = [];
 
-  const accent =
-    envKind === "cyberpunk-city"
-      ? "#f43f5e"
-      : envKind === "compiz-cube"
-      ? "#10b981"
-      : envKind === "kyoto-sanctuary"
-      ? "#2dd4bf"
-      : envKind === "space-station"
-      ? "#60a5fa"
-      : "#38bdf8";
-
-  const floorBg =
-    envKind === "cyberpunk-city"
-      ? "#070412"
-      : envKind === "kyoto-sanctuary"
-      ? "#041217"
-      : envKind === "space-station"
-      ? "#060812"
-      : "#070a14";
-
-  // 1. Vast Reflective 3D Horizon Floor Plane (receives real dynamic shadows from windows & architecture!)
-  const floorTex = createFloorGridTexture(accent, floorBg);
-  disposables.push(floorTex);
-  const floor = new THREE.Mesh(
-    geo(new THREE.PlaneGeometry(46000, 46000)),
-    mat(
-      new THREE.MeshStandardMaterial({
-        map: floorTex,
-        metalness: 0.62,
-        roughness: 0.34,
-      })
-    )
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = -480;
-  floor.receiveShadow = true;
-  group.add(floor);
-
-  // Subtle central circular stage platform underneath the workspace (catches crisp shadows!)
-  const stagePad = new THREE.Mesh(
-    geo(new THREE.CylinderGeometry(2350, 2480, 14, 72)),
-    mat(
-      new THREE.MeshStandardMaterial({
-        color: "#0b1020",
-        metalness: 0.72,
-        roughness: 0.26,
-      })
-    )
-  );
-  stagePad.position.y = -474;
-  stagePad.receiveShadow = true;
-  group.add(stagePad);
-
-  const stageRing = new THREE.Mesh(
-    geo(new THREE.TorusGeometry(2380, 6, 12, 128)),
-    mat(
-      new THREE.MeshStandardMaterial({
-        color: accent,
-        emissive: accent,
-        emissiveIntensity: 1.6,
-      })
-    )
-  );
-  stageRing.rotation.x = Math.PI / 2;
-  stageRing.position.y = -466;
-  group.add(stageRing);
-
-  // 2. Physical 3D Studio Workstation Desk (when in Studio Desk, Curved Cockpit, or Spatial Grid layout!)
-  if (layout === "studio-desk" || layout === "curved-cockpit" || layout === "spatial-grid") {
-    const deskTop = new THREE.Mesh(
-      geo(new THREE.BoxGeometry(2800, 34, 980)),
-      mat(
-        new THREE.MeshPhysicalMaterial({
-          color: envKind === "kyoto-sanctuary" ? "#15262b" : "#101524",
-          metalness: 0.58,
-          roughness: 0.22,
-          clearcoat: 0.85,
-          clearcoatRoughness: 0.12,
-        })
-      )
-    );
-    deskTop.position.set(0, -405, -40);
-    deskTop.castShadow = true;
-    deskTop.receiveShadow = true;
-    group.add(deskTop);
-
-    // Glowing LED front trim strip
-    const trim = new THREE.Mesh(
-      geo(new THREE.BoxGeometry(2804, 5, 6)),
-      mat(
-        new THREE.MeshStandardMaterial({
-          color: accent,
-          emissive: accent,
-          emissiveIntensity: 2.2,
-        })
-      )
-    );
-    trim.position.set(0, -390, 452);
-    group.add(trim);
-
-    // Sleek dark metallic legs casting floor shadows
-    const legGeo = geo(new THREE.BoxGeometry(46, 78, 740));
-    const legMat = mat(new THREE.MeshStandardMaterial({ color: "#171d2e", metalness: 0.88, roughness: 0.25 }));
-    for (const lx of [-1220, 1220]) {
-      const leg = new THREE.Mesh(legGeo, legMat);
-      leg.position.set(lx, -444, -40);
-      leg.castShadow = true;
-      leg.receiveShadow = true;
-      group.add(leg);
-    }
-
-    // Illuminated Desk Mat & Tactile Spatial Keyboard + Mouse Props
-    const matPad = new THREE.Mesh(
-      geo(new THREE.BoxGeometry(1120, 4, 350)),
-      mat(new THREE.MeshStandardMaterial({ color: "#090c15", roughness: 0.78, metalness: 0.14 }))
-    );
-    matPad.position.set(0, -386, 220);
-    matPad.receiveShadow = true;
-    group.add(matPad);
-
-    const kb = new THREE.Mesh(
-      geo(new THREE.BoxGeometry(470, 14, 156)),
-      mat(new THREE.MeshStandardMaterial({ color: "#1e263a", metalness: 0.72, roughness: 0.26 }))
-    );
-    kb.position.set(-55, -377, 225);
-    kb.castShadow = true;
-    kb.receiveShadow = true;
-    group.add(kb);
-
-    const mouse = new THREE.Mesh(
-      geo(new THREE.BoxGeometry(74, 22, 118)),
-      mat(new THREE.MeshPhysicalMaterial({ color: "#1c2438", metalness: 0.7, roughness: 0.2, clearcoat: 0.9 }))
-    );
-    mouse.position.set(295, -374, 225);
-    mouse.castShadow = true;
-    group.add(mouse);
-  }
-
-  // 3. Physical 3D Translucent Glass Compiz Cube Chassis (when layout === "compiz-cube"!)
+  // Optional subtle Compiz Cube glass wireframe core ONLY when layout === "compiz-cube"
   if (layout === "compiz-cube") {
     const coreGeo = geo(new THREE.BoxGeometry(CUBE_HALF_SIZE * 2, 920, CUBE_HALF_SIZE * 2));
     const coreMesh = new THREE.Mesh(
@@ -295,292 +306,754 @@ function buildRoomEnvironment(
         new THREE.MeshPhysicalMaterial({
           color: "#091b26",
           transparent: true,
-          opacity: 0.32,
+          opacity: 0.22,
           metalness: 0.25,
           roughness: 0.08,
           clearcoat: 1.0,
         })
       )
     );
-    coreMesh.position.y = 35;
+    coreMesh.position.y = 45;
     group.add(coreMesh);
-
     const cubeEdges = new THREE.LineSegments(
       geo(new THREE.EdgesGeometry(coreGeo)),
-      mat(new THREE.LineBasicMaterial({ color: accent }))
+      mat(new THREE.LineBasicMaterial({ color: "#38bdf8", transparent: true, opacity: 0.75 }))
     );
-    cubeEdges.position.y = 35;
+    cubeEdges.position.y = 45;
     group.add(cubeEdges);
-
-    const baseRing = new THREE.Mesh(
-      geo(new THREE.TorusGeometry(CUBE_HALF_SIZE * 1.48, 8, 16, 128)),
-      mat(new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 1.8 }))
-    );
-    baseRing.rotation.x = Math.PI / 2;
-    baseRing.position.y = -462;
-    group.add(baseRing);
   }
 
-  // 4. Vast Explorable Architectural Landmarks (per 3D Scene!)
-  const animatedRefs: Array<{ obj: THREE.Object3D; fn: (t: number, speed: number) => void }> = [];
-
-  if (envKind === "cyberpunk-city") {
-    const bGeo = geo(new THREE.BoxGeometry(1, 1, 1));
-    const bMat = mat(new THREE.MeshStandardMaterial({ color: "#0b091c", metalness: 0.78, roughness: 0.28 }));
-    const capMats = ["#f43f5e", "#22d3ee", "#a855f7", "#f59e0b"].map((c) =>
-      mat(new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 2.2 }))
-    );
-    for (let i = 0; i < 64; i++) {
-      const ang = (i / 64) * Math.PI * 2;
-      const ring = i % 3;
-      const dist = 3400 + ring * 1850 + ((i * 197) % 700);
-      const h = 1400 + ((i * 317) % 3600);
-      const w = 280 + ((i * 89) % 440);
-      const mesh = new THREE.Mesh(bGeo, bMat);
-      mesh.scale.set(w, h, w);
-      mesh.position.set(Math.cos(ang) * dist, h / 2 - 480, Math.sin(ang) * dist);
-      mesh.castShadow = ring === 0;
-      mesh.receiveShadow = true;
-      group.add(mesh);
-
-      const cap = new THREE.Mesh(bGeo, capMats[i % capMats.length]!);
-      cap.scale.set(w * 1.03, 26, w * 1.03);
-      cap.position.set(Math.cos(ang) * dist, h - 468, Math.sin(ang) * dist);
-      group.add(cap);
+  // ─── 1. OCEAN SUNSET (Animated Reflective Ocean + Volcanic Archipelago + Golden Sun) ───
+  if (world === "ocean-sunset") {
+    const segs = 112;
+    const oceanGeo = geo(new THREE.PlaneGeometry(46000, 46000, segs, segs));
+    oceanGeo.rotateX(-Math.PI / 2);
+    const posAttr = oceanGeo.attributes.position as THREE.BufferAttribute;
+    const baseX = new Float32Array(posAttr.count);
+    const baseZ = new Float32Array(posAttr.count);
+    for (let i = 0; i < posAttr.count; i++) {
+      baseX[i] = posAttr.getX(i);
+      baseZ[i] = posAttr.getZ(i);
     }
-    // Flying neon traffic vehicles orbiting the megacity!
-    const carGeo = geo(new THREE.BoxGeometry(110, 18, 32));
-    for (let i = 0; i < 18; i++) {
-      const col = i % 2 === 0 ? "#22d3ee" : "#f43f5e";
-      const car = new THREE.Mesh(carGeo, mat(new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 2.8 })));
-      const rad = 2900 + (i % 4) * 750;
-      const yPos = 450 + (i % 5) * 320;
-      const dir = i % 2 === 0 ? 1 : -1;
-      const offset = (i / 18) * Math.PI * 2;
-      group.add(car);
-      animatedRefs.push({
-        obj: car,
-        fn: (t, sp) => {
-          const a = offset + t * 0.14 * dir * Math.max(0.2, sp);
-          car.position.set(Math.cos(a) * rad, yPos, Math.sin(a) * rad);
-          car.rotation.y = -a + (dir > 0 ? 0 : Math.PI);
-        },
-      });
-    }
-  } else if (envKind === "space-station") {
-    // Epic Orbital Planet + Planetary Rings + Moon + Space Bridge Pillars!
-    const planet = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(2400, 48, 36)),
-      mat(
-        new THREE.MeshStandardMaterial({
-          color: "#1e3a8a",
-          emissive: "#0c1b42",
-          metalness: 0.25,
-          roughness: 0.7,
-        })
-      )
-    );
-    planet.position.set(-4800, 1800, -9800);
-    group.add(planet);
-    animatedRefs.push({
-      obj: planet,
-      fn: (t, sp) => {
-        planet.rotation.y = t * 0.04 * sp;
-      },
-    });
 
-    const pRing = new THREE.Mesh(
-      geo(new THREE.TorusGeometry(3900, 140, 8, 128)),
-      mat(
-        new THREE.MeshStandardMaterial({
-          color: "#38bdf8",
-          emissive: "#0ea5e9",
-          emissiveIntensity: 0.65,
-          transparent: true,
-          opacity: 0.65,
-        })
-      )
-    );
-    pRing.position.copy(planet.position);
-    pRing.rotation.set(1.22, 0.25, 0.15);
-    pRing.scale.set(1, 1, 0.08);
-    group.add(pRing);
-
-    const moon = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(480, 32, 24)),
-      mat(new THREE.MeshStandardMaterial({ color: "#cbd5e1", roughness: 0.9, metalness: 0.05 }))
-    );
-    group.add(moon);
-    animatedRefs.push({
-      obj: moon,
-      fn: (t, sp) => {
-        const a = t * 0.08 * sp;
-        moon.position.set(
-          planet.position.x + Math.cos(a) * 4600,
-          planet.position.y + 420,
-          planet.position.z + Math.sin(a) * 4600
-        );
-      },
-    });
-
-    // Orbital station structural ribs curving overhead
-    for (let i = 0; i < 6; i++) {
-      const arch = new THREE.Mesh(
-        geo(new THREE.TorusGeometry(3600, 44, 10, 64, Math.PI)),
-        mat(new THREE.MeshStandardMaterial({ color: "#1e293b", metalness: 0.88, roughness: 0.24 }))
-      );
-      arch.position.set(0, -480, -2600 + i * 1150);
-      arch.castShadow = true;
-      group.add(arch);
-    }
-  } else if (envKind === "vision-horizon") {
-    // Vast Alpine Mountain Amphitheater + Luminous Glass Monoliths
-    const mtGeo = geo(new THREE.CylinderGeometry(6400, 11800, 4200, 84, 6, true));
-    const pos = mtGeo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i);
-      if (y > 0) {
-        const a = Math.atan2(pos.getZ(i), pos.getX(i));
-        pos.setY(i, y + Math.sin(a * 5) * 680 + Math.cos(a * 11) * 340 + Math.sin(a * 19) * 180);
-      }
-    }
-    mtGeo.computeVertexNormals();
-    const mt = new THREE.Mesh(
-      mtGeo,
-      mat(new THREE.MeshStandardMaterial({ color: "#111b31", roughness: 0.88, side: THREE.BackSide }))
-    );
-    mt.position.y = 920;
-    group.add(mt);
-
-    const pGeo = geo(new THREE.BoxGeometry(110, 1400, 110));
-    const pMat = mat(
+    const oceanMat = mat(
       new THREE.MeshPhysicalMaterial({
-        color: "#7dd3fc",
-        transparent: true,
-        opacity: 0.28,
-        roughness: 0.08,
-        metalness: 0.2,
-        clearcoat: 1,
+        color: "#083344",
+        emissive: "#041824",
+        emissiveIntensity: 0.25,
+        metalness: 0.84,
+        roughness: 0.14,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.06,
+        reflectivity: 1.0,
       })
     );
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      const pil = new THREE.Mesh(pGeo, pMat);
-      pil.position.set(Math.cos(a) * 3200, 220, Math.sin(a) * 3200);
-      pil.castShadow = true;
-      group.add(pil);
-    }
-  } else if (envKind === "kyoto-sanctuary") {
-    // Grand Vermilion Torii Gate + Floating Jade & Sakura Lanterns!
-    const toriiMat = mat(new THREE.MeshStandardMaterial({ color: "#b91c1c", roughness: 0.42, metalness: 0.18 }));
-    const darkRoof = mat(new THREE.MeshStandardMaterial({ color: "#18181b", roughness: 0.5, metalness: 0.35 }));
-    const colGeo = geo(new THREE.CylinderGeometry(72, 86, 1750, 18));
-    for (const tx of [-760, 760]) {
-      const col = new THREE.Mesh(colGeo, toriiMat);
-      col.position.set(tx, 395, -2900);
-      col.castShadow = true;
-      group.add(col);
-    }
-    const beam1 = new THREE.Mesh(geo(new THREE.BoxGeometry(2240, 115, 160)), toriiMat);
-    beam1.position.set(0, 1210, -2900);
-    beam1.castShadow = true;
-    group.add(beam1);
-    const roof = new THREE.Mesh(geo(new THREE.BoxGeometry(2420, 72, 220)), darkRoof);
-    roof.position.set(0, 1295, -2900);
-    group.add(roof);
-    const beam2 = new THREE.Mesh(geo(new THREE.BoxGeometry(1880, 75, 110)), toriiMat);
-    beam2.position.set(0, 960, -2900);
-    group.add(beam2);
+    const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+    ocean.position.y = -580;
+    ocean.receiveShadow = true;
+    group.add(ocean);
 
-    const lGeo = geo(new THREE.CylinderGeometry(52, 38, 155, 6));
-    for (let i = 0; i < 20; i++) {
-      const a = (i / 20) * Math.PI * 2;
-      const dist = 2300 + (i % 3) * 850;
-      const col = i % 2 === 0 ? "#2dd4bf" : "#f472b6";
-      const l = new THREE.Mesh(
-        lGeo,
-        mat(new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.65 }))
-      );
-      const baseY = -120 + (i % 4) * 260;
-      l.position.set(Math.cos(a) * dist, baseY, Math.sin(a) * dist);
-      group.add(l);
-      animatedRefs.push({
-        obj: l,
-        fn: (t, sp) => {
-          l.position.y = baseY + Math.sin(t * 0.9 * sp + i) * 55;
-        },
-      });
-    }
-  } else if (envKind === "liquid-monolith") {
-    // Rotating Liquid Chrome Sculptural Monolith & Floating Shards in the distance
-    const mono = new THREE.Mesh(
-      geo(new THREE.IcosahedronGeometry(780, 2)),
-      mat(new THREE.MeshPhysicalMaterial({ color: "#e2e8f0", metalness: 1.0, roughness: 0.06, clearcoat: 1.0 }))
+    // Sculpted distant volcanic archipelago islands along the golden horizon!
+    const islandMat = mat(
+      new THREE.MeshStandardMaterial({
+        color: "#1e1b2e",
+        roughness: 0.88,
+        metalness: 0.08,
+      })
     );
-    mono.position.set(0, 480, -3400);
-    mono.castShadow = true;
-    group.add(mono);
-    animatedRefs.push({
-      obj: mono,
-      fn: (t, sp) => {
-        mono.rotation.y = t * 0.22 * sp;
-        mono.rotation.x = Math.sin(t * 0.35 * sp) * 0.25;
-      },
+    const islands = [
+      { x: -7800, z: -13200, r: 4200, h: 1650 },
+      { x: 6400, z: -14600, r: 5200, h: 2100 },
+      { x: -13500, z: -5500, r: 3600, h: 1250 },
+      { x: 13800, z: -4200, r: 3800, h: 1350 },
+      { x: 1200, z: -18500, r: 3400, h: 980 },
+    ];
+    for (const isl of islands) {
+      const iGeo = geo(new THREE.PlaneGeometry(isl.r * 2, isl.r * 2, 42, 42));
+      iGeo.rotateX(-Math.PI / 2);
+      const ip = iGeo.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < ip.count; i++) {
+        const vx = ip.getX(i);
+        const vz = ip.getZ(i);
+        const d = Math.hypot(vx, vz) / isl.r;
+        const falloff = Math.max(0, 1 - d * d);
+        const ridge = fbm2((vx + isl.x) * 0.00075, (vz + isl.z) * 0.00075, 5);
+        ip.setY(i, Math.pow(falloff, 1.55) * isl.h * (0.45 + ridge * 1.05) - 90);
+      }
+      iGeo.computeVertexNormals();
+      const m = new THREE.Mesh(iGeo, islandMat);
+      m.position.set(isl.x, -580, isl.z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      group.add(m);
+    }
+
+    // Glowing Golden Sunset Solar Disc + Atmospheric Halo on the horizon!
+    const sunTex = createSunGlowTexture("rgba(255,250,220,1)", "rgba(251,191,36,0.72)");
+    disposables.push(sunTex);
+    const sunSprite = new THREE.Sprite(
+      mat(new THREE.SpriteMaterial({ map: sunTex, blending: THREE.AdditiveBlending, depthWrite: false }))
+    );
+    sunSprite.position.set(-1600, 1450, -19500);
+    sunSprite.scale.set(7800, 7800, 1);
+    group.add(sunSprite);
+
+    // Subtle floating golden sea mist motes
+    const mCount = Math.round(420 * particleDensity);
+    const mPos = new Float32Array(mCount * 3);
+    for (let i = 0; i < mCount; i++) {
+      mPos[i * 3] = (Math.random() - 0.5) * 14000;
+      mPos[i * 3 + 1] = -480 + Math.random() * 1400;
+      mPos[i * 3 + 2] = (Math.random() - 0.5) * 14000;
+    }
+    const mGeo = geo(new THREE.BufferGeometry());
+    mGeo.setAttribute("position", new THREE.BufferAttribute(mPos, 3));
+    const mist = new THREE.Points(
+      mGeo,
+      mat(
+        new THREE.PointsMaterial({
+          size: 46,
+          map: starTex,
+          color: "#fde68a",
+          transparent: true,
+          opacity: 0.34,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        })
+      )
+    );
+    group.add(mist);
+
+    let normTick = 0;
+    updaters.push((t, sp) => {
+      const wt = t * Math.max(0.25, sp) * 0.95;
+      for (let i = 0; i < posAttr.count; i++) {
+        const x = baseX[i]!;
+        const z = baseZ[i]!;
+        const y =
+          Math.sin(x * 0.0014 + wt * 1.25) * 34 +
+          Math.cos(z * 0.0017 - wt * 1.05) * 28 +
+          Math.sin((x + z) * 0.0028 + wt * 1.7) * 14 +
+          Math.cos((x * 0.6 - z) * 0.0042 - wt * 2.1) * 7;
+        posAttr.setY(i, y);
+      }
+      posAttr.needsUpdate = true;
+      // Recompute smooth normals every 2nd frame for 60fps liquid reflections!
+      if ((normTick++ & 1) === 0) oceanGeo.computeVertexNormals();
+      mist.rotation.y = t * 0.008 * sp;
     });
-  } else {
-    // Architect Studio Loft: Sleek Architectural Columns + Overhead Luminous Halo Ring!
-    const colGeo = geo(new THREE.CylinderGeometry(64, 64, 2400, 24));
-    const colMat = mat(new THREE.MeshStandardMaterial({ color: "#151c2e", metalness: 0.72, roughness: 0.28 }));
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-      const c = new THREE.Mesh(colGeo, colMat);
-      c.position.set(Math.cos(a) * 3400, 720, Math.sin(a) * 3400);
-      c.castShadow = true;
-      c.receiveShadow = true;
-      group.add(c);
-    }
-    const ceilingRing = new THREE.Mesh(
-      geo(new THREE.TorusGeometry(2800, 16, 16, 128)),
-      mat(new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 1.5 }))
-    );
-    ceilingRing.rotation.x = Math.PI / 2;
-    ceilingRing.position.y = 1480;
-    group.add(ceilingRing);
+
+    return {
+      group,
+      fogColor: "#1b1426",
+      fogDensity: 0.000028,
+      sunPos: [-2200, 1400, -4500],
+      sunColor: "#fdba74",
+      sunIntensity: 2.6,
+      hemiSky: "#fde68a",
+      hemiGround: "#0c4a6e",
+      update: (t, s) => {
+        for (const u of updaters) u(t, s);
+      },
+      dispose: () => {
+        for (const d of disposables) d.dispose();
+      },
+    };
   }
 
-  // 5. Vast 3D Spatial Starfield / Depth Particles
-  const pCount = Math.max(240, Math.min(2600, Math.round(950 * particleDensity)));
-  const pPos = new Float32Array(pCount * 3);
-  for (let i = 0; i < pCount; i++) {
-    const r = 2000 + Math.random() * 12000;
-    const theta = Math.random() * Math.PI * 2;
-    pPos[i * 3] = Math.cos(theta) * r;
-    pPos[i * 3 + 1] = -360 + Math.random() * 5200;
-    pPos[i * 3 + 2] = Math.sin(theta) * r;
+  // ─── 2. ALPINE FJORD & MIRROR LAKE (Procedural FBM Snow Mountains + Mirror Water) ───
+  if (world === "alpine-fjord") {
+    const terrainGeo = geo(new THREE.PlaneGeometry(38000, 38000, 124, 124));
+    terrainGeo.rotateX(-Math.PI / 2);
+    const tp = terrainGeo.attributes.position as THREE.BufferAttribute;
+    const colors = new Float32Array(tp.count * 3);
+
+    const cShore = new THREE.Color("#1e293b");
+    const cPine = new THREE.Color("#14332a");
+    const cRock = new THREE.Color("#475569");
+    const cSnow = new THREE.Color("#f1f5f9");
+    const tmpCol = new THREE.Color();
+
+    for (let i = 0; i < tp.count; i++) {
+      const x = tp.getX(i);
+      const z = tp.getZ(i);
+      const dist = Math.hypot(x, z);
+      // Carve a wide crystal-clear glacial fjord lake in the center (r < 4200), rising into dramatic snow peaks around it!
+      const ringFactor = THREE.MathUtils.smoothstep(dist, 3400, 10500);
+      const n1 = fbm2(x * 0.00026 + 4.2, z * 0.00026 - 1.7, 5);
+      const ridge = 1.0 - Math.abs(fbm2(x * 0.00042 - 3.1, z * 0.00042 + 6.4, 4) * 2 - 1);
+      const h = ringFactor * (1400 + Math.pow(ridge, 1.8) * 4400 + n1 * 1800) - 720;
+      tp.setY(i, h);
+
+      if (h < -520) tmpCol.copy(cShore);
+      else if (h < 320) tmpCol.copy(cPine).lerp(cRock, THREE.MathUtils.clamp((h + 520) / 840, 0, 1));
+      else if (h < 1550) tmpCol.copy(cRock).lerp(cSnow, THREE.MathUtils.clamp((h - 320) / 1230, 0, 1));
+      else tmpCol.copy(cSnow);
+
+      colors[i * 3] = tmpCol.r;
+      colors[i * 3 + 1] = tmpCol.g;
+      colors[i * 3 + 2] = tmpCol.b;
+    }
+    terrainGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    terrainGeo.computeVertexNormals();
+
+    const terrain = new THREE.Mesh(
+      terrainGeo,
+      mat(
+        new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          roughness: 0.84,
+          metalness: 0.06,
+        })
+      )
+    );
+    terrain.castShadow = true;
+    terrain.receiveShadow = true;
+    group.add(terrain);
+
+    // Calm Glacial Mirror Lake surface with gentle ripples!
+    const lakeGeo = geo(new THREE.PlaneGeometry(24000, 24000, 72, 72));
+    lakeGeo.rotateX(-Math.PI / 2);
+    const lp = lakeGeo.attributes.position as THREE.BufferAttribute;
+    const lx = new Float32Array(lp.count);
+    const lz = new Float32Array(lp.count);
+    for (let i = 0; i < lp.count; i++) {
+      lx[i] = lp.getX(i);
+      lz[i] = lp.getZ(i);
+    }
+    const lake = new THREE.Mesh(
+      lakeGeo,
+      mat(
+        new THREE.MeshPhysicalMaterial({
+          color: "#0b2e3d",
+          metalness: 0.9,
+          roughness: 0.08,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.04,
+          transparent: true,
+          opacity: 0.94,
+        })
+      )
+    );
+    lake.position.y = -580;
+    lake.receiveShadow = true;
+    group.add(lake);
+
+    // Drifting translucent cloud wisps floating along the mountain ridges
+    const cloudTex = createSunGlowTexture("rgba(255,255,255,0.42)", "rgba(226,232,240,0.16)");
+    disposables.push(cloudTex);
+    const clouds: Array<{ sp: THREE.Sprite; baseAngle: number; rad: number; y: number }> = [];
+    for (let i = 0; i < 16; i++) {
+      const sp = new THREE.Sprite(
+        mat(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.48, depthWrite: false }))
+      );
+      const rad = 6400 + (i % 4) * 2100;
+      const y = 950 + (i % 5) * 420;
+      const baseAngle = (i / 16) * Math.PI * 2;
+      sp.scale.set(5200 + (i % 3) * 1400, 1400, 1);
+      sp.position.set(Math.cos(baseAngle) * rad, y, Math.sin(baseAngle) * rad);
+      group.add(sp);
+      clouds.push({ sp, baseAngle, rad, y });
+    }
+
+    let nTick = 0;
+    updaters.push((t, sp) => {
+      const wt = t * Math.max(0.2, sp) * 0.7;
+      for (let i = 0; i < lp.count; i++) {
+        const y = Math.sin(lx[i]! * 0.002 + wt) * 10 + Math.cos(lz[i]! * 0.0023 - wt * 0.85) * 9;
+        lp.setY(i, y);
+      }
+      lp.needsUpdate = true;
+      if ((nTick++ & 2) === 0) lakeGeo.computeVertexNormals();
+      for (const c of clouds) {
+        const a = c.baseAngle + t * 0.008 * sp;
+        c.sp.position.set(Math.cos(a) * c.rad, c.y, Math.sin(a) * c.rad);
+      }
+    });
+
+    return {
+      group,
+      fogColor: "#142234",
+      fogDensity: 0.000022,
+      sunPos: [3800, 3200, -2800],
+      sunColor: "#fff7ed",
+      sunIntensity: 2.5,
+      hemiSky: "#bae6fd",
+      hemiGround: "#1e293b",
+      update: (t, s) => {
+        for (const u of updaters) u(t, s);
+      },
+      dispose: () => {
+        for (const d of disposables) d.dispose();
+      },
+    };
   }
-  const pGeo = geo(new THREE.BufferGeometry());
-  pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
-  const particles = new THREE.Points(
-    pGeo,
+
+  // ─── 3. EARTH ORBIT — NASA 4K BLUE MARBLE + 4K CLOUDS + RAYLEIGH ATMOSPHERE + 4K MOON ───
+  if (world === "earth-orbit") {
+    const stars = createStarfield(Math.round(3800 * particleDensity), 14000, 36000, starTex);
+    disposables.push(stars.geometry, stars.material as THREE.Material);
+    group.add(stars);
+
+    const earthGroup = new THREE.Group();
+    earthGroup.position.set(0, -6150, -1800);
+    earthGroup.rotation.z = 0.24;
+    group.add(earthGroup);
+
+    const earthSurf = loadCachedTexture(PLANET_TEX.earthSurface, true);
+    const earthNorm = loadCachedTexture(PLANET_TEX.earthNormal, false);
+    const earthSpec = loadCachedTexture(PLANET_TEX.earthSpecular, false);
+    const earthCloudsTex = loadCachedTexture(PLANET_TEX.earthClouds, true);
+
+    const earth = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(5600, 96, 64)),
+      mat(
+        new THREE.MeshStandardMaterial({
+          map: earthSurf,
+          normalMap: earthNorm,
+          normalScale: new THREE.Vector2(1.4, 1.4),
+          roughnessMap: earthSpec,
+          roughness: 0.62,
+          metalness: 0.12,
+        })
+      )
+    );
+    earth.receiveShadow = true;
+    earthGroup.add(earth);
+
+    // Drifting 4K Volumetric Cloud Sphere
+    const clouds = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(5655, 84, 56)),
+      mat(
+        new THREE.MeshStandardMaterial({
+          map: earthCloudsTex,
+          transparent: true,
+          opacity: 0.88,
+          depthWrite: false,
+          roughness: 0.9,
+        })
+      )
+    );
+    earthGroup.add(clouds);
+
+    // Electric Rayleigh Blue Atmospheric Fresnel Rim Halo!
+    const atmo = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(5880, 64, 48)),
+      mat(
+        new THREE.MeshBasicMaterial({
+          color: "#38bdf8",
+          transparent: true,
+          opacity: 0.22,
+          side: THREE.BackSide,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      )
+    );
+    earthGroup.add(atmo);
+
+    // Crisp 4K NASA Moon suspended in upper distant orbit
+    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true);
+    const moonNorm = loadCachedTexture(PLANET_TEX.moonNormal, false);
+    const moon = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(780, 64, 48)),
+      mat(
+        new THREE.MeshStandardMaterial({
+          map: moonSurf,
+          normalMap: moonNorm,
+          roughness: 0.92,
+          metalness: 0.02,
+        })
+      )
+    );
+    moon.position.set(5200, 2900, -11200);
+    group.add(moon);
+
+    // Blazing Orbital Sun with NASA Lens Flare!
+    const flareTex = loadCachedTexture(PLANET_TEX.lensFlare, true);
+    const sunFlare = new THREE.Sprite(
+      mat(new THREE.SpriteMaterial({ map: flareTex, blending: THREE.AdditiveBlending, depthWrite: false }))
+    );
+    sunFlare.position.set(-9800, 5600, -16500);
+    sunFlare.scale.set(9200, 9200, 1);
+    group.add(sunFlare);
+
+    updaters.push((t, sp) => {
+      earth.rotation.y = 1.65 + t * 0.014 * sp;
+      clouds.rotation.y = 1.65 + t * 0.02 * sp;
+      moon.rotation.y = t * 0.025 * sp;
+      stars.rotation.y = t * 0.002 * sp;
+    });
+
+    return {
+      group,
+      fogColor: "#01030a",
+      fogDensity: 0.000004,
+      sunPos: [-9200, 5200, -12000],
+      sunColor: "#fffbeb",
+      sunIntensity: 3.1,
+      hemiSky: "#38bdf8",
+      hemiGround: "#020617",
+      update: (t, s) => {
+        for (const u of updaters) u(t, s);
+      },
+      dispose: () => {
+        for (const d of disposables) d.dispose();
+      },
+    };
+  }
+
+  // ─── 4. JUPITER ORBIT — COLOSSAL 4K NASA JUPITER + IO & EUROPA MOONS ───
+  if (world === "jupiter-orbit") {
+    const stars = createStarfield(Math.round(4000 * particleDensity), 15000, 38000, starTex);
+    disposables.push(stars.geometry, stars.material as THREE.Material);
+    group.add(stars);
+
+    const jupSurf = loadCachedTexture(PLANET_TEX.jupiterSurface, true);
+    const jupBump = loadCachedTexture(PLANET_TEX.jupiterBump, false);
+    const jupiterGroup = new THREE.Group();
+    jupiterGroup.position.set(-600, -5400, -4800);
+    jupiterGroup.rotation.z = -0.14;
+    group.add(jupiterGroup);
+
+    const jupiter = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(6400, 96, 64)),
+      mat(
+        new THREE.MeshStandardMaterial({
+          map: jupSurf,
+          bumpMap: jupBump,
+          bumpScale: 38,
+          roughness: 0.72,
+          metalness: 0.05,
+        })
+      )
+    );
+    jupiterGroup.add(jupiter);
+
+    // Warm Amber-Gold Atmospheric Limb Halo
+    const halo = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(6660, 64, 48)),
+      mat(
+        new THREE.MeshBasicMaterial({
+          color: "#f59e0b",
+          transparent: true,
+          opacity: 0.18,
+          side: THREE.BackSide,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      )
+    );
+    jupiterGroup.add(halo);
+
+    // Subtle Jovian Gossamer Dust Ring
+    const ring = new THREE.Mesh(
+      geo(new THREE.RingGeometry(7400, 9400, 128)),
+      mat(
+        new THREE.MeshBasicMaterial({
+          color: "#d6b48c",
+          transparent: true,
+          opacity: 0.14,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        })
+      )
+    );
+    ring.rotation.x = Math.PI / 2 - 0.18;
+    jupiterGroup.add(ring);
+
+    // Orbiting Galilean Moons: Io (volcanic amber) & Europa (icy blue)
+    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true);
+    const europa = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(420, 48, 32)),
+      mat(new THREE.MeshStandardMaterial({ map: moonSurf, color: "#bae6fd", roughness: 0.45, metalness: 0.15 }))
+    );
+    const io = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(360, 48, 32)),
+      mat(new THREE.MeshStandardMaterial({ map: moonSurf, color: "#fbbf24", roughness: 0.82 }))
+    );
+    group.add(europa, io);
+
+    const flareTex = loadCachedTexture(PLANET_TEX.lensFlare, true);
+    const sunFlare = new THREE.Sprite(
+      mat(new THREE.SpriteMaterial({ map: flareTex, blending: THREE.AdditiveBlending, depthWrite: false }))
+    );
+    sunFlare.position.set(11000, 5200, -16000);
+    sunFlare.scale.set(7800, 7800, 1);
+    group.add(sunFlare);
+
+    updaters.push((t, sp) => {
+      jupiter.rotation.y = 0.8 + t * 0.022 * sp;
+      const a1 = 0.7 + t * 0.045 * sp;
+      europa.position.set(Math.cos(a1) * 5800 + 1800, 1500 + Math.sin(a1) * 520, -7600 + Math.sin(a1) * 2800);
+      const a2 = -1.2 + t * 0.068 * sp;
+      io.position.set(Math.cos(a2) * 4200 - 2200, 2200, -9200 + Math.sin(a2) * 2400);
+      stars.rotation.y = t * 0.002 * sp;
+    });
+
+    return {
+      group,
+      fogColor: "#040308",
+      fogDensity: 0.000004,
+      sunPos: [9800, 4800, -11000],
+      sunColor: "#ffedd5",
+      sunIntensity: 3.0,
+      hemiSky: "#fbbf24",
+      hemiGround: "#1c1208",
+      update: (t, s) => {
+        for (const u of updaters) u(t, s);
+      },
+      dispose: () => {
+        for (const d of disposables) d.dispose();
+      },
+    };
+  }
+
+  // ─── 5. LUNAR HORIZON & 4K EARTHRISE (NASA 4K Cratered Moon Terrain + Giant Earthrise!) ───
+  if (world === "lunar-horizon") {
+    const stars = createStarfield(Math.round(4200 * particleDensity), 14000, 36000, starTex);
+    disposables.push(stars.geometry, stars.material as THREE.Material);
+    group.add(stars);
+
+    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true);
+    const moonNorm = loadCachedTexture(PLANET_TEX.moonNormal, false);
+    moonSurf.wrapS = moonSurf.wrapT = THREE.RepeatWrapping;
+    moonNorm.wrapS = moonNorm.wrapT = THREE.RepeatWrapping;
+    moonSurf.repeat.set(3, 3);
+    moonNorm.repeat.set(3, 3);
+
+    const lunarGeo = geo(new THREE.PlaneGeometry(36000, 36000, 128, 128));
+    lunarGeo.rotateX(-Math.PI / 2);
+    const lp = lunarGeo.attributes.position as THREE.BufferAttribute;
+    const craters = [
+      { x: -2400, z: -2600, r: 1650, d: 340 },
+      { x: 3600, z: -3800, r: 2200, d: 460 },
+      { x: -5800, z: -6400, r: 2800, d: 520 },
+      { x: 1200, z: -7800, r: 1900, d: 380 },
+      { x: 5400, z: 1400, r: 1700, d: 310 },
+    ];
+    for (let i = 0; i < lp.count; i++) {
+      const x = lp.getX(i);
+      const z = lp.getZ(i);
+      const dist = Math.hypot(x, z);
+      // Natural curved lunar horizon drop-off + rolling ridges + craters!
+      let y = -620 - dist * dist * 0.0000045 + fbm2(x * 0.00032, z * 0.00032, 5) * 620;
+      for (const c of craters) {
+        const cd = Math.hypot(x - c.x, z - c.z) / c.r;
+        if (cd < 1.35) {
+          if (cd < 0.85) y -= (1 - (cd / 0.85) ** 2) * c.d;
+          else y += Math.sin(((cd - 0.85) / 0.5) * Math.PI) * (c.d * 0.36);
+        }
+      }
+      lp.setY(i, y);
+    }
+    lunarGeo.computeVertexNormals();
+
+    const lunarGround = new THREE.Mesh(
+      lunarGeo,
+      mat(
+        new THREE.MeshStandardMaterial({
+          map: moonSurf,
+          normalMap: moonNorm,
+          normalScale: new THREE.Vector2(1.8, 1.8),
+          roughness: 0.94,
+          metalness: 0.04,
+        })
+      )
+    );
+    lunarGround.receiveShadow = true;
+    lunarGround.castShadow = true;
+    group.add(lunarGround);
+
+    // Colossal Glowing 4K Earthrise hanging dramatically over the lunar horizon!
+    const earthSurf = loadCachedTexture(PLANET_TEX.earthSurface, true);
+    const earthCloudsTex = loadCachedTexture(PLANET_TEX.earthClouds, true);
+    const earthRise = new THREE.Group();
+    earthRise.position.set(1600, 2650, -13800);
+    group.add(earthRise);
+
+    const earthSphere = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(2650, 84, 56)),
+      mat(new THREE.MeshStandardMaterial({ map: earthSurf, roughness: 0.65, metalness: 0.1 }))
+    );
+    earthRise.add(earthSphere);
+    const earthCloudSphere = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(2685, 64, 48)),
+      mat(new THREE.MeshStandardMaterial({ map: earthCloudsTex, transparent: true, opacity: 0.88, depthWrite: false }))
+    );
+    earthRise.add(earthCloudSphere);
+    const earthHalo = new THREE.Mesh(
+      geo(new THREE.SphereGeometry(2820, 48, 36)),
+      mat(
+        new THREE.MeshBasicMaterial({
+          color: "#38bdf8",
+          transparent: true,
+          opacity: 0.28,
+          side: THREE.BackSide,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      )
+    );
+    earthRise.add(earthHalo);
+
+    updaters.push((t, sp) => {
+      earthSphere.rotation.y = 2.1 + t * 0.018 * sp;
+      earthCloudSphere.rotation.y = 2.1 + t * 0.025 * sp;
+      stars.rotation.y = t * 0.0015 * sp;
+    });
+
+    return {
+      group,
+      fogColor: "#010206",
+      fogDensity: 0.000005,
+      sunPos: [-8500, 3200, 4200],
+      sunColor: "#ffffff",
+      sunIntensity: 3.1,
+      hemiSky: "#93c5fd",
+      hemiGround: "#090b12",
+      update: (t, s) => {
+        for (const u of updaters) u(t, s);
+      },
+      dispose: () => {
+        for (const d of disposables) d.dispose();
+      },
+    };
+  }
+
+  // ─── 6. AURORA BOREALIS & ARCTIC ICEBERG SEA (Animated 3D Volumetric Aurora Ribbons!) ───
+  const stars = createStarfield(Math.round(3200 * particleDensity), 12000, 32000, starTex);
+  disposables.push(stars.geometry, stars.material as THREE.Material);
+  group.add(stars);
+
+  // Dark Reflective Arctic Sea
+  const seaGeo = geo(new THREE.PlaneGeometry(42000, 42000, 88, 88));
+  seaGeo.rotateX(-Math.PI / 2);
+  const spAttr = seaGeo.attributes.position as THREE.BufferAttribute;
+  const sx = new Float32Array(spAttr.count);
+  const sz = new Float32Array(spAttr.count);
+  for (let i = 0; i < spAttr.count; i++) {
+    sx[i] = spAttr.getX(i);
+    sz[i] = spAttr.getZ(i);
+  }
+  const sea = new THREE.Mesh(
+    seaGeo,
     mat(
-      new THREE.PointsMaterial({
-        size: 42,
-        map: starTex,
-        color: accent,
-        transparent: true,
-        opacity: 0.58,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
+      new THREE.MeshPhysicalMaterial({
+        color: "#03131c",
+        emissive: "#042f2e",
+        emissiveIntensity: 0.25,
+        metalness: 0.88,
+        roughness: 0.1,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.05,
       })
     )
   );
-  group.add(particles);
+  sea.position.y = -580;
+  sea.receiveShadow = true;
+  group.add(sea);
+
+  // Sculpted Crystalline Faceted Icebergs floating in the arctic sea!
+  const iceMat = mat(
+    new THREE.MeshPhysicalMaterial({
+      color: "#cbd5e1",
+      emissive: "#083344",
+      emissiveIntensity: 0.22,
+      roughness: 0.22,
+      metalness: 0.12,
+      clearcoat: 0.9,
+      flatShading: true,
+    })
+  );
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2 + 0.2;
+    const dist = 2900 + (i % 4) * 1900;
+    const radius = 320 + ((i * 137) % 680);
+    const height = 420 + ((i * 211) % 1450);
+    const bergGeo = geo(new THREE.ConeGeometry(radius, height, 6 + (i % 4), 2));
+    const bp = bergGeo.attributes.position as THREE.BufferAttribute;
+    for (let k = 0; k < bp.count; k++) {
+      bp.setX(k, bp.getX(k) * (0.78 + hash2(k, i) * 0.45));
+      bp.setZ(k, bp.getZ(k) * (0.78 + hash2(i, k) * 0.45));
+    }
+    bergGeo.computeVertexNormals();
+    const berg = new THREE.Mesh(bergGeo, iceMat);
+    berg.position.set(Math.cos(a) * dist, -580 + height * 0.34, Math.sin(a) * dist);
+    berg.rotation.y = i * 1.1;
+    berg.castShadow = true;
+    berg.receiveShadow = true;
+    group.add(berg);
+  }
+
+  // 5 Towering Animated 3D Volumetric Aurora Borealis Curtain Ribbons!
+  const auroraTex = createAuroraTexture();
+  disposables.push(auroraTex);
+  const ribbons: Array<{
+    geo: THREE.PlaneGeometry;
+    basePos: Float32Array;
+    phase: number;
+    amp: number;
+  }> = [];
+
+  for (let r = 0; r < 5; r++) {
+    const rGeo = geo(new THREE.PlaneGeometry(18000, 3200, 72, 6));
+    const rp = rGeo.attributes.position as THREE.BufferAttribute;
+    const basePos = new Float32Array(rp.array.length);
+    basePos.set(rp.array as Float32Array);
+
+    const rMat = mat(
+      new THREE.MeshBasicMaterial({
+        map: auroraTex,
+        transparent: true,
+        opacity: 0.42 + (r % 2) * 0.14,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    const mesh = new THREE.Mesh(rGeo, rMat);
+    mesh.position.set((r - 2) * 1800, 2400 + r * 320, -6800 - r * 1450);
+    mesh.rotation.y = (r - 2) * 0.24;
+    group.add(mesh);
+    ribbons.push({ geo: rGeo, basePos, phase: r * 1.35, amp: 520 + r * 130 });
+  }
+
+  let aTick = 0;
+  updaters.push((t, sp) => {
+    const wt = t * Math.max(0.25, sp);
+    for (const rb of ribbons) {
+      const rp = rb.geo.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < rp.count; i++) {
+        const bx = rb.basePos[i * 3]!;
+        const by = rb.basePos[i * 3 + 1]!;
+        const waveZ =
+          Math.sin(bx * 0.00045 + wt * 0.55 + rb.phase) * rb.amp +
+          Math.cos(bx * 0.0011 - wt * 0.8 + rb.phase) * (rb.amp * 0.35);
+        const waveY = Math.sin(bx * 0.0007 + wt * 0.4) * 260;
+        rp.setY(i, by + waveY);
+        rp.setZ(i, waveZ);
+      }
+      rp.needsUpdate = true;
+    }
+    for (let i = 0; i < spAttr.count; i++) {
+      spAttr.setY(i, Math.sin(sx[i]! * 0.0016 + wt * 0.9) * 14 + Math.cos(sz[i]! * 0.0018 - wt * 0.7) * 12);
+    }
+    spAttr.needsUpdate = true;
+    if ((aTick++ & 2) === 0) seaGeo.computeVertexNormals();
+  });
 
   return {
     group,
-    update: (t, speed) => {
-      particles.rotation.y = t * 0.012 * speed;
-      for (const a of animatedRefs) a.fn(t, speed);
+    fogColor: "#040d18",
+    fogDensity: 0.000018,
+    sunPos: [1800, 2600, -4200],
+    sunColor: "#6ee7b7",
+    sunIntensity: 2.1,
+    hemiSky: "#34d399",
+    hemiGround: "#081422",
+    update: (t, s) => {
+      for (const u of updaters) u(t, s);
     },
     dispose: () => {
       for (const d of disposables) d.dispose();
@@ -588,9 +1061,6 @@ function buildRoomEnvironment(
   };
 }
 
-/**
- * Computes ideal camera `(pos, target)` to face any 3D spatial window dead-on at 1:1 reading clarity!
- */
 function computeWindowFocusCamera(
   pose: SpatialWindowPose,
   fovDeg: number,
@@ -614,40 +1084,39 @@ function computeDefaultCamera(
 ): { pos: THREE.Vector3; target: THREE.Vector3 } {
   if (layout === "compiz-cube") {
     const faceAngle = (activeWorkspace - 1) * (Math.PI / 2);
-    const dist = CUBE_HALF_SIZE + 1300;
+    const dist = CUBE_HALF_SIZE + 1320;
     return {
-      pos: new THREE.Vector3(Math.sin(faceAngle) * dist, 180, Math.cos(faceAngle) * dist),
-      target: new THREE.Vector3(0, 40, 0),
+      pos: new THREE.Vector3(Math.sin(faceAngle) * dist, 160, Math.cos(faceAngle) * dist),
+      target: new THREE.Vector3(0, 45, 0),
     };
   }
   if (layout === "spatial-grid") {
     return {
-      pos: new THREE.Vector3(0, 170, 1980),
-      target: new THREE.Vector3(0, 90, -120),
+      pos: new THREE.Vector3(0, 160, 2020),
+      target: new THREE.Vector3(0, 80, -120),
     };
   }
   if (layout === "studio-desk") {
     return {
-      pos: new THREE.Vector3(0, 185, 1480),
+      pos: new THREE.Vector3(0, 165, 1520),
       target: new THREE.Vector3(0, 55, -40),
     };
   }
   if (layout === "gallery-ring") {
     return {
-      pos: new THREE.Vector3(0, 220, 1560),
+      pos: new THREE.Vector3(0, 210, 1600),
       target: new THREE.Vector3(0, 55, -150),
     };
   }
-  // curved-cockpit
   return {
-    pos: new THREE.Vector3(0, 140, 1360),
-    target: new THREE.Vector3(0, 55, -120),
+    pos: new THREE.Vector3(0, 125, 1400),
+    target: new THREE.Vector3(0, 45, -120),
   };
 }
 
 /**
- * Builds a hollow 4-bar machined metallic 3D perimeter frame around a window so BOTH front AND back
- * are 100% open & readable when walking/orbiting behind the window, while casting real shadows!
+ * Hollow 4-bar machined metallic 3D perimeter frame around each window so BOTH front AND back
+ * are completely open & readable while casting real dynamic shadows!
  */
 function createHollowWindowFrame(
   width: number,
@@ -657,20 +1126,17 @@ function createHollowWindowFrame(
   castShadow: boolean
 ): PhysicalWindowMesh {
   const grp = new THREE.Group();
-  const railThick = 16;
-  const railDepth = 24;
+  const railThick = 14;
+  const railDepth = 22;
   const outerW = width + railThick * 2;
   const outerH = height + railThick * 2;
 
   const topRail = new THREE.Mesh(new THREE.BoxGeometry(outerW, railThick, railDepth), bezelMat);
   topRail.position.set(0, height / 2 + railThick / 2, -2);
-
   const botRail = new THREE.Mesh(new THREE.BoxGeometry(outerW, railThick, railDepth), bezelMat);
   botRail.position.set(0, -(height / 2 + railThick / 2), -2);
-
   const leftRail = new THREE.Mesh(new THREE.BoxGeometry(railThick, height, railDepth), bezelMat);
   leftRail.position.set(-(width / 2 + railThick / 2), 0, -2);
-
   const rightRail = new THREE.Mesh(new THREE.BoxGeometry(railThick, height, railDepth), bezelMat);
   rightRail.position.set(width / 2 + railThick / 2, 0, -2);
 
@@ -682,9 +1148,7 @@ function createHollowWindowFrame(
   }
 
   const rimGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(outerW + 2, outerH + 2, railDepth + 2));
-  const rimMat = new THREE.LineBasicMaterial({
-    color: focused ? "#38bdf8" : "#475569",
-  });
+  const rimMat = new THREE.LineBasicMaterial({ color: focused ? "#38bdf8" : "#475569" });
   const rimMesh = new THREE.LineSegments(rimGeo, rimMat);
   rimMesh.position.z = -2;
   grp.add(rimMesh);
@@ -713,21 +1177,23 @@ export const ThreeDesktop3d: React.FC = () => {
   const [backendLabel, setBackendLabel] = useState<"WebGPU" | "WebGL2" | "Init…">("Init…");
   const [fps, setFps] = useState(60);
   const [hdriLoading, setHdriLoading] = useState(false);
+  const [hudCollapsed, setHudCollapsed] = useState(false);
+  const overviewToggleRef = useRef(false);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<WebGPURenderer | null>(null);
   const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
   const roomEnvTexRef = useRef<THREE.Texture | null>(null);
   const envRef = useRef<EnvRuntime | null>(null);
   const starTexRef = useRef<THREE.Texture | null>(null);
   const windowMeshesRef = useRef<Map<string, PhysicalWindowMesh>>(new Map());
   const flyTargetRef = useRef<{ pos: THREE.Vector3; target: THREE.Vector3; active: boolean }>({
-    pos: new THREE.Vector3(0, 140, 1360),
-    target: new THREE.Vector3(0, 55, -120),
+    pos: new THREE.Vector3(0, 125, 1400),
+    target: new THREE.Vector3(0, 45, -120),
     active: false,
   });
 
-  // Main synchronized Three.js WebGPU + Real 3D DOM Window Compositor + ZQSD/Arrows Engine!
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -739,8 +1205,8 @@ export const ThreeDesktop3d: React.FC = () => {
     let envTarget: THREE.WebGLRenderTarget | null = null;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#05070e");
-    scene.fog = new THREE.FogExp2("#05070e", 0.000055);
+    scene.background = new THREE.Color("#03050a");
+    scene.fog = new THREE.FogExp2("#03050a", 0.00002);
     sceneRef.current = scene;
 
     const FOV = 50;
@@ -748,49 +1214,53 @@ export const ThreeDesktop3d: React.FC = () => {
       FOV,
       window.innerWidth / Math.max(1, window.innerHeight),
       20,
-      46000
+      58000
     );
     const initCam = computeDefaultCamera(cfgRef.current.layout, wmRef.current.activeWorkspace);
     camera.position.copy(initCam.pos);
 
-    // Rich 3-Point Studio + Sun Shadow Lighting Rig!
-    const hemi = new THREE.HemisphereLight("#dbeafe", "#0b1120", 0.9);
+    // Cinema 3-Point Sun + Hemisphere + Rim Lighting
+    const hemi = new THREE.HemisphereLight("#dbeafe", "#0b1120", 0.95);
     scene.add(hemi);
+    hemiLightRef.current = hemi;
 
-    const keyLight = new THREE.DirectionalLight("#fff7ed", 2.2);
+    const keyLight = new THREE.DirectionalLight("#fff7ed", 2.5);
     keyLight.position.set(1600, 2600, 1900);
     keyLight.castShadow = cfgRef.current.shadowsEnabled;
     keyLight.shadow.mapSize.set(2048, 2048);
     keyLight.shadow.camera.near = 200;
-    keyLight.shadow.camera.far = 9500;
-    keyLight.shadow.camera.left = -3600;
-    keyLight.shadow.camera.right = 3600;
-    keyLight.shadow.camera.top = 3600;
-    keyLight.shadow.camera.bottom = -3600;
+    keyLight.shadow.camera.far = 16000;
+    keyLight.shadow.camera.left = -4500;
+    keyLight.shadow.camera.right = 4500;
+    keyLight.shadow.camera.top = 4500;
+    keyLight.shadow.camera.bottom = -4500;
     keyLight.shadow.bias = -0.0005;
     scene.add(keyLight);
     keyLightRef.current = keyLight;
 
-    const cyanLight = new THREE.PointLight("#22d3ee", 3.6, 8500, 0.35);
-    cyanLight.position.set(-1800, 780, 1100);
-    scene.add(cyanLight);
-
-    const violetLight = new THREE.PointLight("#a855f7", 3.6, 8500, 0.35);
-    violetLight.position.set(1800, 680, -900);
-    scene.add(violetLight);
+    const rimLight = new THREE.PointLight("#38bdf8", 2.4, 9500, 0.4);
+    rimLight.position.set(-1600, 700, 1400);
+    scene.add(rimLight);
 
     const starTex = createStarTexture();
     starTexRef.current = starTex;
 
+    // ─── AAA Mouse, Precision Trackpad & Multi-Touch Controls ────────────────
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.075;
-    controls.rotateSpeed = 0.65;
-    controls.zoomSpeed = 0.95;
-    controls.panSpeed = 0.9;
-    controls.minDistance = 280;
-    controls.maxDistance = 12000;
-    controls.maxPolarAngle = Math.PI * 0.64;
+    controls.dampingFactor = 0.068;
+    controls.rotateSpeed = 0.68;
+    controls.zoomSpeed = 1.05;
+    controls.panSpeed = 1.0;
+    controls.screenSpacePanning = true;
+    controls.zoomToCursor = true;
+    controls.minDistance = 260;
+    controls.maxDistance = 14500;
+    controls.maxPolarAngle = Math.PI * 0.72;
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
     controls.target.copy(initCam.target);
     controls.update();
 
@@ -799,50 +1269,7 @@ export const ThreeDesktop3d: React.FC = () => {
     };
     controls.addEventListener("start", cancelFly);
 
-    // ─── ZQSD / WASD Free-Flight + Arrow Keys Camera Rotation ────────────────
-    const pressedCodes = new Set<string>();
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isTypingTarget(document.activeElement)) return;
-      const code = e.code;
-      const navCodes = [
-        "KeyW",
-        "KeyA",
-        "KeyS",
-        "KeyD",
-        "KeyQ",
-        "KeyZ",
-        "KeyE",
-        "KeyC",
-        "Space",
-        "ShiftLeft",
-        "ShiftRight",
-        "ArrowLeft",
-        "ArrowRight",
-        "ArrowUp",
-        "ArrowDown",
-      ];
-      if (code === "KeyR") {
-        spatial3dBridge.dispatchCamera({ kind: "reset" });
-        return;
-      }
-      if (navCodes.includes(code)) {
-        pressedCodes.add(code);
-        flyTargetRef.current.active = false;
-        if (code.startsWith("Arrow") || code === "Space") {
-          e.preventDefault();
-        }
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      pressedCodes.delete(e.code);
-    };
-    const onBlur = () => pressedCodes.clear();
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("blur", onBlur);
-
-    // Reusable temporaries for zero-GC 60fps loop
+    // Reusable temporaries for zero-GC 60fps loop + trackpad gestures
     const tmpObj = new THREE.Object3D();
     const tmpFwd = new THREE.Vector3();
     const tmpRight = new THREE.Vector3();
@@ -850,10 +1277,96 @@ export const ThreeDesktop3d: React.FC = () => {
     const tmpOffset = new THREE.Vector3();
     const tmpSph = new THREE.Spherical();
 
+    // Precision Trackpad & Mouse Wheel Enhancement (2-finger horizontal orbit/pan, Shift+scroll pan, Alt+scroll fly!)
+    const onCanvasWheel = (e: WheelEvent) => {
+      if (!cfgRef.current.interactiveOrbit) return;
+      flyTargetRef.current.active = false;
+      // Alt + Wheel: Smooth forward/back camera dolly flight through the 3D scene!
+      if (e.altKey) {
+        e.preventDefault();
+        camera.getWorldDirection(tmpFwd);
+        const step = -e.deltaY * 3.2;
+        camera.position.addScaledVector(tmpFwd, step);
+        controls.target.addScaledVector(tmpFwd, step);
+        return;
+      }
+      // Shift + Wheel or 2-finger Trackpad Horizontal Swipe: Smooth pan / horizontal orbit!
+      if (e.shiftKey && !e.ctrlKey) {
+        e.preventDefault();
+        camera.getWorldDirection(tmpFwd);
+        tmpRight.crossVectors(tmpFwd, tmpUp).normalize();
+        const panScale = Math.max(0.8, camera.position.distanceTo(controls.target) * 0.0012);
+        const move = tmpOffset
+          .set(0, 0, 0)
+          .addScaledVector(tmpRight, e.deltaX * panScale)
+          .addScaledVector(tmpUp, e.deltaY * panScale);
+        camera.position.add(move);
+        controls.target.add(move);
+        return;
+      }
+      // Trackpad 2-finger horizontal swipe (MacBook): smoothly orbits horizontally!
+      if (!e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.15 && Math.abs(e.deltaX) > 1.5) {
+        e.preventDefault();
+        tmpOffset.copy(camera.position).sub(controls.target);
+        tmpSph.setFromVector3(tmpOffset);
+        tmpSph.theta -= e.deltaX * 0.0038;
+        tmpOffset.setFromSpherical(tmpSph);
+        camera.position.copy(controls.target).add(tmpOffset);
+      }
+    };
+    canvas.addEventListener("wheel", onCanvasWheel, { passive: false });
+
+    // Double-click empty 3D space: smoothly toggle Cinematic Panorama Overview <-> Workspace View!
+    const onCanvasDblClick = () => {
+      overviewToggleRef.current = !overviewToggleRef.current;
+      spatial3dBridge.dispatchCamera({ kind: overviewToggleRef.current ? "overview" : "reset" });
+    };
+    canvas.addEventListener("dblclick", onCanvasDblClick);
+
+    // ─── ZQSD / WASD Free-Flight + Arrow Keys Smooth Rotation ────────────────
+    const pressedCodes = new Set<string>();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(document.activeElement)) return;
+      const code = e.code;
+      if (code === "KeyR") {
+        spatial3dBridge.dispatchCamera({ kind: "reset" });
+        return;
+      }
+      const navCodes = [
+        "KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyZ", "KeyE", "KeyC",
+        "Space", "ShiftLeft", "ShiftRight",
+        "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+      ];
+      if (navCodes.includes(code)) {
+        pressedCodes.add(code);
+        flyTargetRef.current.active = false;
+        if (code.startsWith("Arrow") || code === "Space") e.preventDefault();
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => pressedCodes.delete(e.code);
+    const onBlur = () => pressedCodes.clear();
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+
+    // Subtle glowing holographic rail under the 3D Super Dock!
+    const dockGlowBar = new THREE.Mesh(
+      new THREE.BoxGeometry(920, 4, 18),
+      new THREE.MeshStandardMaterial({
+        color: "#38bdf8",
+        emissive: "#38bdf8",
+        emissiveIntensity: 1.6,
+        transparent: true,
+        opacity: 0.72,
+      })
+    );
+    scene.add(dockGlowBar);
+
     const sharedBezelMat = new THREE.MeshPhysicalMaterial({
-      color: "#111729",
-      metalness: 0.9,
-      roughness: 0.16,
+      color: "#111827",
+      metalness: 0.92,
+      roughness: 0.14,
       clearcoat: 1.0,
     });
 
@@ -868,7 +1381,6 @@ export const ThreeDesktop3d: React.FC = () => {
           scene.add(entry.group);
           windowMeshesRef.current.set(p.id, entry);
         }
-
         entry.group.visible = p.visible;
         if (p.visible) {
           entry.group.position.set(p.x, p.y, p.z);
@@ -877,7 +1389,6 @@ export const ThreeDesktop3d: React.FC = () => {
           for (const r of entry.rails) r.castShadow = shadows;
         }
       }
-
       for (const [id, entry] of windowMeshesRef.current.entries()) {
         if (!seen.has(id)) {
           disposeWindowFrame(scene, entry);
@@ -898,14 +1409,14 @@ export const ThreeDesktop3d: React.FC = () => {
         if (layout === "compiz-cube") {
           const ang = (wmRef.current.activeWorkspace - 1) * (Math.PI / 2) + 0.58;
           flyTargetRef.current = {
-            pos: new THREE.Vector3(Math.sin(ang) * 3100, 960, Math.cos(ang) * 3100),
-            target: new THREE.Vector3(0, 30, 0),
+            pos: new THREE.Vector3(Math.sin(ang) * 3200, 980, Math.cos(ang) * 3200),
+            target: new THREE.Vector3(0, 40, 0),
             active: true,
           };
         } else {
           flyTargetRef.current = {
-            pos: new THREE.Vector3(820, 840, 2750),
-            target: new THREE.Vector3(0, 40, -120),
+            pos: new THREE.Vector3(960, 820, 2950),
+            target: new THREE.Vector3(0, 20, -200),
             active: true,
           };
         }
@@ -928,6 +1439,15 @@ export const ThreeDesktop3d: React.FC = () => {
     };
     window.addEventListener("resize", onResize);
 
+    const applyWorldLighting = (env: EnvRuntime) => {
+      scene.fog = new THREE.FogExp2(env.fogColor, env.fogDensity);
+      keyLight.position.set(...env.sunPos);
+      keyLight.color.set(env.sunColor);
+      keyLight.intensity = env.sunIntensity;
+      hemi.color.set(env.hemiSky);
+      hemi.groundColor.set(env.hemiGround);
+    };
+
     const boot = async () => {
       try {
         const r = new WebGPURenderer({
@@ -943,10 +1463,10 @@ export const ThreeDesktop3d: React.FC = () => {
         }
         renderer = r;
         rendererRef.current = r;
-        r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+        r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.0));
         r.setSize(window.innerWidth, window.innerHeight, false);
         r.toneMapping = THREE.ACESFilmicToneMapping;
-        r.toneMappingExposure = 1.12;
+        r.toneMappingExposure = 1.1;
         r.shadowMap.enabled = cfgRef.current.shadowsEnabled;
         r.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -958,21 +1478,20 @@ export const ThreeDesktop3d: React.FC = () => {
           const room = new RoomEnvironment();
           envTarget = pmrem.fromScene(room, 0.04);
           roomEnvTexRef.current = envTarget.texture;
-          if (cfgRef.current.hdriPreset === "none") {
-            scene.environment = envTarget.texture;
-          }
+          scene.environment = envTarget.texture;
           room.dispose();
         } catch {
           // graceful lighting fallback
         }
 
-        const initialEnv = buildRoomEnvironment(
+        const initialEnv = buildCinematicWorld(
           cfgRef.current.scene,
           cfgRef.current.layout,
           cfgRef.current.particleDensity,
           starTex
         );
         scene.add(initialEnv.group);
+        applyWorldLighting(initialEnv);
         envRef.current = initialEnv;
 
         let fpsFrames = 0;
@@ -993,13 +1512,12 @@ export const ThreeDesktop3d: React.FC = () => {
 
           controls.enabled = curCfg.interactiveOrbit;
 
-          // ─── ZQSD / WASD Translation + Arrow Keys Look Rotation ────────────
+          // ZQSD / WASD + Arrow Keys navigation
           if (pressedCodes.size > 0 && !isTypingTarget(document.activeElement)) {
             const sprint = pressedCodes.has("ShiftLeft") || pressedCodes.has("ShiftRight") ? 2.4 : 1.0;
-            const moveStep = 1350 * (curCfg.moveSpeed || 1.0) * sprint * dt;
+            const moveStep = 1450 * (curCfg.moveSpeed || 1.0) * sprint * dt;
             const rotStep = 1.55 * dt;
 
-            // Arrow keys rotate camera viewing direction (yaw & pitch around camera eye!)
             const yawInput =
               (pressedCodes.has("ArrowLeft") ? 1 : 0) - (pressedCodes.has("ArrowRight") ? 1 : 0);
             const pitchInput =
@@ -1010,13 +1528,12 @@ export const ThreeDesktop3d: React.FC = () => {
               const dist = Math.max(120, tmpOffset.length());
               tmpSph.setFromVector3(tmpOffset);
               tmpSph.theta += yawInput * rotStep;
-              tmpSph.phi = Math.max(0.18, Math.min(Math.PI - 0.18, tmpSph.phi - pitchInput * rotStep));
+              tmpSph.phi = Math.max(0.14, Math.min(Math.PI - 0.14, tmpSph.phi - pitchInput * rotStep));
               tmpSph.radius = dist;
               tmpOffset.setFromSpherical(tmpSph);
               controls.target.copy(camera.position).add(tmpOffset);
             }
 
-            // ZQSD + WASD free movement (Z/W forward, S back, Q/A left, D right, Space/E up, C down)
             const fwdIn =
               (pressedCodes.has("KeyW") || pressedCodes.has("KeyZ") ? 1 : 0) -
               (pressedCodes.has("KeyS") ? 1 : 0);
@@ -1041,19 +1558,17 @@ export const ThreeDesktop3d: React.FC = () => {
 
               camera.position.add(moveVec);
               controls.target.add(moveVec);
-              // Keep camera above floor plane
-              if (camera.position.y < -390) {
-                const lift = -390 - camera.position.y;
+              if (camera.position.y < -480) {
+                const lift = -480 - camera.position.y;
                 camera.position.y += lift;
                 controls.target.y += lift;
               }
             }
           }
 
-          // Smooth camera fly-to interpolation
           if (flyTargetRef.current.active) {
-            camera.position.lerp(flyTargetRef.current.pos, 0.09);
-            controls.target.lerp(flyTargetRef.current.target, 0.09);
+            camera.position.lerp(flyTargetRef.current.pos, 0.088);
+            controls.target.lerp(flyTargetRef.current.target, 0.088);
             if (
               camera.position.distanceTo(flyTargetRef.current.pos) < 4 &&
               controls.target.distanceTo(flyTargetRef.current.target) < 4
@@ -1065,7 +1580,6 @@ export const ThreeDesktop3d: React.FC = () => {
           controls.update();
           camera.updateMatrixWorld();
 
-          // 1. Compute real 3D poses for all open OS windows
           const w = window.innerWidth;
           const h = Math.max(1, window.innerHeight);
           const poses = computeSpatialWindowPoses(
@@ -1078,10 +1592,9 @@ export const ThreeDesktop3d: React.FC = () => {
             spatial3dBridge.depthOffsets
           );
 
-          // 2. Sync hollow 4-rail metallic 3D frames & real shadow casters
           syncPhysicalWindows(poses, curCfg.shadowsEnabled);
 
-          // 3. Apply EXACT CSS3DRenderer camera matrix to live React window stage
+          // Exact CSS3D Camera Stage Transform
           const stage = spatial3dBridge.cameraStageEl;
           if (stage) {
             const fovPx = camera.projectionMatrix.elements[5]! * (h / 2);
@@ -1091,7 +1604,7 @@ export const ThreeDesktop3d: React.FC = () => {
               `translate(${(w / 2).toFixed(2)}px, ${(h / 2).toFixed(2)}px)`;
           }
 
-          // 4. Position EVERY real DOM WindowFrame directly in 3D world space!
+          // Synchronize all open real DOM Windows in 3D space
           spatial3dBridge.poses.clear();
           for (const p of poses) {
             spatial3dBridge.poses.set(p.id, p);
@@ -1113,10 +1626,48 @@ export const ThreeDesktop3d: React.FC = () => {
             el.style.transform = toObjectCSSMatrix(tmpObj.matrixWorld);
           }
 
-          // Animate environment & dynamic lighting
-          const boost = Math.max(0.3, curCfg.bloomIntensity);
-          cyanLight.intensity = 3.4 * boost;
-          violetLight.intensity = 3.4 * boost;
+          // Synchronize FULL 3D Super Dock / Taskbar + 3D Global Menu inside the 3D Scene!
+          const faceAngle =
+            curCfg.layout === "compiz-cube" ? (curWm.activeWorkspace - 1) * (Math.PI / 2) : 0;
+          const cosF = Math.cos(faceAngle);
+          const sinF = Math.sin(faceAngle);
+          const dockDist = curCfg.layout === "compiz-cube" ? CUBE_HALF_SIZE + 260 : 320;
+          const menuDist = curCfg.layout === "compiz-cube" ? CUBE_HALF_SIZE + 140 : 120;
+
+          const dockEl = spatial3dBridge.dock3dEl;
+          if (dockEl && curCfg.spatialChrome3d) {
+            const dx = dockDist * sinF;
+            const dz = dockDist * cosF;
+            tmpObj.position.set(dx, -405, dz);
+            tmpObj.rotation.set(-0.22, faceAngle, 0);
+            tmpObj.scale.set(1, 1, 1);
+            tmpObj.updateMatrixWorld();
+            dockEl.style.display = "flex";
+            dockEl.style.transform = toObjectCSSMatrix(tmpObj.matrixWorld);
+
+            dockGlowBar.visible = true;
+            dockGlowBar.position.set(dx, -445, dz - 8 * cosF);
+            dockGlowBar.rotation.set(-0.22, faceAngle, 0);
+          } else {
+            dockGlowBar.visible = false;
+            if (dockEl) dockEl.style.transform = "";
+          }
+
+          const menuEl = spatial3dBridge.globalMenu3dEl;
+          if (menuEl && curCfg.spatialChrome3d) {
+            const mx = menuDist * sinF;
+            const mz = menuDist * cosF;
+            tmpObj.position.set(mx, 495, mz);
+            tmpObj.rotation.set(0.08, faceAngle, 0);
+            tmpObj.scale.set(1, 1, 1);
+            tmpObj.updateMatrixWorld();
+            menuEl.style.display = "flex";
+            menuEl.style.transform = toObjectCSSMatrix(tmpObj.matrixWorld);
+          } else if (menuEl) {
+            menuEl.style.transform = "";
+          }
+
+          rimLight.intensity = 2.4 * Math.max(0.3, curCfg.bloomIntensity);
           envRef.current?.update(elapsed, curCfg.cameraSpeed);
 
           r.render(scene, camera);
@@ -1143,15 +1694,17 @@ export const ThreeDesktop3d: React.FC = () => {
       cancelAnimationFrame(raf);
       unsubCmd();
       controls.removeEventListener("start", cancelFly);
+      canvas.removeEventListener("wheel", onCanvasWheel);
+      canvas.removeEventListener("dblclick", onCanvasDblClick);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
       controls.dispose();
 
-      if (spatial3dBridge.cameraStageEl) {
-        spatial3dBridge.cameraStageEl.style.transform = "";
-      }
+      if (spatial3dBridge.cameraStageEl) spatial3dBridge.cameraStageEl.style.transform = "";
+      if (spatial3dBridge.dock3dEl) spatial3dBridge.dock3dEl.style.transform = "";
+      if (spatial3dBridge.globalMenu3dEl) spatial3dBridge.globalMenu3dEl.style.transform = "";
       for (const id of windowMeshesRef.current.keys()) {
         const dom = spatial3dBridge.getWindowEl(id);
         if (dom) dom.style.transform = "";
@@ -1160,6 +1713,8 @@ export const ThreeDesktop3d: React.FC = () => {
         disposeWindowFrame(scene, entry);
       }
       windowMeshesRef.current.clear();
+      dockGlowBar.geometry.dispose();
+      (dockGlowBar.material as THREE.Material).dispose();
       sharedBezelMat.dispose();
       envRef.current?.dispose();
       envRef.current = null;
@@ -1172,54 +1727,47 @@ export const ThreeDesktop3d: React.FC = () => {
     };
   }, []);
 
-  // Live Shadow Toggle synchronization
+  // Shadow toggle sync
   useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.shadowMap.enabled = cfg3d.shadowsEnabled;
-    }
-    if (keyLightRef.current) {
-      keyLightRef.current.castShadow = cfg3d.shadowsEnabled;
-    }
+    if (rendererRef.current) rendererRef.current.shadowMap.enabled = cfg3d.shadowsEnabled;
+    if (keyLightRef.current) keyLightRef.current.castShadow = cfg3d.shadowsEnabled;
   }, [cfg3d.shadowsEnabled]);
 
-  // Real 360° HDRI Skybox & IBL Reflection Loader (CORS + CORP safe!)
+  // Razor-Sharp 4K HDRI Loader (ZERO blurriness — backgroundBlurriness = 0 & LinearFilter!)
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
     let cancelled = false;
 
-    const preset = HDRI_PRESETS.find((h) => h.id === cfg3d.hdriPreset);
-    const url =
-      cfg3d.hdriPreset === "custom"
-        ? cfg3d.hdriUrl.trim()
-        : cfg3d.hdriPreset === "none"
-        ? ""
-        : preset?.url ?? "";
-
+    const url = resolveHdriUrl(cfg3d.hdriPreset, cfg3d.hdriUrl, cfg3d.scene);
     if (!url) {
-      scene.background = new THREE.Color("#05070e");
+      scene.background = new THREE.Color("#02040a");
       scene.backgroundBlurriness = 0;
       if (roomEnvTexRef.current) scene.environment = roomEnvTexRef.current;
       setHdriLoading(false);
       return;
     }
 
-    const applyTex = (tex: THREE.DataTexture) => {
+    const applySharpHdri = (tex: THREE.DataTexture) => {
       if (cancelled || !sceneRef.current) return;
       tex.mapping = THREE.EquirectangularReflectionMapping;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+      tex.needsUpdate = true;
       sceneRef.current.environment = tex;
       if (cfg3d.hdriBackground) {
         sceneRef.current.background = tex;
-        sceneRef.current.backgroundBlurriness = 0.04;
+        sceneRef.current.backgroundBlurriness = 0; // 100% razor sharp 4K!
       } else {
-        sceneRef.current.background = new THREE.Color("#05070e");
+        sceneRef.current.background = new THREE.Color("#02040a");
         sceneRef.current.backgroundBlurriness = 0;
       }
     };
 
     const cached = hdriTextureCache.get(url);
     if (cached) {
-      applyTex(cached);
+      applySharpHdri(cached);
       setHdriLoading(false);
       return;
     }
@@ -1231,12 +1779,12 @@ export const ThreeDesktop3d: React.FC = () => {
       .loadAsync(url)
       .then((tex) => {
         hdriTextureCache.set(url, tex);
-        applyTex(tex);
+        applySharpHdri(tex);
       })
       .catch((err) => {
-        console.warn("[ThreeDesktop3d] HDRI load failed:", url, err);
+        console.warn("[ThreeDesktop3d] 4K HDRI load failed:", url, err);
         if (!cancelled && sceneRef.current) {
-          sceneRef.current.background = new THREE.Color("#05070e");
+          sceneRef.current.background = new THREE.Color("#03060f");
           if (roomEnvTexRef.current) sceneRef.current.environment = roomEnvTexRef.current;
         }
       })
@@ -1247,9 +1795,9 @@ export const ThreeDesktop3d: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [cfg3d.hdriPreset, cfg3d.hdriUrl, cfg3d.hdriBackground]);
+  }, [cfg3d.hdriPreset, cfg3d.hdriUrl, cfg3d.hdriBackground, cfg3d.scene]);
 
-  // Hot-swap 3D room environment or layout chassis without recreating the GPU device
+  // Hot-swap cinematic 3D world or layout without recreating the WebGPU device
   useEffect(() => {
     const scene = sceneRef.current;
     const starTex = starTexRef.current;
@@ -1258,13 +1806,22 @@ export const ThreeDesktop3d: React.FC = () => {
       scene.remove(envRef.current.group);
       envRef.current.dispose();
     }
-    const next = buildRoomEnvironment(cfg3d.scene, cfg3d.layout, cfg3d.particleDensity, starTex);
+    const next = buildCinematicWorld(cfg3d.scene, cfg3d.layout, cfg3d.particleDensity, starTex);
     scene.add(next.group);
+    scene.fog = new THREE.FogExp2(next.fogColor, next.fogDensity);
+    if (keyLightRef.current) {
+      keyLightRef.current.position.set(...next.sunPos);
+      keyLightRef.current.color.set(next.sunColor);
+      keyLightRef.current.intensity = next.sunIntensity;
+    }
+    if (hemiLightRef.current) {
+      hemiLightRef.current.color.set(next.hemiSky);
+      hemiLightRef.current.groundColor.set(next.hemiGround);
+    }
     envRef.current = next;
     spatial3dBridge.dispatchCamera({ kind: "reset" });
   }, [cfg3d.scene, cfg3d.layout, cfg3d.particleDensity]);
 
-  // Smoothly orbit around the 4-sided Compiz Cube whenever activeWorkspace changes
   useEffect(() => {
     if (cfg3d.layout === "compiz-cube") {
       spatial3dBridge.dispatchCamera({ kind: "workspace", workspace: wm.activeWorkspace });
@@ -1278,190 +1835,210 @@ export const ThreeDesktop3d: React.FC = () => {
 
   return (
     <>
-      {/* Interactive 3D WebGPU Room Canvas: drag to orbit 360°, ZQSD/WASD to fly, Arrows to look! */}
+      {/* Full-viewport Interactive 3D Canvas (Mouse Orbit/Pan/Zoom, Trackpad 2-Finger Glide/Pinch, Touch, ZQSD + Arrows) */}
       <canvas
         ref={canvasRef}
-        className="fixed inset-0 w-full h-full z-0 pointer-events-auto cursor-grab active:cursor-grabbing"
+        className="fixed inset-0 w-full h-full z-0 pointer-events-auto cursor-grab active:cursor-grabbing touch-none"
       />
 
-      {/* Sleek Floating 3D Spatial Navigation, HDRI, Shadows & Layout Bar (Bottom-Left) */}
-      <div className="fixed bottom-4 left-4 z-[60] hidden md:flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 rounded-2xl glass-dock border border-cyan-400/30 text-[11px] select-none shadow-2xl max-w-[calc(100vw-32px)]">
-        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 font-mono text-[10px]">
-          <Box className="w-3 h-3" />
-          3D {backendLabel} · {fps} FPS
-        </span>
+      {/* Coherent, Compact, Collapsible Top-Center 3D Control Pill — NEVER overlaps the Dock or Taskbar! */}
+      <div
+        style={{ top: mods.shell.topBarStyle === "hidden" ? "10px" : "44px" }}
+        className="fixed left-1/2 -translate-x-1/2 z-[55] hidden md:flex items-center select-none pointer-events-none"
+      >
+        {hudCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setHudCollapsed(false)}
+            className="pointer-events-auto flex items-center gap-1.5 px-3 py-1 rounded-full glass-dock border border-cyan-400/35 text-[10px] font-mono text-cyan-200 hover:text-white shadow-xl cursor-pointer"
+            title="Afficher la barre de contrôle 3D"
+          >
+            <Box className="w-3 h-3" />
+            3D {backendLabel} · {fps} FPS
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        ) : (
+          <div className="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full glass-dock border border-white/18 text-[10px] shadow-2xl max-w-[96vw]">
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/35 text-cyan-200 font-mono shrink-0">
+              <Box className="w-3 h-3" />
+              {backendLabel} · {fps}
+            </span>
 
-        <span
-          title="Déplacement libre : ZQSD/WASD (Espace/C hauteur, Shift sprint), Flèches ←↑↓→ rotation, Shift+Glisser fenêtre = profondeur Z, R = Reset"
-          className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/[0.06] border border-white/10 font-mono text-[9px] text-zinc-300"
-        >
-          ZQSD · ←↑↓→ · Shift+Z
-        </span>
+            {/* World Selector */}
+            <select
+              value={cfg3d.scene}
+              onChange={(e) => modStore.setDesktop3d({ scene: e.target.value as Desktop3dSceneKind })}
+              className="bg-white/8 border border-white/14 rounded-full px-2 py-0.5 text-[10px] text-white outline-none cursor-pointer max-w-[165px]"
+              title="Monde 3D cinématographique"
+            >
+              {WORLD_BUTTONS.map((ev) => (
+                <option key={ev.id} value={ev.id} className="bg-[#0b0e18] text-white">
+                  {ev.label}
+                </option>
+              ))}
+            </select>
 
-        <div className="w-px h-4 bg-white/15 mx-0.5" />
+            {/* 4K HDRI Selector */}
+            <select
+              value={cfg3d.hdriPreset}
+              onChange={(e) => modStore.setDesktop3d({ hdriPreset: e.target.value as HdriPresetId })}
+              className="bg-white/8 border border-white/14 rounded-full px-2 py-0.5 text-[10px] text-amber-200 outline-none cursor-pointer max-w-[138px]"
+              title="Skybox 4K HDRI ultra-nette"
+            >
+              {HDRI_PRESETS.map((h) => (
+                <option key={h.id} value={h.id} className="bg-[#0b0e18] text-white">
+                  {hdriLoading && cfg3d.hdriPreset === h.id ? "⏳ 4K… " : `${h.emoji} `}
+                  {h.name}
+                </option>
+              ))}
+              {cfg3d.hdriUrl && (
+                <option value="custom" className="bg-[#0b0e18] text-white">
+                  🌐 HDRI Perso
+                </option>
+              )}
+            </select>
 
-        {/* 5 True 3D Window Spatial Layouts */}
-        {LAYOUT_BUTTONS.map((l) => {
-          const active = cfg3d.layout === l.id;
-          return (
+            <div className="w-px h-3.5 bg-white/15" />
+
+            {/* 5 Spatial Window Layouts */}
+            <div className="flex items-center gap-0.5">
+              {LAYOUT_BUTTONS.map((l) => {
+                const active = cfg3d.layout === l.id;
+                return (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => modStore.setDesktop3d({ layout: l.id })}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition cursor-pointer ${
+                      active
+                        ? "bg-gradient-to-r from-cyan-500/40 to-violet-500/40 text-white border border-cyan-300/50"
+                        : "text-zinc-300 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {l.emoji} {l.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {cfg3d.layout === "compiz-cube" && (
+              <div className="flex items-center gap-0.5 px-1 rounded-full bg-emerald-500/20 border border-emerald-400/35 text-emerald-200 font-mono">
+                <button type="button" onClick={() => rotateCube(-1)} className="p-0.5 hover:bg-white/15 rounded-full cursor-pointer">
+                  <ChevronLeft className="w-3 h-3" />
+                </button>
+                <span>F{wm.activeWorkspace}</span>
+                <button type="button" onClick={() => rotateCube(1)} className="p-0.5 hover:bg-white/15 rounded-full cursor-pointer">
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            <div className="w-px h-3.5 bg-white/15" />
+
+            {/* Camera Controls */}
             <button
-              key={l.id}
               type="button"
-              onClick={() => modStore.setDesktop3d({ layout: l.id })}
-              className={`px-2 py-1 rounded-xl text-[10px] font-medium transition cursor-pointer ${
-                active
-                  ? "bg-gradient-to-r from-cyan-500/35 to-violet-500/35 text-white border border-cyan-300/50 shadow"
-                  : "text-zinc-300 hover:text-white hover:bg-white/10"
+              onClick={() => {
+                if (wm.activeWindowId) {
+                  spatial3dBridge.dispatchCamera({ kind: "focus-window", windowId: wm.activeWindowId });
+                }
+              }}
+              title="Focaliser la caméra 1:1 sur la fenêtre active"
+              className="p-1 rounded-full hover:bg-white/15 text-cyan-300 cursor-pointer"
+            >
+              <Crosshair className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => spatial3dBridge.dispatchCamera({ kind: "overview" })}
+              title="Vue panoramique cinématique (ou double-clic sur le ciel)"
+              className="p-1 rounded-full hover:bg-white/15 text-violet-300 cursor-pointer"
+            >
+              <Compass className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                spatial3dBridge.resetDepthOffsets();
+                spatial3dBridge.dispatchCamera({ kind: "reset" });
+              }}
+              title="Réinitialiser la caméra (R)"
+              className="p-1 rounded-full hover:bg-white/15 text-zinc-300 hover:text-white cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="w-px h-3.5 bg-white/15" />
+
+            {/* 3D Dock & Global Menu Toggle, Shadows, Double-Sided */}
+            <button
+              type="button"
+              onClick={() => modStore.setDesktop3d({ spatialChrome3d: !cfg3d.spatialChrome3d })}
+              title="Super Dock, Barre des tâches & Menu Global EN 3D dans la scène"
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full transition cursor-pointer ${
+                cfg3d.spatialChrome3d
+                  ? "bg-fuchsia-500/28 border border-fuchsia-300/50 text-fuchsia-100"
+                  : "text-zinc-400 hover:text-white hover:bg-white/10"
               }`}
             >
-              {l.emoji} {l.label}
+              <LayoutPanelTop className="w-3 h-3" />
+              Dock 3D
             </button>
-          );
-        })}
 
-        {cfg3d.layout === "compiz-cube" && (
-          <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-xl bg-emerald-500/18 border border-emerald-400/35 text-emerald-200 font-mono text-[10px]">
             <button
               type="button"
-              onClick={() => rotateCube(-1)}
-              className="p-0.5 hover:bg-white/15 rounded cursor-pointer"
-              title="Tourner le Cube à gauche"
+              onClick={() => modStore.setDesktop3d({ shadowsEnabled: !cfg3d.shadowsEnabled })}
+              title="Ombres dynamiques 3D"
+              className={`p-1 rounded-full transition cursor-pointer ${
+                cfg3d.shadowsEnabled ? "bg-amber-500/22 text-amber-200" : "text-zinc-400 hover:text-white"
+              }`}
             >
-              <ChevronLeft className="w-3.5 h-3.5" />
+              <Sun className="w-3.5 h-3.5" />
             </button>
-            <span>F{wm.activeWorkspace}</span>
+
             <button
               type="button"
-              onClick={() => rotateCube(1)}
-              className="p-0.5 hover:bg-white/15 rounded cursor-pointer"
-              title="Tourner le Cube à droite"
+              onClick={() => modStore.setDesktop3d({ doubleSidedWindows: !cfg3d.doubleSidedWindows })}
+              title="Fenêtres visibles des 2 côtés"
+              className={`p-1 rounded-full transition cursor-pointer ${
+                cfg3d.doubleSidedWindows ? "bg-emerald-500/22 text-emerald-200" : "text-zinc-400 hover:text-white"
+              }`}
             >
-              <ChevronRight className="w-3.5 h-3.5" />
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => wmStore.openApp("mod-studio")}
+              title="Mod Studio (Scènes, HDRI 4K, Fonds 2D/3D)"
+              className="p-1 rounded-full text-zinc-300 hover:text-white hover:bg-white/15 cursor-pointer"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setHudCollapsed(true)}
+              title="Réduire la barre 3D"
+              className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/15 cursor-pointer"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => modStore.setDesktop3d({ enabled: false })}
+              title="Revenir au bureau 2D"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/22 hover:bg-rose-500/38 text-rose-200 font-semibold cursor-pointer"
+            >
+              <Monitor className="w-3 h-3" />
+              2D
+              <X className="w-3 h-3" />
             </button>
           </div>
         )}
-
-        <div className="w-px h-4 bg-white/15 mx-0.5" />
-
-        {/* Camera Actions */}
-        <button
-          type="button"
-          onClick={() => {
-            if (wm.activeWindowId) {
-              spatial3dBridge.dispatchCamera({ kind: "focus-window", windowId: wm.activeWindowId });
-            }
-          }}
-          title="Voler la caméra face à la fenêtre active (1:1)"
-          className="flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] bg-white/8 hover:bg-white/18 text-white transition cursor-pointer"
-        >
-          <Crosshair className="w-3 h-3 text-cyan-300" />
-          Focus
-        </button>
-
-        <button
-          type="button"
-          onClick={() => spatial3dBridge.dispatchCamera({ kind: "overview" })}
-          title="Vue d'ensemble 3D de toute la scène"
-          className="flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] bg-white/8 hover:bg-white/18 text-white transition cursor-pointer"
-        >
-          <Compass className="w-3 h-3 text-violet-300" />
-          Vue 3D
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            spatial3dBridge.resetDepthOffsets();
-            spatial3dBridge.dispatchCamera({ kind: "reset" });
-          }}
-          title="Réinitialiser la caméra & profondeurs (touche R)"
-          className="p-1 rounded-lg text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Shadows & Double-Sided Toggles */}
-        <button
-          type="button"
-          onClick={() => modStore.setDesktop3d({ shadowsEnabled: !cfg3d.shadowsEnabled })}
-          title="Lumières & Ombres dynamiques temps réel (PCFSoftShadowMap)"
-          className={`p-1 rounded-lg transition cursor-pointer ${
-            cfg3d.shadowsEnabled
-              ? "bg-amber-500/22 text-amber-200 border border-amber-400/40"
-              : "text-zinc-400 hover:text-white hover:bg-white/10"
-          }`}
-        >
-          <Sun className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          type="button"
-          onClick={() => modStore.setDesktop3d({ doubleSidedWindows: !cfg3d.doubleSidedWindows })}
-          title="Fenêtres visibles des 2 côtés (recto/verso holographique)"
-          className={`p-1 rounded-lg transition cursor-pointer ${
-            cfg3d.doubleSidedWindows
-              ? "bg-emerald-500/22 text-emerald-200 border border-emerald-400/40"
-              : "text-zinc-400 hover:text-white hover:bg-white/10"
-          }`}
-        >
-          <Eye className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="w-px h-4 bg-white/15 mx-0.5" />
-
-        {/* Quick 3D Scene Switcher */}
-        <select
-          value={cfg3d.scene}
-          onChange={(e) => modStore.setDesktop3d({ scene: e.target.value as Desktop3dSceneKind })}
-          className="bg-white/8 border border-white/15 rounded-lg px-1.5 py-0.5 text-[10px] text-zinc-200 outline-none cursor-pointer"
-          title="Scène 3D architecturale"
-        >
-          {ENV_BUTTONS.map((ev) => (
-            <option key={ev.id} value={ev.id} className="bg-[#0b0e18] text-white">
-              {ev.label}
-            </option>
-          ))}
-        </select>
-
-        {/* Quick 360° HDRI Skybox Switcher */}
-        <select
-          value={cfg3d.hdriPreset}
-          onChange={(e) => modStore.setDesktop3d({ hdriPreset: e.target.value as HdriPresetId })}
-          className="bg-white/8 border border-white/15 rounded-lg px-1.5 py-0.5 text-[10px] text-cyan-200 outline-none cursor-pointer"
-          title="Skybox HDRI 360° & Reflets PBR"
-        >
-          {HDRI_PRESETS.map((h) => (
-            <option key={h.id} value={h.id} className="bg-[#0b0e18] text-white">
-              {hdriLoading && cfg3d.hdriPreset === h.id ? "⏳ " : `${h.emoji} `}
-              {h.name}
-            </option>
-          ))}
-          {cfg3d.hdriUrl && (
-            <option value="custom" className="bg-[#0b0e18] text-white">
-              🌐 HDRI Perso
-            </option>
-          )}
-        </select>
-
-        <button
-          type="button"
-          onClick={() => wmStore.openApp("mod-studio")}
-          title="Ouvrir Mod Studio"
-          className="p-1 rounded-lg text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          type="button"
-          onClick={() => modStore.setDesktop3d({ enabled: false })}
-          title="Revenir au bureau 2D"
-          className="flex items-center gap-1 px-2 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 text-rose-200 text-[10px] font-semibold cursor-pointer"
-        >
-          <Monitor className="w-3 h-3" />
-          2D
-          <X className="w-3 h-3" />
-        </button>
       </div>
     </>
   );

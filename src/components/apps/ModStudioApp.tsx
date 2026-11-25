@@ -21,6 +21,7 @@ import React, { useState } from "react";
 import {
   HDRI_PRESETS,
   modStore,
+  ULTRA_HD_BACKDROPS,
   useMods,
   type CustomDesktopWidget,
   type CustomShaderMod,
@@ -94,60 +95,61 @@ const SCENES_3D: readonly {
   gradient: string;
 }[] = [
   {
-    id: "compiz-cube",
-    name: "Compiz / Beryl 3D Cube",
-    emoji: "🧊",
-    desc: "Véritable Cube 3D translucide 4 faces (Bureaux 1–4) qui pivote automatiquement au changement d'espace !",
-    gradient: "from-emerald-950 via-teal-900/70 to-cyan-950",
+    id: "ocean-sunset",
+    name: "Océan Infini & Coucher de Soleil",
+    emoji: "🌊",
+    desc: "Vagues animées 60fps en reflets d'or, archipel volcanique à l'horizon, soleil couchant volumétrique & HDRI 4K Venice",
+    gradient: "from-amber-950/90 via-rose-950/70 to-cyan-950",
   },
   {
-    id: "vision-horizon",
-    name: "VisionOS Horizon Spatial",
-    emoji: "🥽",
-    desc: "Paysage crépusculaire haute altitude, piliers de lumière verre, halo orbital & atmosphère spatiale",
-    gradient: "from-sky-950 via-indigo-950 to-slate-950",
+    id: "alpine-fjord",
+    name: "Fjord Alpin & Lac Miroir",
+    emoji: "🏔️",
+    desc: "Chaîne de montagnes alpines enneigées sculptées en FBM, lac glaciaire miroir ondulant, nuages dérivants & HDRI 4K Drakensberg",
+    gradient: "from-sky-950 via-slate-900 to-emerald-950/80",
   },
   {
-    id: "cyber-observatory",
-    name: "Quantum Observatory",
+    id: "earth-orbit",
+    name: "Orbite Terrestre — NASA 4K",
+    emoji: "🌍",
+    desc: "Terre géante en rotation texture NASA 4K Blue Marble, nuages 4K, halo atmosphérique Rayleigh, Lune 4K & Soleil cinématique",
+    gradient: "from-blue-950 via-sky-950/80 to-black",
+  },
+  {
+    id: "jupiter-orbit",
+    name: "Orbite Jupiter — NASA 4K",
     emoji: "🪐",
-    desc: "Nœud torique Liquid Metal PBR, 3 anneaux holographiques orbitaux, satellites & sol obsidienne",
-    gradient: "from-indigo-950 via-violet-900/70 to-cyan-900/60",
+    desc: "Jupiter géante 4K avec Grande Tache Rouge, anneau jovien, lueur atmosphérique ambre et lunes Io & Europe en orbite",
+    gradient: "from-orange-950/80 via-amber-950/60 to-black",
   },
   {
-    id: "liquid-monolith",
-    name: "Liquid Chrome Monolith",
-    emoji: "💎",
-    desc: "Monolithe icosaèdre chrome déformé en temps réel, 16 éclats réfractifs & piédestal studio",
-    gradient: "from-slate-900 via-sky-900/60 to-indigo-950",
+    id: "lunar-horizon",
+    name: "Horizon Lunaire & Lever de Terre 4K",
+    emoji: "🌙",
+    desc: "Sol lunaire cratérisé NASA 4K en relief éclairé par soleil rasant et gigantesque Lever de Terre 4K dans le ciel étoilé",
+    gradient: "from-zinc-900 via-slate-950 to-sky-950/70",
   },
   {
-    id: "cyberpunk-city",
-    name: "Night City 2099",
-    emoji: "⚡",
-    desc: "Mégalopole néon procédurale 64 tours, trafic aérien lumineux, soleil synthwave & grille laser",
-    gradient: "from-fuchsia-950 via-rose-900/60 to-cyan-950",
-  },
-  {
-    id: "space-station",
-    name: "Orbital Space Station",
-    emoji: "🛸",
-    desc: "Passerelle orbitale géante avec planète 3D à anneaux en rotation, lune en orbite et arches métalliques",
-    gradient: "from-slate-950 via-blue-950/75 to-indigo-950",
-  },
-  {
-    id: "kyoto-sanctuary",
-    name: "Kyoto Sanctuary",
-    emoji: "🪷",
-    desc: "Grand Torii vermillon, lanternes de cristal flottantes jade & sakura, lac miroir et lucioles",
-    gradient: "from-teal-950 via-emerald-900/50 to-pink-950/60",
+    id: "aurora-fjord",
+    name: "Aurores Boréales & Mer Arctique",
+    emoji: "🌌",
+    desc: "5 rideaux d'aurores boréales 3D volumétriques animés, icebergs cristallins sur mer miroir & ciel Voie Lactée 4K",
+    gradient: "from-emerald-950 via-teal-950/70 to-violet-950",
   },
 ];
 
 const AGENT_API_EXAMPLES: readonly { title: string; cmd: string }[] = [
   {
-    title: "Grille 3D + HDRI Sunset 360° + Ombres + Recto-Verso",
-    cmd: `osctl call mod.desktop3d.set '{"enabled":true,"layout":"spatial-grid","scene":"space-station","hdriPreset":"sunset","shadowsEnabled":true,"doubleSidedWindows":true}'`,
+    title: "Orbite Terrestre NASA 4K + Super Dock 3D + Mur Grille 3D",
+    cmd: `osctl call mod.desktop3d.set '{"enabled":true,"layout":"spatial-grid","scene":"earth-orbit","spatialChrome3d":true,"shadowsEnabled":true,"doubleSidedWindows":true}'`,
+  },
+  {
+    title: "Océan Cinématique & HDRI Venice 4K",
+    cmd: `osctl call mod.desktop3d.set '{"enabled":true,"layout":"curved-cockpit","scene":"ocean-sunset","hdriPreset":"venice-4k"}'`,
+  },
+  {
+    title: "Fond 2D Ultra-HD NASA Jupiter / Terre / Lune",
+    cmd: `osctl call mod.backdrop.set '{"id":"backdrop-jupiter-hubble"}'`,
   },
   {
     title: "Organiser toutes les fenêtres en Grille 2D",
@@ -158,16 +160,8 @@ const AGENT_API_EXAMPLES: readonly { title: string; cmd: string }[] = [
     cmd: `osctl call mod.fx.set '{"openAnimation":"flip3d","wobblyDrag":true,"burnClose":true,"genieMinimize":true,"hoverTilt3d":true,"chromaBorder":true}'`,
   },
   {
-    title: "Activer Compiz / Beryl 3D (Cube 4 Bureaux + Wobbly)",
-    cmd: `osctl call mod.variant.apply '{"id":"linux-compiz-beryl"}'`,
-  },
-  {
     title: "Afficher Météo Live + Bourse Crypto + Healthcheck",
     cmd: `osctl call mod.widget.upsert '{"id":"widget-weather-live","enabled":true}'`,
-  },
-  {
-    title: "Passer en Apple VisionOS Spatial 3D ou Windows XP/11",
-    cmd: `osctl call mod.variant.apply '{"id":"vision-spatial-3d"}'`,
   },
 ];
 
@@ -688,8 +682,82 @@ export const ModStudioApp: React.FC = () => {
               </div>
             </div>
 
+            {/* Ultra-HD NASA Earth / Moon / Jupiter / 4K Backdrops (2D & 3D!) */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-950/40 via-[#0c1020] to-amber-950/30 border border-sky-400/25 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-sky-300">
+                  Fonds Ultra-HD NASA & 4K (Terre · Lune · Jupiter · Saturne · Océan) — 2D & 3D
+                </div>
+                {mods.activeBackdropImageId && (
+                  <button
+                    type="button"
+                    onClick={() => modStore.setBackdropImage(null)}
+                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] text-zinc-200 cursor-pointer"
+                  >
+                    Revenir aux shaders 2D
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {ULTRA_HD_BACKDROPS.map((bg) => {
+                  const active2d = !mods.desktop3d.enabled && mods.activeBackdropImageId === bg.id;
+                  return (
+                    <div
+                      key={bg.id}
+                      className={`group relative overflow-hidden rounded-2xl border transition ${
+                        active2d ? "border-sky-300 ring-1 ring-sky-300/60" : "border-white/12 hover:border-white/30"
+                      }`}
+                    >
+                      <div className="h-24 w-full bg-black relative overflow-hidden">
+                        <img
+                          src={bg.url}
+                          crossOrigin="anonymous"
+                          alt={bg.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+                        <div className="absolute bottom-2 left-2.5 right-2.5 text-xs font-bold text-white truncate">
+                          {bg.emoji} {bg.name}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 p-2 bg-[#0a0d18]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            modStore.setDesktop3d({ enabled: false });
+                            modStore.setBackdropImage(bg.id);
+                          }}
+                          className={`flex-1 py-1 rounded-lg text-[10px] font-semibold cursor-pointer ${
+                            active2d
+                              ? "bg-sky-500 text-black"
+                              : "bg-white/10 hover:bg-white/20 text-white"
+                          }`}
+                        >
+                          {active2d ? "✓ Fond 2D actif" : "Fond 2D HD"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            modStore.setDesktop3d({
+                              enabled: true,
+                              scene: bg.scene3dHint,
+                              hdriPreset: bg.hdriHint,
+                            })
+                          }
+                          className="flex-1 py-1 rounded-lg bg-gradient-to-r from-cyan-500/35 to-violet-500/35 hover:brightness-125 border border-cyan-400/35 text-[10px] font-semibold text-cyan-100 cursor-pointer"
+                        >
+                          Monde 3D 4K
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="text-xs font-bold uppercase tracking-wider text-violet-300 pt-1">
-              Environnement Architectural de la Pièce 3D
+              6 Mondes 3D Cinématographiques (Eau, Montagnes, Planètes NASA 4K, Aurores Boréales)
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {SCENES_3D.map((sc) => {
@@ -724,8 +792,21 @@ export const ModStudioApp: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/10">
               <label className="flex items-center justify-between gap-3 text-xs cursor-pointer">
                 <div>
+                  <div className="font-semibold text-white">🚀 Super Dock, Barre des tâches & Menu Global EN 3D</div>
+                  <div className="text-[11px] text-zinc-400">Intègre le Dock, la Taskbar (Win/Linux/Mac) et le Menu Global directement dans la scène 3D</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={mods.desktop3d.spatialChrome3d}
+                  onChange={(e) => modStore.setDesktop3d({ spatialChrome3d: e.target.checked })}
+                  className="accent-fuchsia-400 w-4 h-4"
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-3 text-xs cursor-pointer">
+                <div>
                   <div className="font-semibold text-white">☀️ Lumières & Ombres Dynamiques 3D</div>
-                  <div className="text-[11px] text-zinc-400">Ombres portées douces (PCFSoftShadowMap 2048px) sur le sol & bureau</div>
+                  <div className="text-[11px] text-zinc-400">Ombres portées douces (PCFSoftShadowMap 2048px)</div>
                 </div>
                 <input
                   type="checkbox"

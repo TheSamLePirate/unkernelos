@@ -32,7 +32,7 @@ export type CameraCommand =
 const eps = (v: number): number => (Math.abs(v) < 1e-10 ? 0 : v);
 
 /**
- * Exact Three.js CSS3DRenderer camera matrix formula (keeps WebGPURenderer & DOM windows
+ * Exact Three.js CSS3DRenderer camera matrix formula (keeps WebGPURenderer & DOM windows/dock/menu
  * locked 1:1 down to sub-pixel precision on every frame!).
  */
 export function toCameraCSSMatrix(matrixWorldInverse: THREE.Matrix4): string {
@@ -48,7 +48,7 @@ export function toCameraCSSMatrix(matrixWorldInverse: THREE.Matrix4): string {
 }
 
 /**
- * Exact Three.js CSS3DRenderer object matrix formula for a DOM window placed in 3D world space.
+ * Exact Three.js CSS3DRenderer object matrix formula for a DOM element placed in 3D world space.
  */
 export function toObjectCSSMatrix(matrixWorld: THREE.Matrix4): string {
   const e = matrixWorld.elements;
@@ -97,7 +97,7 @@ export function computeSpatialWindowPoses(
         id: w.id,
         workspace: w.workspace,
         x: 0,
-        y: -2500,
+        y: -3000,
         z: 0,
         rx: 0,
         ry: 0,
@@ -114,7 +114,7 @@ export function computeSpatialWindowPoses(
     const cx = w.maximized ? 0 : w.x + w.width / 2 - vw / 2;
     const cy = w.maximized ? 20 : -(w.y + w.height / 2 - vh / 2);
 
-    // 1. TRUE 4-SIDED COMPIZ / BERYL 3D CUBE (all 4 workspaces mounted simultaneously on the 4 physical cube faces!)
+    // 1. TRUE 4-SIDED COMPIZ / BERYL 3D CUBE
     if (layout === "compiz-cube") {
       const sameWs = windows
         .filter((x) => x.workspace === w.workspace && !x.minimized)
@@ -122,9 +122,8 @@ export function computeSpatialWindowPoses(
       const stackIdx = Math.max(0, sameWs.findIndex((x) => x.id === w.id));
       const faceOut = CUBE_HALF_SIZE + 44 + stackIdx * 42 + (isFocused ? 28 : 0) + userDepth;
       const localX = Math.max(-520, Math.min(520, cx * 0.85));
-      const localY = Math.max(-250, Math.min(340, cy * 0.82 + 45));
+      const localY = Math.max(-200, Math.min(340, cy * 0.82 + 65));
 
-      // Workspace 1 = Front (+Z), 2 = Right (+X), 3 = Back (-Z), 4 = Left (-X)
       const faceAngle = (w.workspace - 1) * (Math.PI / 2);
       const cosA = Math.cos(faceAngle);
       const sinA = Math.sin(faceAngle);
@@ -147,11 +146,11 @@ export function computeSpatialWindowPoses(
       };
     }
 
-    // 2. 360° SPATIAL GALLERY RING (all open windows float around you in a 3D panoramic ring!)
+    // 2. 360° SPATIAL GALLERY RING
     if (layout === "gallery-ring") {
       const idx = Math.max(0, allNonMinimized.findIndex((x) => x.id === w.id));
       const total = Math.max(1, allNonMinimized.length);
-      const radius = Math.max(1120, total * 255);
+      const radius = Math.max(1140, total * 260);
       const angle = total === 1 ? 0 : (idx / total) * Math.PI * 2;
       const lift = (isFocused ? 85 : 0) + userDepth;
       const r = Math.max(550, radius - lift);
@@ -159,7 +158,7 @@ export function computeSpatialWindowPoses(
         id: w.id,
         workspace: w.workspace,
         x: Math.sin(angle) * r,
-        y: 65 + (isFocused ? 18 : 0),
+        y: 80 + (isFocused ? 18 : 0),
         z: -Math.cos(angle) * r + radius - 160,
         rx: 0,
         ry: -angle,
@@ -171,13 +170,12 @@ export function computeSpatialWindowPoses(
       };
     }
 
-    // Active workspace layouts
     if (w.workspace !== activeWorkspace) {
       return {
         id: w.id,
         workspace: w.workspace,
         x: 0,
-        y: -2500,
+        y: -3000,
         z: 0,
         rx: 0,
         ry: 0,
@@ -206,7 +204,7 @@ export function computeSpatialWindowPoses(
 
       const rowCount = row === rows - 1 ? count - row * cols : cols;
       const flatX = (col - (rowCount - 1) / 2) * (cellW + gapX);
-      const flatY = ((rows - 1) / 2 - row) * (cellH + gapY) + 90;
+      const flatY = ((rows - 1) / 2 - row) * (cellH + gapY) + 100;
 
       const wallRadius = 2650;
       const theta = flatX / wallRadius;
@@ -220,7 +218,7 @@ export function computeSpatialWindowPoses(
         x,
         y: flatY,
         z,
-        rx: -((flatY - 90) * 0.00014),
+        rx: -((flatY - 100) * 0.00014),
         ry: -theta * 0.85,
         rz: 0,
         width: cellW,
@@ -230,7 +228,7 @@ export function computeSpatialWindowPoses(
       };
     }
 
-    // 4. 3D VIRTUAL STUDIO WORKSTATION DESK (ergonomic triple-monitor / wing-monitor setup over a physical 3D desk!)
+    // 4. 3D TRIPLE-SCREEN WING CONSOLE (ergonomic main center screen + angled side wings)
     if (layout === "studio-desk") {
       const focusedIdx = activeWsVisible.findIndex((x) => x.id === activeWindowId);
       const others = activeWsVisible.filter((x) => x.id !== activeWindowId);
@@ -239,7 +237,7 @@ export function computeSpatialWindowPoses(
           id: w.id,
           workspace: w.workspace,
           x: cx * 0.35,
-          y: 85 + cy * 0.25,
+          y: 95 + cy * 0.25,
           z: 70 + userDepth,
           rx: -0.02,
           ry: 0,
@@ -253,13 +251,13 @@ export function computeSpatialWindowPoses(
       const oIdx = Math.max(0, others.findIndex((x) => x.id === w.id));
       const side = oIdx % 2 === 0 ? -1 : 1;
       const tier = Math.floor(oIdx / 2);
-      const wingX = side * (920 + tier * 560);
+      const wingX = side * (940 + tier * 560);
       const wingZ = -180 - tier * 240 + userDepth;
       return {
         id: w.id,
         workspace: w.workspace,
         x: wingX,
-        y: 88 + tier * 40,
+        y: 95 + tier * 40,
         z: wingZ,
         rx: -0.02,
         ry: -side * 0.44,
@@ -271,7 +269,7 @@ export function computeSpatialWindowPoses(
       };
     }
 
-    // 5. CURVED SPATIAL COCKPIT (Apple VisionOS / Minority Report Ergonomic 3D Arc)
+    // 5. CURVED SPATIAL COCKPIT (VisionOS panoramic arc)
     const arcRadius = 1580;
     const spreadX = count > 1 ? cx * 1.15 + (idx - (count - 1) / 2) * 145 : cx * 0.92;
     const clampedX = Math.max(-1480, Math.min(1480, spreadX));
@@ -280,7 +278,7 @@ export function computeSpatialWindowPoses(
     const r = arcRadius - depthOffset;
     const x = Math.sin(theta) * r;
     const z = (arcRadius - Math.cos(theta) * r) * 0.9 + depthOffset + userDepth - 160;
-    const y = Math.max(-180, Math.min(420, cy * 0.8 + 65));
+    const y = Math.max(-140, Math.min(420, cy * 0.8 + 80));
 
     return {
       id: w.id,
@@ -301,6 +299,8 @@ export function computeSpatialWindowPoses(
 
 class Spatial3dBridge {
   public cameraStageEl: HTMLDivElement | null = null;
+  public dock3dEl: HTMLDivElement | null = null;
+  public globalMenu3dEl: HTMLDivElement | null = null;
   private windowEls = new Map<string, HTMLDivElement>();
   private commandListeners = new Set<(cmd: CameraCommand) => void>();
   public poses = new Map<string, SpatialWindowPose>();

@@ -122,7 +122,7 @@ const TRAY_PAD_Y = 10; // exact top & bottom symmetry inside glass tray
  * - Proportional glyph scaling: icons scale smoothly inside their growing squircles.
  * - Zero vertical clipping: overflow-visible row floats over the background glass tray.
  */
-export const Dock: React.FC = () => {
+export const Dock: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false }) => {
   const wm = useWm();
   const mods = useMods();
   const { isTouch, width: viewportWidth, keyboardInset } = useViewport();
@@ -260,7 +260,7 @@ export const Dock: React.FC = () => {
   const dockStyle = mods.shell.dockStyle;
   if (dockStyle === "hidden") return null;
 
-  const isTaskbar = dockStyle === "full-taskbar";
+  const isTaskbar = dockStyle === "full-taskbar" && !embedded3d;
   const isCyberRail = dockStyle === "cyber-rail";
   const isMinimalPill = dockStyle === "minimal-pill";
 
@@ -270,14 +270,22 @@ export const Dock: React.FC = () => {
 
   return (
     <div
-      style={{
-        bottom: isTaskbar ? "0px" : "max(0.75rem, env(safe-area-inset-bottom))",
-      }}
-      className={`hidden md:flex fixed ${
-        isTaskbar ? "inset-x-0" : "left-1/2 -translate-x-1/2"
-      } z-50 justify-center pointer-events-none transition-all duration-200 ${
-        hiddenForKeyboard ? "translate-y-28 opacity-0" : "translate-y-0 opacity-100"
-      }`}
+      style={
+        embedded3d
+          ? undefined
+          : {
+              bottom: isTaskbar ? "0px" : "max(0.75rem, env(safe-area-inset-bottom))",
+            }
+      }
+      className={
+        embedded3d
+          ? "flex justify-center pointer-events-none"
+          : `hidden md:flex fixed ${
+              isTaskbar ? "inset-x-0" : "left-1/2 -translate-x-1/2"
+            } z-50 justify-center pointer-events-none transition-all duration-200 ${
+              hiddenForKeyboard ? "translate-y-28 opacity-0" : "translate-y-0 opacity-100"
+            }`
+      }
     >
       <nav
         onPointerMove={handlePointerMove}
