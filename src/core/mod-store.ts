@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { Spatial3dLayoutKind } from "../gpu/spatial-3d-bridge.ts";
 import type { OsThemeId, WallpaperShaderId } from "./schema.ts";
 
 export type WindowDecoratorStyle =
@@ -55,6 +56,7 @@ export type VariantFamily = "windows" | "linux" | "apple" | "creative";
 
 export interface Desktop3dModConfig {
   readonly enabled: boolean;
+  readonly layout: Spatial3dLayoutKind;
   readonly scene: Desktop3dSceneKind;
   readonly spatialWindows: boolean;
   readonly interactiveOrbit: boolean;
@@ -195,9 +197,10 @@ const STORAGE_KEY = "unkernelos:mods:v2";
 
 export const DEFAULT_DESKTOP_3D: Desktop3dModConfig = {
   enabled: false,
+  layout: "curved-cockpit",
   scene: "cyber-observatory",
   spatialWindows: true,
-  interactiveOrbit: false,
+  interactiveOrbit: true,
   cameraSpeed: 0.7,
   bloomIntensity: 1.0,
   particleDensity: 1.0,
@@ -1287,9 +1290,10 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
     },
     desktop3d: {
       enabled: true,
+      layout: "compiz-cube",
       scene: "compiz-cube",
       spatialWindows: true,
-      interactiveOrbit: false,
+      interactiveOrbit: true,
       cameraSpeed: 0.75,
       bloomIntensity: 1.25,
       particleDensity: 1.2,
@@ -1563,9 +1567,10 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
     },
     desktop3d: {
       enabled: true,
+      layout: "curved-cockpit",
       scene: "vision-horizon",
       spatialWindows: true,
-      interactiveOrbit: false,
+      interactiveOrbit: true,
       cameraSpeed: 0.65,
       bloomIntensity: 1.05,
       particleDensity: 1.0,
@@ -1626,9 +1631,10 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
     },
     desktop3d: {
       enabled: true,
+      layout: "studio-desk",
       scene: "cyberpunk-city",
       spatialWindows: true,
-      interactiveOrbit: false,
+      interactiveOrbit: true,
       cameraSpeed: 0.85,
       bloomIntensity: 1.3,
       particleDensity: 1.15,
@@ -1739,9 +1745,10 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
     },
     desktop3d: {
       enabled: true,
+      layout: "gallery-ring",
       scene: "kyoto-sanctuary",
       spatialWindows: true,
-      interactiveOrbit: false,
+      interactiveOrbit: true,
       cameraSpeed: 0.6,
       bloomIntensity: 1.0,
       particleDensity: 1.1,

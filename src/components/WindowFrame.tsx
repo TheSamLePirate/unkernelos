@@ -1,7 +1,8 @@
-import { Layers, Maximize2, Minimize2, Minus, PanelLeft, PanelRight, Pin, Square, X } from "lucide-react";
-import React, { useRef, useState } from "react";
+import { Crosshair, Layers, Maximize2, Minimize2, Minus, PanelLeft, PanelRight, Pin, Square, X } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
 import { useMods } from "../core/mod-store.ts";
 import { useViewport } from "../core/use-viewport.ts";
+import { spatial3dBridge } from "../gpu/spatial-3d-bridge.ts";
 import { APP_CATALOG, useWm, wmStore, type SnapZone, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
 import { getSnapZoneStyle } from "./SnapPreviewOverlay.tsx";
 
@@ -43,12 +44,18 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
   const wm = useWm();
   const mods = useMods();
   const dec = mods.decorator;
-  const spatial3d = mods.desktop3d.enabled && mods.desktop3d.spatialWindows;
-  const wobblyEnabled = mods.shell.compizWobbly;
-  const visionOrnament = mods.shell.visionOrnaments || dec.style === "visionos-glass";
   const { isMobile, isTouch, keyboardInset } = useViewport();
+  const is3dSpace = mods.desktop3d.enabled && !isMobile;
+  const wobblyEnabled = mods.shell.compizWobbly && !is3dSpace;
+  const visionOrnament = mods.shell.visionOrnaments || dec.style === "visionos-glass";
   const [interacting, setInteracting] = useState(false);
   const [wobble, setWobble] = useState({ skewX: 0, skewY: 0, rot: 0 });
+  const frameElRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    spatial3dBridge.registerWindowEl(win.id, frameElRef.current);
+    return () => spatial3dBridge.registerWindowEl(win.id, null);
+  }, [win.id]);
 
   const dragRef = useRef<{
     pointerId: number;
@@ -272,45 +279,50 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
   const wobbleTransform =
     wobblyEnabled && (wobble.skewX !== 0 || wobble.skewY !== 0 || wobble.rot !== 0)
       ? `skew(${wobble.skewX}deg, ${wobble.skewY}deg) rotate(${wobble.rot}deg)`
-      : "";
+      : undefined;
 
-  const spatialTransform =
-    !isMobile && spatial3d && !interacting
-      ? focused
-        ? "translate3d(0, 0, 18px) scale(1)"
-        : "translate3d(0, 4px, -36px) scale(0.985)"
-      : "";
-
-  const combinedTransform = [spatialTransform, wobbleTransform].filter(Boolean).join(" ") || undefined;
-
-  const style: React.CSSProperties = {
-    ...(isMobile
-      ? mobileSheetStyle
-      : snapStyle ?? {
-          left: win.x,
-          top: win.y,
-          width: win.width,
-          height: win.height,
-        }),
-    zIndex: win.pinned ? win.zIndex + 5000 : win.zIndex,
-    display: !visible || win.minimized ? "none" : "flex",
-    borderRadius: isMobile ? undefined : `${dec.radiusPx}px`,
-    borderWidth: isMobile ? undefined : `${dec.borderWidthPx}px`,
-    opacity: focused ? 1 : dec.unfocusedOpacity,
-    boxShadow:
-      focused && !isMobile && dec.activeGlowPx > 0
-        ? `0 32px 86px -12px rgba(0,0,0,0.86), 0 0 ${dec.activeGlowPx}px -10px var(--window-glow), 0 1px 0 0 rgba(255,255,255,0.22) inset`
-        : undefined,
-    transform: combinedTransform,
-    transition: interacting
-      ? wobblyEnabled
-        ? "transform 95ms ease-out"
-        : "none"
-      : wobblyEnabled
-      ? "transform 460ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease, box-shadow 220ms ease"
-      : "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease, box-shadow 220ms ease",
-    willChange: interacting ? "left, top, width, height, transform" : undefined,
-  };
+  const style: React.CSSProperties = is3dSpace
+    ? {
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: win.width,
+        height: win.height,
+        borderRadius: `${dec.radiusPx}px`,
+        borderWidth: `${dec.borderWidthPx}px`,
+        opacity: focused ? 1 : Math.max(0.86, dec.unfocusedOpacity),
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
+        pointerEvents: "auto",
+      }
+    : {
+        ...(isMobile
+          ? mobileSheetStyle
+          : snapStyle ?? {
+              left: win.x,
+              top: win.y,
+              width: win.width,
+              height: win.height,
+            }),
+        zIndex: win.pinned ? win.zIndex + 5000 : win.zIndex,
+        display: !visible || win.minimized ? "none" : "flex",
+        borderRadius: isMobile ? undefined : `${dec.radiusPx}px`,
+        borderWidth: isMobile ? undefined : `${dec.borderWidthPx}px`,
+        opacity: focused ? 1 : dec.unfocusedOpacity,
+        boxShadow:
+          focused && !isMobile && dec.activeGlowPx > 0
+            ? `0 32px 86px -12px rgba(0,0,0,0.86), 0 0 ${dec.activeGlowPx}px -10px var(--window-glow), 0 1px 0 0 rgba(255,255,255,0.22) inset`
+            : undefined,
+        transform: wobbleTransform,
+        transition: interacting
+          ? wobblyEnabled
+            ? "transform 95ms ease-out"
+            : "none"
+          : wobblyEnabled
+          ? "transform 460ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease, box-shadow 220ms ease"
+          : "opacity 200ms ease, box-shadow 220ms ease",
+        willChange: interacting ? "left, top, width, height, transform" : undefined,
+      };
 
   const openWsCount = wm.windows.filter((w) => w.workspace === wm.activeWorkspace).length;
 
@@ -616,10 +628,17 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
 
   return (
     <div
+      ref={frameElRef}
       style={style}
-      onPointerDown={() => wmStore.focusWindow(win.id)}
+      data-window-surface="true"
+      onPointerDown={() => {
+        if (win.workspace !== wm.activeWorkspace) {
+          wmStore.switchWorkspace(win.workspace);
+        }
+        wmStore.focusWindow(win.id);
+      }}
       data-window-decorator={dec.style}
-      className={`fixed flex-col animate-window-in ${
+      className={`${is3dSpace ? "absolute" : "fixed animate-window-in"} pointer-events-auto flex-col ${
         visionOrnament ? "overflow-visible" : "overflow-hidden"
       } ${isMobile ? "rounded-t-[20px] border-x-0" : ""} ${
         focused ? "glass-surface-focused" : "glass-surface"
@@ -640,7 +659,14 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         data-unkernel-titlebar="true"
         onPointerDown={onHeaderPointerDown}
         onPointerUp={onHeaderPointerUpMobile}
-        onDoubleClick={() => !isMobile && wmStore.toggleMaximize(win.id)}
+        onDoubleClick={() => {
+          if (isMobile) return;
+          if (is3dSpace) {
+            spatial3dBridge.dispatchCamera({ kind: "focus-window", windowId: win.id });
+          } else {
+            wmStore.toggleMaximize(win.id);
+          }
+        }}
         style={{
           height: isMobile ? "44px" : isTabletTouch ? "44px" : `${dec.titlebarHeightPx}px`,
         }}
@@ -710,8 +736,19 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
               )}
             </div>
 
-            {/* Workspace, Snap & Right-Side Controls */}
+            {/* Workspace, Snap, 3D Camera Focus & Right-Side Controls */}
             <div className="flex items-center gap-1">
+              {is3dSpace && (
+                <button
+                  type="button"
+                  onClick={() => spatial3dBridge.dispatchCamera({ kind: "focus-window", windowId: win.id })}
+                  title="Centrer la caméra 3D face à cette fenêtre (1:1)"
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/40 text-cyan-200 text-[10px] font-mono transition cursor-pointer"
+                >
+                  <Crosshair className="w-3 h-3" />
+                  3D
+                </button>
+              )}
               {dec.showWorkspacePills && (
                 <div className="hidden lg:flex items-center gap-0.5 mr-1 px-1 py-0.5 rounded-md bg-white/[0.04] border border-white/8">
                   {([1, 2, 3, 4] as WorkspaceId[]).map((ws) => (

@@ -19,6 +19,7 @@ import { uiSounds } from "../core/ui-sounds.ts";
 import { waylandDesktopManager } from "../core/wayland-host.ts";
 import { workflowsStore } from "../core/workflows-store.ts";
 import { WebGpuBackdrop } from "../gpu/webgpu-backdrop.ts";
+import { spatial3dBridge } from "../gpu/spatial-3d-bridge.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
 import { AppLauncherOverlay } from "./AppLauncherOverlay.tsx";
 import { BootOverlay } from "./BootOverlay.tsx";
@@ -522,10 +523,10 @@ export const Desktop: React.FC = () => {
       {/* Magnetic Drag Snap Zone Preview Overlay */}
       <SnapPreviewOverlay />
 
-      {/* Floating Glass Window Layer (with Spatial 3D perspective & Compiz 3D Cube spin!) */}
+      {/* Floating Glass Window Layer (in 3D mode, windows live inside the exact Three.js CSS3D camera stage with ZERO unmounting!) */}
       <main
         style={
-          mods.desktop3d.enabled && mods.desktop3d.spatialWindows || mods.shell.compizCube
+          !mods.desktop3d.enabled && mods.shell.compizCube
             ? {
                 perspective: "1600px",
                 transformStyle: "preserve-3d",
@@ -537,23 +538,51 @@ export const Desktop: React.FC = () => {
               }
             : undefined
         }
-        className="relative z-10 w-full h-full pointer-events-none"
+        className="relative z-10 w-full h-full pointer-events-none overflow-hidden"
       >
-        {wm.windows.map((win) => {
-          const visible = win.workspace === wm.activeWorkspace;
-          const focused = visible && win.id === wm.activeWindowId && !wm.missionControlOpen && !wm.locked;
-          return (
-            <div key={win.id} data-window-surface="true" className="pointer-events-auto">
-              <WindowFrame win={win} focused={focused} visible={visible}>
+        <div
+          ref={(el) => {
+            spatial3dBridge.cameraStageEl = el;
+          }}
+          style={
+            mods.desktop3d.enabled
+              ? {
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  transformStyle: "preserve-3d",
+                  pointerEvents: "none",
+                }
+              : {
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  pointerEvents: "none",
+                }
+          }
+        >
+          {wm.windows.map((win) => {
+            const visible =
+              mods.desktop3d.enabled &&
+              (mods.desktop3d.layout === "compiz-cube" || mods.desktop3d.layout === "gallery-ring")
+                ? true
+                : win.workspace === wm.activeWorkspace;
+            const focused =
+              win.workspace === wm.activeWorkspace &&
+              win.id === wm.activeWindowId &&
+              !wm.missionControlOpen &&
+              !wm.locked;
+            return (
+              <WindowFrame key={win.id} win={win} focused={focused} visible={visible}>
                 <WindowErrorBoundary appTitle={win.title}>
                   <Suspense fallback={<AppLoadingFallback />}>
                     {renderWindowApp(win, focused, visible)}
                   </Suspense>
                 </WindowErrorBoundary>
               </WindowFrame>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </main>
 
       {/* Bottom Floating AAA Magnification Dock (Desktop & Tablet) */}

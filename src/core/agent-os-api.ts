@@ -37,6 +37,7 @@ import type {
 import { uiSounds } from "./ui-sounds.ts";
 import { waylandDesktopManager } from "./wayland-host.ts";
 import { KITTY_THEMES } from "../gpu/webgpu-terminal.ts";
+import { spatial3dBridge } from "../gpu/spatial-3d-bridge.ts";
 import {
   APP_CATALOG,
   wmStore,
@@ -955,21 +956,20 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
   {
     method: "mod.desktop3d.set",
     category: "theme",
-    summary: "Control the AAA Three.js WebGPU 3D Spatial Desktop: enabled, scene (compiz-cube, vision-horizon, cyber-observatory, liquid-monolith, cyberpunk-city, kyoto-sanctuary), spatialWindows, interactiveOrbit, cameraSpeed, bloomIntensity, particleDensity, mouseParallax.",
+    summary: "Control the True Spatial 3D WebGPU Desktop (real interactive windows in 3D space!): enabled, layout (curved-cockpit, compiz-cube, studio-desk, gallery-ring), scene (compiz-cube, vision-horizon, cyber-observatory, liquid-monolith, cyberpunk-city, kyoto-sanctuary), camera (focus, overview, reset).",
     paramsSchema: {
       type: "object",
       properties: {
         enabled: { type: "boolean" },
+        layout: { type: "string", enum: ["curved-cockpit", "compiz-cube", "studio-desk", "gallery-ring"] },
         scene: { type: "string", enum: ["compiz-cube", "vision-horizon", "cyber-observatory", "liquid-monolith", "cyberpunk-city", "kyoto-sanctuary"] },
-        spatialWindows: { type: "boolean" },
-        interactiveOrbit: { type: "boolean" },
+        camera: { type: "string", enum: ["focus", "overview", "reset"] },
         cameraSpeed: { type: "number" },
         bloomIntensity: { type: "number" },
         particleDensity: { type: "number" },
-        mouseParallax: { type: "number" },
       },
     },
-    example: { enabled: true, scene: "compiz-cube", spatialWindows: true, interactiveOrbit: false },
+    example: { enabled: true, layout: "compiz-cube", scene: "compiz-cube", camera: "overview" },
   },
   {
     method: "mod.shader.set",
@@ -2067,6 +2067,7 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       const patch: Record<string, unknown> = {};
       for (const k of [
         "enabled",
+        "layout",
         "scene",
         "spatialWindows",
         "interactiveOrbit",
@@ -2079,10 +2080,18 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       }
       modStore.setDesktop3d(patch as Partial<Desktop3dModConfig>);
       const next = modStore.getSnapshot().desktop3d;
+      if (p.camera === "overview") {
+        spatial3dBridge.dispatchCamera({ kind: "overview" });
+      } else if (p.camera === "reset") {
+        spatial3dBridge.dispatchCamera({ kind: "reset" });
+      } else if (p.camera === "focus") {
+        const activeId = wmStore.getSnapshot().activeWindowId;
+        if (activeId) spatial3dBridge.dispatchCamera({ kind: "focus-window", windowId: activeId });
+      }
       if (typeof p.enabled === "boolean") {
         wmStore.pushToast(
-          next.enabled ? "Bureau 3D WebGPU Activé" : "Bureau 2D Restauré",
-          next.enabled ? `Scène Three.js : ${next.scene}` : "Retour au fond WebGPU 2D.",
+          next.enabled ? "Bureau Spatial 3D Activé" : "Bureau 2D Restauré",
+          next.enabled ? `Layout 3D : ${next.layout} · Pièce : ${next.scene}` : "Retour au bureau 2D.",
           "info"
         );
       }

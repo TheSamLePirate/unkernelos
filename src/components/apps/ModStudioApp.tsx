@@ -33,6 +33,7 @@ import {
   type WindowDecoratorStyle,
 } from "../../core/mod-store.ts";
 import { wmStore } from "../../wm/wm-store.ts";
+import { spatial3dBridge, type Spatial3dLayoutKind } from "../../gpu/spatial-3d-bridge.ts";
 
 type ModTab = "variants" | "desktop3d" | "theme-dec" | "shaders" | "widgets" | "mods";
 
@@ -517,33 +518,103 @@ export const ModStudioApp: React.FC = () => {
           </div>
         )}
 
-        {/* ─── TAB 2: AAA 3D WEBGPU THREE.JS DESKTOP ──────────────────────────── */}
+        {/* ─── TAB 2: TRUE SPATIAL 3D WEBGPU THREE.JS DESKTOP ─────────────────── */}
         {tab === "desktop3d" && (
           <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-500/18 via-violet-600/15 to-fuchsia-500/15 border border-cyan-400/30 flex flex-wrap items-center justify-between gap-3">
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-500/18 via-violet-600/15 to-fuchsia-500/15 border border-cyan-400/35 flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-1">
                 <div className="text-sm font-bold text-white flex items-center gap-2">
                   <Box className="w-4 h-4 text-cyan-300" />
-                  Bureau Spatial 3D — Three.js WebGPU AAA
+                  Vrai Bureau Spatial 3D — Fenêtres & Pièce en 3D (Three.js WebGPU)
                 </div>
                 <p className="text-xs text-zinc-300">
-                  Moteur PBR temps réel (<code className="text-cyan-200">three/webgpu</code> + réflexions studio PMREM + repli WebGL2 automatique) avec profondeur spatiale des fenêtres et caméra orbitale 360°.
+                  Vos vraies fenêtres interactives (Terminal, Code IDE, Rust Rune, Agent Studio…) flottent physiquement dans la scène 3D avec châssis métallique WebGPU synchronisé. Glissez le fond pour orbiter 360°, molette pour zoomer, double-clic titre pour focaliser la caméra !
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => modStore.setDesktop3d({ enabled: !mods.desktop3d.enabled })}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  mods.desktop3d.enabled
-                    ? "bg-emerald-500 text-black hover:bg-emerald-400 shadow-lg shadow-emerald-500/25"
-                    : "bg-gradient-to-r from-cyan-500 to-violet-600 text-white hover:brightness-110 shadow-lg"
-                }`}
-              >
-                {mods.desktop3d.enabled ? "✓ Bureau 3D Activé" : "Activer le Bureau 3D WebGPU"}
-              </button>
+              <div className="flex items-center gap-2">
+                {mods.desktop3d.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => spatial3dBridge.dispatchCamera({ kind: "overview" })}
+                    className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-semibold text-white cursor-pointer"
+                  >
+                    Vue Globale 3D
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => modStore.setDesktop3d({ enabled: !mods.desktop3d.enabled })}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    mods.desktop3d.enabled
+                      ? "bg-emerald-500 text-black hover:bg-emerald-400 shadow-lg shadow-emerald-500/25"
+                      : "bg-gradient-to-r from-cyan-500 to-violet-600 text-white hover:brightness-110 shadow-lg"
+                  }`}
+                >
+                  {mods.desktop3d.enabled ? "✓ Bureau 3D Activé" : "Activer le Bureau 3D"}
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* 4 True 3D Spatial Window Layouts */}
+            <div className="space-y-2">
+              <div className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+                Disposition 3D des Fenêtres dans l'Espace
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {(
+                  [
+                    {
+                      id: "curved-cockpit" as Spatial3dLayoutKind,
+                      emoji: "🥽",
+                      name: "Arc Spatial (VisionOS)",
+                      desc: "Fenêtres disposées en arc cylindrique ergonomique autour de vous",
+                    },
+                    {
+                      id: "compiz-cube" as Spatial3dLayoutKind,
+                      emoji: "🧊",
+                      name: "Cube 4 Bureaux (Compiz)",
+                      desc: "Les 4 bureaux (1–4) montés simultanément sur les 4 faces d'un Cube 3D !",
+                    },
+                    {
+                      id: "studio-desk" as Spatial3dLayoutKind,
+                      emoji: "🖥️",
+                      name: "Bureau Studio 3D",
+                      desc: "Poste physique 3D avec écran principal au centre & moniteurs latéraux",
+                    },
+                    {
+                      id: "gallery-ring" as Spatial3dLayoutKind,
+                      emoji: "🪐",
+                      name: "Anneau 360°",
+                      desc: "Toutes vos fenêtres ouvertes en anneau panoramique 360° dans la pièce",
+                    },
+                  ]
+                ).map((lay) => {
+                  const active = mods.desktop3d.layout === lay.id;
+                  return (
+                    <button
+                      key={lay.id}
+                      type="button"
+                      onClick={() => modStore.setDesktop3d({ enabled: true, layout: lay.id })}
+                      className={`text-left p-3.5 rounded-2xl border transition cursor-pointer ${
+                        active && mods.desktop3d.enabled
+                          ? "bg-gradient-to-br from-cyan-500/22 to-violet-500/22 border-cyan-300 text-white shadow-lg"
+                          : "bg-white/[0.04] hover:bg-white/[0.08] border-white/12 text-zinc-200"
+                      }`}
+                    >
+                      <div className="text-xs font-bold">
+                        {lay.emoji} {lay.name}
+                      </div>
+                      <p className="text-[11px] text-zinc-400 mt-1 leading-snug">{lay.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="text-xs font-bold uppercase tracking-wider text-violet-300 pt-1">
+              Environnement Architectural de la Pièce 3D
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {SCENES_3D.map((sc) => {
                 const active = mods.desktop3d.scene === sc.id;
                 return (
