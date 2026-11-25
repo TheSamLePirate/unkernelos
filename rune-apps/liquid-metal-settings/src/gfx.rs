@@ -1,8 +1,8 @@
 //! GPU Compositor for Liquid Metal unkernelOS Réglages (powered by `rune-fx`).
 //!
 //! Each `rune::effect(kind).effect_data([a, b, c, d])` slot becomes a deterministic WGSL
-//! fragment shader layer: liquid metal slabs, metallic tube borders, neon ambient glows,
-//! and animated shimmers.
+//! fragment shader layer: molten liquid metal slabs, metallic tube borders, neon & soft
+//! hover glows, specular shimmer sweeps, and ambient studio aurora.
 
 #![forbid(unsafe_code)]
 
@@ -19,12 +19,12 @@ pub const SHIMMER: u32 = 4;
 pub const AURORA: u32 = 5;
 
 const PALETTE: [u32; 6] = [
-    0x8b5cf6, // violet
-    0x22d3ee, // cyan
-    0xe879f9, // fuchsia
-    0x34d399, // emerald
-    0xf59e0b, // amber
-    0xf43f5e, // rose
+    0x8b5cf6, // 0: violet
+    0x22d3ee, // 1: cyan
+    0xf43f5e, // 2: rose / neon
+    0x34d399, // 3: emerald
+    0xf59e0b, // 4: amber / gold
+    0x38bdf8, // 5: sapphire sky
 ];
 
 fn metal_preset(idx: u32, flow: f32, dome: f32, iridescence: f32, contrast: f32) -> LiquidMetalParams {
@@ -33,7 +33,7 @@ fn metal_preset(idx: u32, flow: f32, dome: f32, iridescence: f32, contrast: f32)
         2 => LiquidMetalParams::rose(),
         3 => LiquidMetalParams::gunmetal(),
         _ => LiquidMetalParams {
-            light: rgb(0xdcebff),
+            light: rgb(0xe2f0ff),
             ..LiquidMetalParams::chrome()
         },
     };
@@ -41,7 +41,7 @@ fn metal_preset(idx: u32, flow: f32, dome: f32, iridescence: f32, contrast: f32)
     base.dome = dome.clamp(0.05, 1.0);
     base.iridescence = iridescence.clamp(0.0, 0.75);
     base.contrast = contrast.clamp(0.65, 1.65);
-    base.speed = 0.42;
+    base.speed = 0.44;
     base
 }
 
@@ -63,34 +63,41 @@ fn build_layer(kind: u32, d: [f32; 4], shape: Shape, t: f32, s: &State) -> Optio
         }
         LIQUID_BORDER => {
             let finish = d[0] as u32;
-            let width = if d[1] > 0.0 { d[1] } else { 2.5 };
-            let mut p = metal_preset(finish, s.metal_flow * 0.85, s.metal_dome, s.metal_irid + 0.08, s.metal_contrast);
-            p.bevel = width * 2.2;
+            let width = if d[1] > 0.0 { d[1] } else { 2.2 };
+            let boost = if d[2] > 0.0 { d[2] } else { 0.0 };
+            let mut p = metal_preset(
+                finish,
+                (s.metal_flow * 0.9 + boost * 0.25).min(1.5),
+                s.metal_dome,
+                (s.metal_irid + 0.1 + boost * 0.12).min(0.75),
+                (s.metal_contrast + boost * 0.18).min(1.65),
+            );
+            p.bevel = width * 2.4;
             Fx::fill(p.border(width))
         }
         GLOW => {
             let col = rgb(PALETTE[(d[0].max(0.0) as usize).min(PALETTE.len() - 1)]);
             let style = if d[1] > 0.5 { GlowStyle::Neon } else { GlowStyle::Soft };
-            let intensity = if d[2] > 0.0 { d[2] } else { 0.75 };
+            let intensity = if d[2] > 0.0 { d[2] } else { 0.7 };
             let radius = if d[3] > 0.0 { d[3] } else { 16.0 };
             Fx::glow(GlowParams {
                 style,
                 color: col,
                 intensity,
                 radius,
-                aura_speed: 0.35,
+                aura_speed: 0.42,
                 ..Default::default()
             })
         }
         SHIMMER => Fx::shimmer(ShimmerParams {
-            intensity: if d[0] > 0.0 { d[0] } else { 0.45 },
-            period: if d[1] > 0.0 { d[1] } else { 3.2 },
-            band: if d[2] > 0.0 { d[2] } else { 0.28 },
+            intensity: if d[0] > 0.0 { d[0] } else { 0.5 },
+            period: if d[1] > 0.0 { d[1] } else { 2.6 },
+            band: if d[2] > 0.0 { d[2] } else { 0.30 },
             ..Default::default()
         }),
         AURORA => Fx::aurora(AuroraParams {
-            intensity: if d[0] > 0.0 { d[0] } else { 0.35 },
-            speed: if d[1] > 0.0 { d[1] } else { 0.25 },
+            intensity: if d[0] > 0.0 { d[0] } else { 0.32 },
+            speed: if d[1] > 0.0 { d[1] } else { 0.24 },
             ..Default::default()
         }),
         _ => return None,

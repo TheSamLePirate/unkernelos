@@ -32,13 +32,13 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { SettingsService, useSubscriptionRef } from "../core/runtime.ts";
 import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
 import { useViewport } from "../core/use-viewport.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
 
-const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string }>> = {
+const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   "agent-studio": Bot,
   "agent-swarm": Network,
   "agent-api": Workflow,
@@ -94,7 +94,7 @@ interface DockSlot {
   readonly label: string;
   readonly shortcut?: string;
   readonly accent?: string;
-  readonly icon: React.ComponentType<{ className?: string }>;
+  readonly icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   readonly isActive: boolean;
   readonly isOpen: boolean;
   readonly isMinimizedOnly: boolean;
@@ -104,12 +104,19 @@ interface DockSlot {
   readonly onClick: () => void;
 }
 
+const SLOT_GAP = 7; // px between items
+const DIVIDER_SLOT_W = 11; // 1px line + 5px margin on each side
+const TRAY_PAD_Y = 10; // exact top & bottom symmetry inside glass tray
+
 /**
- * AAA macOS / VisionOS Liquid Glass Dock:
- * - Zero vertical clipping: frosted glass tray sits behind an overflow-visible icon strip
- *   so magnified icons & tooltips soar freely above the tray.
- * - True neighbor-displacing spring magnification (icons expand their slot width smoothly).
- * - Touch-first iPad adaptation: larger tactile squircles, zero hover glitches, safe-area inset.
+ * AAA macOS Sequoia / VisionOS Liquid Glass Dock:
+ * - Pixel-exact vertical centering: squircles sit dead-center inside the frosted tray
+ *   (TRAY_PAD_Y above and below), while glowing indicator pills float inside the lower
+ *   10px band so running & idle icons ALWAYS share the exact same baseline.
+ * - Center-invariant magnification math: computes resting icon centers analytically from
+ *   the row's midpoint (which never moves), eliminating horizontal drift & jitter.
+ * - Proportional glyph scaling: icons scale smoothly inside their growing squircles.
+ * - Zero vertical clipping: overflow-visible row floats over the background glass tray.
  */
 export const Dock: React.FC = () => {
   const wm = useWm();
@@ -120,25 +127,20 @@ export const Dock: React.FC = () => {
   );
 
   const rowRef = useRef<HTMLDivElement>(null);
-  const slotRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const rafRef = useRef<number>(0);
-  const [pointerX, setPointerX] = useState<number | null>(null);
+  const [pointerRelX, setPointerRelX] = useState<number | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [bouncingKey, setBouncingKey] = useState<string | null>(null);
-  const [centers, setCenters] = useState<number[]>([]);
 
   const extraRunningIds = Array.from(
     new Set(wm.windows.map((w) => w.appId).filter((id) => !PINNED_DOCK_IDS.includes(id)))
   );
   const visibleIds: readonly AppId[] = [...PINNED_DOCK_IDS, ...extraRunningIds];
 
-  // Compact icon sizing on tighter iPad portrait widths so all icons fit effortlessly without overflow clipping
+  // Fit all icons cleanly with balanced spacing across desktop & iPad widths
   const totalSlots = visibleIds.length + 2;
-  const maxAvailablePerSlot = Math.floor((viewportWidth - 72) / Math.max(1, totalSlots)) - 6;
-  const baseSize = isTouch
-    ? Math.max(36, Math.min(46, maxAvailablePerSlot))
-    : Math.max(38, Math.min(46, maxAvailablePerSlot));
-  const iconGlyphSize = baseSize >= 44 ? "w-[22px] h-[22px]" : "w-[19px] h-[19px]";
+  const maxAvailablePerSlot = Math.floor((viewportWidth - 88 - 2 * DIVIDER_SLOT_W) / Math.max(1, totalSlots)) - SLOT_GAP;
+  const baseSize = Math.max(36, Math.min(46, maxAvailablePerSlot));
   const magEnabled = cfg.dockMagnification && !isTouch && viewportWidth >= 900;
 
   const triggerBounce = useCallback((key: string) => {
@@ -198,53 +200,61 @@ export const Dock: React.FC = () => {
     },
   ];
 
-  // Snapshot resting icon centers once per layout change (zero layout thrash on mousemove!)
-  const measureCenters = useCallback(() => {
-    const next = slotRefs.current.slice(0, slots.length).map((el) => {
-      if (!el) return 0;
-      const r = el.getBoundingClientRect();
-      return r.left + r.width / 2;
-    });
-    setCenters(next);
-  }, [slots.length]);
-
-  useEffect(() => {
-    measureCenters();
-  }, [measureCenters, viewportWidth, baseSize]);
+  // Analytically compute each slot's exact resting horizontal center relative to row midpoint.
+  // Because the dock is centered at viewport 50%, midpoint X is invariant during magnification!
+  const restingOffsets = useMemo(() => {
+    const centers: number[] = [];
+    let cursor = 0;
+    for (let i = 0; i < slots.length; i++) {
+      centers.push(cursor + baseSize / 2);
+      cursor += baseSize;
+      if (i < slots.length - 1) {
+        cursor += SLOT_GAP;
+        if (i === 0 || i === slots.length - 2) {
+          cursor += DIVIDER_SLOT_W + SLOT_GAP;
+        }
+      }
+    }
+    const mid = cursor / 2;
+    return centers.map((c) => c - mid);
+  }, [slots.length, baseSize]);
 
   const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
     if (!magEnabled || e.pointerType === "touch") return;
-    if (centers.length !== slots.length) measureCenters();
-    const x = e.clientX;
+    const rect = rowRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const relX = e.clientX - (rect.left + rect.width / 2);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
-      setPointerX(x);
+      setPointerRelX(relX);
     });
   };
 
   const handlePointerLeave = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    setPointerX(null);
+    setPointerRelX(null);
     setHoveredKey(null);
   };
 
   const getScaleAndLift = (idx: number): { scale: number; lift: number } => {
-    if (!magEnabled || pointerX === null) return { scale: 1, lift: 0 };
-    const center = centers[idx];
-    if (!center) return { scale: 1, lift: 0 };
-    const dist = Math.abs(pointerX - center);
-    const radius = 148;
+    if (!magEnabled || pointerRelX === null) return { scale: 1, lift: 0 };
+    const center = restingOffsets[idx];
+    if (center === undefined) return { scale: 1, lift: 0 };
+    const dist = Math.abs(pointerRelX - center);
+    const radius = baseSize * 3.1;
     if (dist >= radius) return { scale: 1, lift: 0 };
     const t = Math.cos((dist / radius) * (Math.PI / 2));
     const smooth = t * t;
     return {
-      scale: 1 + smooth * 0.52,
-      lift: smooth * 14,
+      scale: 1 + smooth * 0.48,
+      lift: smooth * 13,
     };
   };
 
-  // Hide dock gracefully on iPad if software keyboard is covering the bottom
   const hiddenForKeyboard = isTouch && keyboardInset > 100;
+  const trayHeight = baseSize + TRAY_PAD_Y * 2;
+  const dividerHeight = Math.round(baseSize * 0.56);
+  const dividerOffsetBottom = Math.round((baseSize - dividerHeight) / 2);
 
   return (
     <div
@@ -256,28 +266,33 @@ export const Dock: React.FC = () => {
       }`}
     >
       <nav
-        onPointerEnter={() => {
-          if (magEnabled) measureCenters();
-        }}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
-        className="relative pointer-events-auto flex items-end px-3 pb-2 pt-1 overflow-visible"
+        style={{
+          paddingLeft: "12px",
+          paddingRight: "12px",
+          paddingBottom: `${TRAY_PAD_Y}px`,
+          paddingTop: `${TRAY_PAD_Y}px`,
+        }}
+        className="relative pointer-events-auto flex items-end overflow-visible"
       >
-        {/* Frosted Liquid Glass Tray (sits strictly behind icons so zoom & tooltips are NEVER clipped!) */}
+        {/* Frosted Liquid Glass Tray (exact symmetrical height around resting squircles!) */}
         <div
-          style={{ height: `${baseSize + 20}px` }}
+          style={{ height: `${trayHeight}px` }}
           className="glass-dock pointer-events-none absolute inset-x-0 bottom-0 rounded-[22px] transition-all duration-150"
         />
 
-        {/* Icons Row — overflow-visible! */}
+        {/* Icons Row — overflow-visible & pixel-aligned baseline! */}
         <div
           ref={rowRef}
-          className="relative z-10 flex items-end gap-1.5 overflow-visible"
+          style={{ gap: `${SLOT_GAP}px` }}
+          className="relative z-10 flex items-end overflow-visible"
         >
           {slots.map((slot, idx) => {
             const Icon = slot.icon;
             const { scale, lift } = getScaleAndLift(idx);
             const size = Math.round(baseSize * scale);
+            const glyphPx = Math.round(size * 0.48);
             const showDividerAfter = idx === 0 || idx === slots.length - 2;
             const isHovered = hoveredKey === slot.key && !isTouch;
             const isBouncing = bouncingKey === slot.key;
@@ -285,9 +300,6 @@ export const Dock: React.FC = () => {
             return (
               <React.Fragment key={slot.key}>
                 <button
-                  ref={(el) => {
-                    slotRefs.current[idx] = el;
-                  }}
                   type="button"
                   onClick={slot.onClick}
                   onPointerEnter={(e) => {
@@ -309,16 +321,21 @@ export const Dock: React.FC = () => {
                   }}
                   style={{
                     width: `${size}px`,
-                    transition: pointerX !== null ? "width 75ms ease-out" : "width 210ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    height: `${baseSize}px`,
+                    transition:
+                      pointerRelX !== null
+                        ? "width 70ms ease-out"
+                        : "width 220ms cubic-bezier(0.22, 1, 0.36, 1)",
                   }}
-                  className="group relative flex flex-col items-center justify-end shrink-0 outline-none cursor-pointer touch-manipulation"
+                  className="group relative flex items-end justify-center shrink-0 outline-none cursor-pointer touch-manipulation"
                 >
                   {/* Floating Unclipped Glass Tooltip Pill with Caret */}
                   <span
                     style={{
-                      transform: `translateY(${isHovered ? -(lift + 8) : -(lift + 2)}px) scale(${isHovered ? 1 : 0.94})`,
+                      bottom: `${size + lift + 10}px`,
+                      transform: `scale(${isHovered ? 1 : 0.94})`,
                     }}
-                    className={`pointer-events-none absolute bottom-full mb-2 px-2.5 py-1 rounded-xl bg-[#0d101c]/95 backdrop-blur-xl border border-white/18 text-[11px] font-medium text-white whitespace-nowrap shadow-[0_12px_30px_rgba(0,0,0,0.7)] transition-all duration-150 z-30 ${
+                    className={`pointer-events-none absolute left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-xl bg-[#0d101c]/95 backdrop-blur-xl border border-white/18 text-[11px] font-medium text-white whitespace-nowrap shadow-[0_12px_30px_rgba(0,0,0,0.7)] transition-opacity duration-150 z-30 ${
                       isHovered ? "opacity-100" : "opacity-0"
                     }`}
                   >
@@ -331,16 +348,16 @@ export const Dock: React.FC = () => {
                     <span className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-2 h-2 rotate-45 bg-[#0d101c] border-r border-b border-white/18" />
                   </span>
 
-                  {/* Glossy Squircle App Icon */}
+                  {/* Glossy Squircle App Icon (anchored cleanly to baseline, grows upward) */}
                   <div
                     style={{
                       width: `${size}px`,
                       height: `${size}px`,
                       transform: `translateY(${-lift.toFixed(1)}px)`,
                       transition:
-                        pointerX !== null
-                          ? "width 75ms ease-out, height 75ms ease-out, transform 75ms ease-out"
-                          : "width 210ms cubic-bezier(0.22, 1, 0.36, 1), height 210ms cubic-bezier(0.22, 1, 0.36, 1), transform 210ms cubic-bezier(0.22, 1, 0.36, 1)",
+                        pointerRelX !== null
+                          ? "width 70ms ease-out, height 70ms ease-out, transform 70ms ease-out"
+                          : "width 220ms cubic-bezier(0.22, 1, 0.36, 1), height 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                     className={`dock-squircle rounded-[26%] flex items-center justify-center active:scale-90 ${
                       isBouncing ? "animate-dock-bounce" : ""
@@ -348,16 +365,17 @@ export const Dock: React.FC = () => {
                       slot.isSystem
                         ? slot.isActive
                           ? "bg-gradient-to-br from-violet-500 to-cyan-500 border border-white/45 text-white shadow-[0_10px_28px_rgba(139,92,246,0.45)]"
-                          : "bg-white/12 hover:bg-white/20 border border-white/18 text-zinc-100"
-                        : `bg-gradient-to-br ${slot.accent} ${
+                          : "bg-white/12 hover:bg-white/22 border border-white/18 text-zinc-100"
+                        : `bg-gradient-to-br ${slot.accent} border border-white/20 ${
                             slot.isActive
-                              ? "ring-[1.5px] ring-white/75 shadow-[0_14px_32px_rgba(0,0,0,0.65)]"
+                              ? "ring-[1.5px] ring-white/80 shadow-[0_14px_32px_rgba(0,0,0,0.65)]"
                               : "opacity-95 group-hover:opacity-100"
                           }`
                     }`}
                   >
                     <Icon
-                      className={`${iconGlyphSize} text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] transition-transform duration-100`}
+                      style={{ width: `${glyphPx}px`, height: `${glyphPx}px` }}
+                      className="text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.42)] shrink-0"
                     />
                     {slot.badgeCount > 1 && (
                       <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-black/85 border border-white/35 text-[9px] font-mono font-bold text-white flex items-center justify-center z-10 shadow">
@@ -366,13 +384,13 @@ export const Dock: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Glowing Active / Minimized Indicator Dot */}
+                  {/* Absolute Indicator Dot inside the bottom 10px tray band (never offsets icons!) */}
                   <span
-                    className={`mt-1.5 h-[3.5px] rounded-full transition-all duration-200 ${
+                    className={`pointer-events-none absolute left-1/2 -translate-x-1/2 -bottom-[7px] h-[3px] rounded-full transition-all duration-200 ${
                       slot.isActive
-                        ? "w-4 bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)] opacity-100"
+                        ? "w-4 bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)] opacity-100"
                         : slot.isMinimizedOnly
-                        ? "w-2 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)] opacity-95"
+                        ? "w-2 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.85)] opacity-95"
                         : slot.isOpen
                         ? "w-1.5 bg-zinc-300 opacity-85"
                         : "w-1 opacity-0"
@@ -382,9 +400,20 @@ export const Dock: React.FC = () => {
 
                 {showDividerAfter && (
                   <div
-                    style={{ height: `${Math.round(baseSize * 0.72)}px` }}
-                    className="w-px bg-gradient-to-b from-transparent via-white/22 to-transparent mx-1 mb-2.5 shrink-0"
-                  />
+                    style={{
+                      width: `${DIVIDER_SLOT_W}px`,
+                      height: `${baseSize}px`,
+                    }}
+                    className="flex items-end justify-center shrink-0"
+                  >
+                    <div
+                      style={{
+                        height: `${dividerHeight}px`,
+                        marginBottom: `${dividerOffsetBottom}px`,
+                      }}
+                      className="w-px bg-gradient-to-b from-transparent via-white/26 to-transparent"
+                    />
+                  </div>
                 )}
               </React.Fragment>
             );
