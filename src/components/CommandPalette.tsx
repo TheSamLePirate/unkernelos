@@ -20,6 +20,7 @@ import {
 import React, { useEffect, useState } from "react";
 import { clipboardStore, useClipboardHistory } from "../core/clipboard-store.ts";
 import { useDynamicApps } from "../core/dynamic-apps-store.ts";
+import { modStore } from "../core/mod-store.ts";
 import { OS_THEMES } from "../core/os-themes.ts";
 import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../core/runtime.ts";
 import type { OsThemeId } from "../core/schema.ts";
@@ -299,6 +300,9 @@ export const CommandPalette: React.FC = () => {
                     key={t.id}
                     type="button"
                     onClick={() => {
+                      modStore.setTheme({ enabled: false });
+                      modStore.setBackdropImage(null);
+                      modStore.setActiveShaderMod(null);
                       appRuntime.runFork(
                         Effect.flatMap(SettingsService, (s) =>
                           s.updateConfig({ osTheme: t.id, wallpaperShader: t.defaultShader })

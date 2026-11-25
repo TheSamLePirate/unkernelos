@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useEffect } from "react";
+import { modStore } from "../core/mod-store.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "../core/os-themes.ts";
 import { appRuntime, SettingsService, useSubscriptionRef } from "../core/runtime.ts";
 import {
@@ -56,6 +57,8 @@ export const ContextMenu: React.FC = () => {
     const ids = Object.keys(WALLPAPER_SHADERS) as WallpaperShaderId[];
     const idx = ids.indexOf(cfg.wallpaperShader);
     const next = ids[(idx + 1) % ids.length]!;
+    modStore.setBackdropImage(null);
+    modStore.setActiveShaderMod(null);
     patchCfg({ wallpaperShader: next, webgpuWallpaper: true });
     wmStore.setContextMenu(null);
   };
@@ -64,6 +67,9 @@ export const ContextMenu: React.FC = () => {
     const ids = Object.keys(OS_THEMES) as OsThemeId[];
     const idx = ids.indexOf(cfg.osTheme);
     const next = ids[(idx + 1) % ids.length]!;
+    modStore.setTheme({ enabled: false });
+    modStore.setBackdropImage(null);
+    modStore.setActiveShaderMod(null);
     patchCfg({ osTheme: next, wallpaperShader: OS_THEMES[next].defaultShader });
     wmStore.setContextMenu(null);
   };
@@ -227,7 +233,7 @@ export const ContextMenu: React.FC = () => {
               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200 transition"
             >
               <Lock className="w-3.5 h-3.5 text-sky-400" />
-              Lock Screen (⌘L)
+              Lock Screen (⌘⇧L)
             </button>
             <button
               type="button"

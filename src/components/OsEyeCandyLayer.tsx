@@ -164,10 +164,11 @@ export const OsEyeCandyLayer: React.FC = () => {
     window.addEventListener("pointermove", onMove, { passive: true });
 
     let t = 0;
+    const ms = Math.max(0.3, Math.min(2.0, ec.motionSpeed || 1));
     const step = () => {
       raf = requestAnimationFrame(step);
       if (document.hidden) return;
-      t += 0.016 * ec.motionSpeed;
+      t += 0.016 * ms;
       ctx.clearRect(0, 0, w, h);
 
       // Draw ambient particles
@@ -175,8 +176,8 @@ export const OsEyeCandyLayer: React.FC = () => {
         const mode = ec.ambientParticles;
         for (const p of particles) {
           if (mode === "fireflies") {
-            p.x += Math.sin(t + p.phase) * 0.65;
-            p.y += Math.cos(t * 0.8 + p.phase) * 0.5;
+            p.x += Math.sin(t + p.phase) * 0.65 * ms;
+            p.y += Math.cos(t * 0.8 + p.phase) * 0.5 * ms;
             const pulse = 0.25 + 0.75 * Math.abs(Math.sin(t * 1.6 + p.phase));
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size * 0.75, 0, Math.PI * 2);
@@ -186,8 +187,8 @@ export const OsEyeCandyLayer: React.FC = () => {
             ctx.fill();
             ctx.shadowBlur = 0;
           } else if (mode === "embers") {
-            p.x += Math.sin(t * 1.4 + p.phase) * 0.8;
-            p.y -= p.vy * 1.15;
+            p.x += Math.sin(t * 1.4 + p.phase) * 0.8 * ms;
+            p.y -= p.vy * 1.15 * ms;
             if (p.y < -12) {
               p.y = h + 10;
               p.x = Math.random() * w;
@@ -200,8 +201,8 @@ export const OsEyeCandyLayer: React.FC = () => {
             ctx.fill();
             ctx.shadowBlur = 0;
           } else if (mode === "rain") {
-            p.x -= 1.2;
-            p.y += p.vy * 8.5;
+            p.x -= 1.2 * ms;
+            p.y += p.vy * 8.5 * ms;
             if (p.y > h + 20) {
               p.y = -20;
               p.x = Math.random() * (w + 140);
@@ -213,7 +214,7 @@ export const OsEyeCandyLayer: React.FC = () => {
             ctx.lineTo(p.x + 2.5, p.y - 16);
             ctx.stroke();
           } else if (mode === "matrix-sparks") {
-            p.y += p.vy * 2.8;
+            p.y += p.vy * 2.8 * ms;
             if (p.y > h + 14) {
               p.y = -14;
               p.x = Math.random() * w;
@@ -221,9 +222,9 @@ export const OsEyeCandyLayer: React.FC = () => {
             ctx.fillStyle = "rgba(52, 211, 153, 0.65)";
             ctx.fillRect(p.x, p.y, 2, 9);
           } else if (mode === "sakura") {
-            p.x += 0.65 + Math.sin(t + p.phase) * 0.9;
-            p.y += p.vy * 0.85;
-            p.rot += p.vrot;
+            p.x += (0.65 + Math.sin(t + p.phase) * 0.9) * ms;
+            p.y += p.vy * 0.85 * ms;
+            p.rot += p.vrot * ms;
             if (p.y > h + 16 || p.x > w + 16) {
               p.y = -12;
               p.x = Math.random() * w;
@@ -238,8 +239,8 @@ export const OsEyeCandyLayer: React.FC = () => {
             ctx.restore();
           } else {
             // snow
-            p.x += Math.sin(t * 0.9 + p.phase) * 0.65;
-            p.y += p.vy * 0.85;
+            p.x += Math.sin(t * 0.9 + p.phase) * 0.65 * ms;
+            p.y += p.vy * 0.85 * ms;
             if (p.y > h + 10) {
               p.y = -10;
               p.x = Math.random() * w;
@@ -271,9 +272,9 @@ export const OsEyeCandyLayer: React.FC = () => {
         }
         for (let i = trail.length - 1; i >= 0; i--) {
           const pt = trail[i]!;
-          pt.x += pt.vx;
-          pt.y += pt.vy;
-          pt.life -= 0.036;
+          pt.x += pt.vx * ms;
+          pt.y += pt.vy * ms;
+          pt.life -= 0.036 * ms;
           if (pt.life <= 0) {
             trail.splice(i, 1);
             continue;
@@ -322,6 +323,16 @@ export const OsEyeCandyLayer: React.FC = () => {
     return () => cancelAnimationFrame(raf);
   }, [ec.showPerfHud]);
 
+  // Clean up any pending hot-corner timer on unmount
+  useEffect(() => {
+    return () => {
+      if (cornerTimerRef.current) {
+        window.clearTimeout(cornerTimerRef.current);
+        cornerTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const enterCorner = (key: string, action: HotCornerAction) => {
     if (action === "none") return;
     setHoveredCorner(key);
@@ -357,6 +368,7 @@ export const OsEyeCandyLayer: React.FC = () => {
             width: `${ec.cursorSpotlightSize}px`,
             height: `${ec.cursorSpotlightSize}px`,
             opacity: ec.cursorSpotlightOpacity,
+            transform: "translate3d(-9999px, -9999px, 0)",
             background:
               "radial-gradient(circle, var(--accent-cyan) 0%, var(--accent-primary) 35%, transparent 72%)",
           }}

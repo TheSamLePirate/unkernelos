@@ -285,6 +285,9 @@ export const DesktopWidgets: React.FC = () => {
     ports: vm.detectedPorts.map((p) => p.port),
   };
 
+  const hasVisibleWindow = wm.windows.some((w) => w.workspace === wm.activeWorkspace && !w.minimized);
+  const hideForSpringboard = mods.shell.springboardHome && !hasVisibleWindow;
+
   return (
     <>
       {/* Draggable Custom Mod Widgets (HTML / SVG / JS) */}
@@ -293,7 +296,7 @@ export const DesktopWidgets: React.FC = () => {
       ))}
 
       {/* Stock Right-Hand Desktop Widgets */}
-      {cfg.desktopWidgets && mods.shell.showStockWidgets && (
+      {cfg.desktopWidgets && mods.shell.showStockWidgets && !hideForSpringboard && (
         <div className="fixed top-12 right-5 z-[5] w-68 hidden sm:flex flex-col gap-3 select-none">
           {/* Glass Clock Widget */}
           <div className="glass-widget rounded-3xl p-4">
@@ -350,7 +353,7 @@ export const DesktopWidgets: React.FC = () => {
               </span>
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/10 text-cyan-300">
                 <Wifi className="w-2.5 h-2.5" />
-                {vm.wispActiveUrl === "offline" ? "off" : "wisp"}
+                {vm.wispActiveUrl && vm.wispActiveUrl !== "offline" ? "wisp" : "off"}
               </span>
             </div>
 

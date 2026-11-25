@@ -86,6 +86,19 @@ const AppLoadingFallback: React.FC = () => (
   </div>
 );
 
+const LiveClock: React.FC = () => {
+  const [time, setTime] = React.useState(() =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return <span className="font-mono text-xs text-zinc-200 pl-1 tabular-nums">{time}</span>;
+};
+
 const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean): React.ReactNode => {
   switch (win.appId) {
     case "agent-studio":
@@ -221,10 +234,18 @@ export const Desktop: React.FC = () => {
     uiSounds.setEnabled(cfg.uiSounds);
   }, [cfg.osTheme, cfg.glassBlur, cfg.glassOpacity, cfg.uiSounds, mods.theme, mods.mods, mods.userCss, mods.decorator.style, mods.shell, mods.eyeCandy]);
 
-  // WebGPU Animated Live Shader Wallpaper (5 stock shaders + custom WGSL shader mods; paused when 3D Desktop is active)
+  const activeBackdropUrl =
+    mods.activeBackdropImageId === "custom"
+      ? mods.customBackdropImageUrl.trim()
+      : mods.activeBackdropImageId
+      ? ULTRA_HD_BACKDROPS.find((b) => b.id === mods.activeBackdropImageId)?.url ?? ""
+      : "";
+  const hasBackdropImage = Boolean(activeBackdropUrl);
+
+  // WebGPU Animated Live Shader Wallpaper (5 stock shaders + custom WGSL shader mods; paused when 3D Desktop or 4K Image is active)
   useEffect(() => {
     const canvas = wallpaperRef.current;
-    if (!canvas || !cfg.webgpuWallpaper || mods.desktop3d.enabled) return;
+    if (!canvas || !cfg.webgpuWallpaper || mods.desktop3d.enabled || hasBackdropImage) return;
     const bg = new WebGpuBackdrop(canvas, cfg.wallpaperShader);
     backdropInstanceRef.current = bg;
     const onResize = () => bg.resize(window.innerWidth, window.innerHeight);
@@ -236,7 +257,7 @@ export const Desktop: React.FC = () => {
       backdropInstanceRef.current = null;
       bg.dispose();
     };
-  }, [cfg.webgpuWallpaper, mods.desktop3d.enabled]);
+  }, [cfg.webgpuWallpaper, mods.desktop3d.enabled, hasBackdropImage]);
 
   // Hot-switch WebGPU shader mode without recreating GPUDevice
   useEffect(() => {
@@ -250,13 +271,13 @@ export const Desktop: React.FC = () => {
   const activeShaderWgsl = activeShaderMod?.wgsl ?? null;
 
   useEffect(() => {
-    if (mods.desktop3d.enabled) return;
+    if (mods.desktop3d.enabled || hasBackdropImage) return;
     const bg = backdropInstanceRef.current;
     if (!bg) return;
     void bg.setCustomWgsl(activeShaderWgsl).then((res) => {
       modStore.setShaderCompileError(res.ok ? null : (res.error ?? "WGSL compilation error"));
     });
-  }, [activeShaderWgsl, mods.desktop3d.enabled, cfg.webgpuWallpaper]);
+  }, [activeShaderWgsl, mods.desktop3d.enabled, cfg.webgpuWallpaper, hasBackdropImage]);
 
   // Boot unkernel automatically on first mount, reconcile startup workspace, & open requested app (or Agent Studio)
   useEffect(() => {
@@ -477,12 +498,6 @@ export const Desktop: React.FC = () => {
     };
   }, []);
 
-  const activeBackdropUrl =
-    mods.activeBackdropImageId === "custom"
-      ? mods.customBackdropImageUrl.trim()
-      : mods.activeBackdropImageId
-      ? ULTRA_HD_BACKDROPS.find((b) => b.id === mods.activeBackdropImageId)?.url ?? ""
-      : "";
   const spatialChromeActive = mods.desktop3d.enabled && mods.desktop3d.spatialChrome3d;
   const activeWin = wm.windows.find((w) => w.id === wm.activeWindowId);
 
@@ -671,9 +686,7 @@ export const Desktop: React.FC = () => {
                 >
                   ⌘K
                 </button>
-                <span className="font-mono text-xs text-zinc-200 pl-1 tabular-nums">
-                  {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </span>
+                <LiveClock />
               </div>
             </div>
           )}

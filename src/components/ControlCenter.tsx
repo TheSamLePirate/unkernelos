@@ -87,7 +87,7 @@ export const ControlCenter: React.FC = () => {
               type="button"
               onClick={() => wmStore.setLocked(true)}
               className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/8 hover:bg-white/15 text-[11px] text-zinc-200 transition"
-              title="Lock Screen (⌘L)"
+              title="Lock Screen (⌘⇧L)"
             >
               <Lock className="w-3 h-3 text-cyan-400" />
               Lock
@@ -188,7 +188,12 @@ export const ControlCenter: React.FC = () => {
                   key={id}
                   type="button"
                   title={t.name}
-                  onClick={() => patchCfg({ osTheme: id, wallpaperShader: t.defaultShader })}
+                  onClick={() => {
+                    modStore.setTheme({ enabled: false });
+                    modStore.setBackdropImage(null);
+                    modStore.setActiveShaderMod(null);
+                    patchCfg({ osTheme: id, wallpaperShader: t.defaultShader });
+                  }}
                   className={`flex flex-col items-center gap-1 p-1.5 rounded-xl border transition ${
                     active
                       ? "bg-white/14 border-white/40 scale-105"
@@ -224,7 +229,11 @@ export const ControlCenter: React.FC = () => {
                 <button
                   key={id}
                   type="button"
-                  onClick={() => patchCfg({ wallpaperShader: id, webgpuWallpaper: true })}
+                  onClick={() => {
+                    modStore.setBackdropImage(null);
+                    modStore.setActiveShaderMod(null);
+                    patchCfg({ wallpaperShader: id, webgpuWallpaper: true });
+                  }}
                   className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition ${
                     active
                       ? "bg-white/16 border-white/35 text-white"

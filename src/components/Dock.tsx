@@ -261,7 +261,14 @@ export const Dock: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false })
 
   const hiddenForKeyboard = isTouch && keyboardInset > 100;
   const dockStyle = mods.shell.dockStyle;
-  if (dockStyle === "hidden") return null;
+  const usesExternalTaskbar =
+    mods.shell.taskbarMode === "win95" ||
+    mods.shell.taskbarMode === "winxp" ||
+    mods.shell.taskbarMode === "win11" ||
+    mods.shell.taskbarMode === "kde-plasma" ||
+    mods.shell.taskbarMode === "xfce-lxde" ||
+    mods.shell.taskbarMode === "visionos-ornament";
+  if (dockStyle === "hidden" || usesExternalTaskbar) return null;
 
   const isTaskbar = dockStyle === "full-taskbar" && !embedded3d;
   const isCyberRail = dockStyle === "cyber-rail";

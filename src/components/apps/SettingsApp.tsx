@@ -29,7 +29,7 @@ import {
   Wifi,
   X,
 } from "lucide-react";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   HDRI_PRESETS,
   modStore,
@@ -497,6 +497,18 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
   const importDiskRef = useRef<HTMLInputElement>(null);
   const importPackRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    setCustomBackdropInput(mods.customBackdropImageUrl);
+  }, [mods.customBackdropImageUrl]);
+
+  useEffect(() => {
+    setCustomHdriInput(mods.desktop3d.hdriUrl);
+  }, [mods.desktop3d.hdriUrl]);
+
   const maxHostCores =
     typeof navigator !== "undefined" ? Math.min(16, navigator.hardwareConcurrency || 8) : 8;
 
@@ -936,6 +948,9 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                           type="button"
                           onClick={() => {
                             uiSounds.playClick();
+                            modStore.setTheme({ enabled: false });
+                            modStore.setBackdropImage(null);
+                            modStore.setActiveShaderMod(null);
                             patchCfg({ osTheme: id, wallpaperShader: t.defaultShader }, false);
                           }}
                           className={`text-left p-3 rounded-xl border transition ${

@@ -85,6 +85,15 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
     return () => spatial3dBridge.registerWindowEl(win.id, null);
   }, [win.id]);
 
+  useEffect(() => {
+    if (!titleMenuPos) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setTitleMenuPos(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [titleMenuPos]);
+
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -739,7 +748,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           e.preventDefault();
           e.stopPropagation();
           wmStore.focusWindow(win.id);
-          setTitleMenuPos({ x: e.nativeEvent.offsetX, y: dec.titlebarHeightPx + 4 });
+          setTitleMenuPos({ x: e.clientX, y: e.clientY });
         }}
         onDoubleClick={() => {
           if (isMobile) return;
@@ -913,13 +922,24 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         )}
       </div>
 
-      {/* Rich Titlebar Right-Click Power Menu (Shade, PiP, Live Opacity, Snap, Workspaces) */}
+      {/* Rich Titlebar Right-Click Power Menu (Fixed viewport coords so it NEVER clips even when window is Shaded!) */}
       {titleMenuPos && !isMobile && (
-        <div
-          onMouseLeave={() => setTitleMenuPos(null)}
-          style={{ left: `${Math.min(Math.max(8, titleMenuPos.x), Math.max(8, win.width - 236))}px`, top: `${titleMenuPos.y}px` }}
-          className="absolute z-[95] w-56 p-2 rounded-2xl glass-surface-focused border border-white/20 shadow-2xl text-[11px] text-zinc-100 space-y-1.5 animate-window-in"
-        >
+        <>
+          <div
+            className="fixed inset-0 z-[114]"
+            onClick={() => setTitleMenuPos(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setTitleMenuPos(null);
+            }}
+          />
+          <div
+            style={{
+              left: `${Math.min(Math.max(8, titleMenuPos.x), Math.max(8, (typeof window !== "undefined" ? window.innerWidth : 1440) - 236))}px`,
+              top: `${Math.min(Math.max(40, titleMenuPos.y), Math.max(40, (typeof window !== "undefined" ? window.innerHeight : 900) - 340))}px`,
+            }}
+            className="fixed z-[116] w-56 p-2 rounded-2xl glass-surface-focused border border-white/20 shadow-2xl text-[11px] text-zinc-100 space-y-1.5 animate-window-in"
+          >
           <div className="px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-zinc-400">
             Options de Fenêtre
           </div>
@@ -1019,7 +1039,8 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
               🎯 Focus Caméra 3D (1:1)
             </button>
           )}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Window Content (Hidden when Shaded / Rolled-Up!) */}
@@ -1049,7 +1070,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              wmStore.closeWindow(win.id);
+              handleCloseWindow();
             }}
             title="Fermer la fenêtre spatiale"
             className="w-5 h-5 rounded-full bg-white/25 hover:bg-white/45 backdrop-blur-xl border border-white/40 flex items-center justify-center text-white shadow cursor-pointer"

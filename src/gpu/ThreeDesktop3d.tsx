@@ -1537,21 +1537,27 @@ export const ThreeDesktop3d: React.FC = () => {
           const room = new RoomEnvironment();
           envTarget = pmrem.fromScene(room, 0.04);
           roomEnvTexRef.current = envTarget.texture;
-          scene.environment = envTarget.texture;
+          // Do not clobber a 4K HDRI environment if the HDRI effect already applied one
+          if (!scene.environment) {
+            scene.environment = envTarget.texture;
+          }
           room.dispose();
         } catch {
           // graceful lighting fallback
         }
 
-        const initialEnv = buildCinematicWorld(
-          cfgRef.current.scene,
-          cfgRef.current.layout,
-          cfgRef.current.particleDensity,
-          starTex
-        );
-        scene.add(initialEnv.group);
-        applyWorldLighting(initialEnv);
-        envRef.current = initialEnv;
+        // Only build the initial world if the hot-swap effect hasn't already built it during async r.init()
+        if (!envRef.current) {
+          const initialEnv = buildCinematicWorld(
+            cfgRef.current.scene,
+            cfgRef.current.layout,
+            cfgRef.current.particleDensity,
+            starTex
+          );
+          scene.add(initialEnv.group);
+          applyWorldLighting(initialEnv);
+          envRef.current = initialEnv;
+        }
 
         let fpsFrames = 0;
         let fpsLast = performance.now();
@@ -1778,6 +1784,10 @@ export const ThreeDesktop3d: React.FC = () => {
       envRef.current?.dispose();
       envRef.current = null;
       starTex.dispose();
+      starTexRef.current = null;
+      keyLightRef.current = null;
+      hemiLightRef.current = null;
+      roomEnvTexRef.current = null;
       envTarget?.dispose();
       pmrem?.dispose();
       renderer?.dispose();

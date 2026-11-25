@@ -2751,6 +2751,10 @@ class ModEngineStore {
     root.dataset.taskbarMode = s.shell.taskbarMode;
     root.dataset.topbarStyle = s.shell.topBarStyle;
     root.dataset.colorProfile = s.eyeCandy.colorProfile;
+    root.style.setProperty(
+      "--os-motion-scale",
+      Math.max(0.3, Math.min(2.0, s.eyeCandy.motionSpeed || 1)).toFixed(2)
+    );
 
     const cssParts: string[] = [];
     for (const mod of s.mods) {
@@ -2786,7 +2790,19 @@ class ModEngineStore {
   }
 
   public setShell(patch: Partial<ShellModConfig>): void {
-    this.setState((s) => ({ ...s, shell: { ...s.shell, ...patch } }));
+    this.setState((s) => {
+      const nextShell: ShellModConfig = { ...s.shell, ...patch };
+      // Keep Dock & Taskbar coherent when toggling taskbarMode directly from Settings / Mod Studio
+      if (patch.taskbarMode && patch.dockStyle === undefined) {
+        if (
+          (patch.taskbarMode === "dock" || patch.taskbarMode === "ios-springboard") &&
+          nextShell.dockStyle === "hidden"
+        ) {
+          return { ...s, shell: { ...nextShell, dockStyle: "floating-glass" } };
+        }
+      }
+      return { ...s, shell: nextShell };
+    });
   }
 
   public setDesktop3d(patch: Partial<Desktop3dModConfig>): void {

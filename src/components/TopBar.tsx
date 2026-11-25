@@ -223,10 +223,9 @@ export const TopBar: React.FC = () => {
             <span className="hidden lg:inline">Grid</span>
           </button>
           {gridMenuOpen && (
-            <div
-              onMouseLeave={() => setGridMenuOpen(false)}
-              className="absolute right-0 top-8 w-48 p-1.5 rounded-2xl glass-surface-focused border border-white/15 shadow-2xl z-[90] space-y-0.5"
-            >
+            <>
+              <div className="fixed inset-0 z-[85]" onClick={() => setGridMenuOpen(false)} />
+              <div className="absolute right-0 top-8 w-48 p-1.5 rounded-2xl glass-surface-focused border border-white/15 shadow-2xl z-[90] space-y-0.5 animate-window-in">
               <div className="px-2 py-1 text-[9px] font-mono uppercase tracking-wider text-zinc-400">
                 Placement Grille 2D
               </div>
@@ -277,7 +276,8 @@ export const TopBar: React.FC = () => {
               >
                 🧊 Cube 4 Bureaux 3D
               </button>
-            </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -361,7 +361,11 @@ export const TopBar: React.FC = () => {
           <Cpu className="w-3 h-3 text-cyan-400 hidden sm:block" />
           <span>{vm.cpus}c</span>
           <span className="hidden xl:inline text-white/20">·</span>
-          <span className="hidden xl:inline text-zinc-300">{Math.round(vm.memoryMiB / 1024)}G</span>
+          <span className="hidden xl:inline text-zinc-300">
+            {vm.memoryMiB >= 1024
+              ? `${(vm.memoryMiB / 1024).toFixed(vm.memoryMiB % 1024 === 0 ? 0 : 1)}G`
+              : `${vm.memoryMiB}M`}
+          </span>
           {vm.transport === "shared" && (
             <span className="hidden 2xl:inline text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300">SAB</span>
           )}
@@ -411,9 +415,13 @@ export const TopBar: React.FC = () => {
             type="button"
             onClick={() => wmStore.openApp("settings", { tab: "network" })}
             className="hidden xl:flex items-center justify-center w-5.5 h-5 rounded-full hover:bg-white/12 transition cursor-pointer"
-            title={`Réseau Wisp : ${vm.wispActiveUrl}`}
+            title={`Réseau Wisp : ${vm.wispActiveUrl && vm.wispActiveUrl !== "offline" ? vm.wispActiveUrl : "Déconnecté"}`}
           >
-            <Wifi className={`w-3 h-3 ${vm.wispActiveUrl !== "offline" ? "text-emerald-400" : "text-zinc-500"}`} />
+            <Wifi
+              className={`w-3 h-3 ${
+                vm.wispActiveUrl && vm.wispActiveUrl !== "offline" ? "text-emerald-400" : "text-zinc-500"
+              }`}
+            />
           </button>
 
           <button
