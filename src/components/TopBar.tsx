@@ -26,6 +26,7 @@ import { appRuntime, GithubAuthService, useSubscriptionRef, VmService } from "..
 import { voiceOsEngine } from "../core/voice-os.ts";
 import { APP_CATALOG, useWm, wmStore, type GridLayoutMode, type WorkspaceId } from "../wm/wm-store.ts";
 import { DynamicIsland } from "./DynamicIsland.tsx";
+import { ReactiveSurfaceSlot } from "./ReactiveSurfaceHost.tsx";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher.tsx";
 
 const WORKSPACES: readonly WorkspaceId[] = [1, 2, 3, 4];
@@ -207,6 +208,11 @@ export const TopBar: React.FC = () => {
 
       {/* ─── RIGHT ZONE: Grid, Segmented 3D + HUD Toggle, Mods, Compact Telemetry & Utility Capsule ─── */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 z-10">
+        {/* Injectable Reactive Mod Capsules in TopBar */}
+        <div className="hidden lg:flex items-center gap-1">
+          <ReactiveSurfaceSlot slot="topbar" />
+        </div>
+
         {/* 2D & 3D Grid Placement Quick Menu */}
         <div className="relative hidden sm:block">
           <button

@@ -19,6 +19,18 @@ import {
 } from "./mod-store.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "./os-themes.ts";
 import { pwaStore } from "./pwa-service.ts";
+import {
+  reactiveEngine,
+  type BindingTarget,
+  type DataSourceKind,
+  type ReactiveBinding,
+  type ReactiveDataSource,
+  type ReactiveScriptMod,
+  type ReactiveSurface,
+  type SignalPrimitive,
+  type SurfaceContentType,
+  type SurfaceSlot,
+} from "./reactive-mod-engine.ts";
 import { swarmStore } from "./swarm-store.ts";
 import { workflowsStore } from "./workflows-store.ts";
 import {
@@ -1133,6 +1145,146 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
     example: { id: "agent-css", name: "Neon Glow", css: ".glass-dock{border-color:#22d3ee!important}", enabled: true },
   },
   {
+    method: "mod.signal.list",
+    category: "theme",
+    summary: "List all live real-time reactive OS signals (CPU, GPU, RAM, disk, procs, AI tokens, weather, daylight, custom signals), active data sources, bindings, scripts & surfaces.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "mod.signal.set",
+    category: "theme",
+    summary: "Push one or many real-time signal values into the Reactive Mod Engine (drives WGSL shader uniforms, CSS --sig-* vars, bindings, JS scripts & HTML/Canvas/Iframe surfaces immediately!).",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string" },
+        value: {},
+        signals: { type: "object" },
+        unit: { type: "string" },
+        label: { type: "string" },
+      },
+    },
+    example: { key: "custom.energy", value: 0.92, unit: "" },
+  },
+  {
+    method: "mod.source.upsert",
+    category: "theme",
+    summary: "Create or update a live programmable Data Source (shell / python / bun / node inside unkernel VM, or http / js) that periodically feeds real-time signals into the OS.",
+    paramsSchema: {
+      type: "object",
+      required: ["id", "kind", "code"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        emoji: { type: "string" },
+        kind: { type: "string", enum: ["shell", "python", "bun", "node", "http", "js"] },
+        enabled: { type: "boolean" },
+        intervalMs: { type: "number" },
+        outputPrefix: { type: "string" },
+        code: { type: "string" },
+        parser: { type: "string" },
+      },
+    },
+    example: { id: "src-my-metric", name: "Git Commits", kind: "shell", enabled: true, intervalMs: 10000, outputPrefix: "git", code: "echo '{\"commits\": 12}'" },
+  },
+  {
+    method: "mod.source.run",
+    category: "theme",
+    summary: "Execute a Reactive Data Source immediately and return its output.",
+    paramsSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    example: { id: "src-linux-proc-python" },
+  },
+  {
+    method: "mod.source.remove",
+    category: "theme",
+    summary: "Remove a Reactive Data Source by ID.",
+    paramsSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    example: { id: "src-my-metric" },
+  },
+  {
+    method: "mod.binding.upsert",
+    category: "theme",
+    summary: "Bind any live OS signal expression to any OS theme, eye-candy, 3D, dock, decorator, CSS variable or WGSL shader custom0..3 uniform.",
+    paramsSchema: {
+      type: "object",
+      required: ["id", "target", "expression"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        enabled: { type: "boolean" },
+        target: { type: "string" },
+        cssVarName: { type: "string" },
+        expression: { type: "string" },
+      },
+    },
+    example: { id: "bind-cpu-color", name: "CPU Color", enabled: true, target: "theme.accentPrimary", expression: "lerpColor('#22d3ee','#f43f5e',clamp(sig('sys.cpu')/100,0,1))" },
+  },
+  {
+    method: "mod.binding.remove",
+    category: "theme",
+    summary: "Remove a Reactive Binding by ID.",
+    paramsSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    example: { id: "bind-cpu-color" },
+  },
+  {
+    method: "mod.script.upsert",
+    category: "theme",
+    summary: "Install or update an unrestricted live JavaScript Reactive Mod Controller with full access to signals, DOM, modStore, wmStore, unkernel execShell & fetch.",
+    paramsSchema: {
+      type: "object",
+      required: ["id", "code"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        enabled: { type: "boolean" },
+        intervalMs: { type: "number" },
+        code: { type: "string" },
+      },
+    },
+    example: { id: "script-agent-pulse", name: "Agent Pulse", enabled: true, intervalMs: 1500, code: "os.reactiveEngine.setCustomUniform(1, clamp(sig('agent.tokens')/20000,0,1));" },
+  },
+  {
+    method: "mod.script.remove",
+    category: "theme",
+    summary: "Remove a Reactive JS Script Mod by ID.",
+    paramsSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    example: { id: "script-agent-pulse" },
+  },
+  {
+    method: "mod.surface.upsert",
+    category: "theme",
+    summary: "Mount or update a custom HTML, Iframe, or 60fps Canvas surface anywhere in the OS (slots: wallpaper, desktop, overlay, topbar, dock, titlebar, 3d-panel).",
+    paramsSchema: {
+      type: "object",
+      required: ["id", "contentType", "slot"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        enabled: { type: "boolean" },
+        contentType: { type: "string", enum: ["html", "iframe", "canvas"] },
+        slot: { type: "string", enum: ["wallpaper", "desktop", "overlay", "topbar", "dock", "titlebar", "3d-panel"] },
+        x: { type: "number" },
+        y: { type: "number" },
+        width: { type: "number" },
+        height: { type: "number" },
+        html: { type: "string" },
+        iframeUrl: { type: "string" },
+        script: { type: "string" },
+        canvasScript: { type: "string" },
+        pose3d: { type: "object" },
+      },
+    },
+    example: { id: "surf-agent-pill", name: "Agent Pill", enabled: true, contentType: "html", slot: "topbar", html: "<span style='color:#38bdf8;font-family:monospace;font-size:10px'>AI {{agent.tokens}}t</span>" },
+  },
+  {
+    method: "mod.surface.remove",
+    category: "theme",
+    summary: "Remove a custom Reactive Surface by ID.",
+    paramsSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+    example: { id: "surf-agent-pill" },
+  },
+  {
     method: "mod.reset",
     category: "theme",
     summary: "Reset all OS mods, custom theme tokens, decorator, 3D desktop, widgets & CSS back to stock unkernelOS.",
@@ -1247,8 +1399,11 @@ class AgentApiStore {
 
 export const agentApiStore = new AgentApiStore();
 
-// Connect workflows engine to OS API executor cleanly without circular imports
+// Connect workflows & reactive mod engines to OS API executor cleanly without circular imports
 workflowsStore.setOsExecutor((method, params, meta) => executeOsAction(method, params, meta));
+reactiveEngine.attachOsCallBridge((method, params) =>
+  executeOsAction(method, params ?? {}, { source: "window-api" })
+);
 
 export function useAgentApi(): AgentApiState {
   return useSyncExternalStore(agentApiStore.subscribe, agentApiStore.getSnapshot);
@@ -1283,6 +1438,12 @@ export async function executeOsAction(
     }
 
     const result = await dispatchOsAction(method, params);
+    // Feed real-time AI agent activity & estimated token usage into the Reactive Signal Bus
+    if (method !== "mod.signal.list" && method !== "mod.signal.set") {
+      const payloadChars = JSON.stringify(params).length + (result ? JSON.stringify(result).length : 0);
+      const estTokens = Math.max(12, Math.round(payloadChars / 4));
+      reactiveEngine.recordAgentActivity(estTokens, 1);
+    }
     agentApiStore.recordCall({
       id: Math.random().toString(36).slice(2, 9),
       timestamp: Date.now(),
@@ -2345,9 +2506,149 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       return { userCssLength: css.length };
     }
 
+    case "mod.signal.list": {
+      const st = reactiveEngine.getSnapshot();
+      return {
+        engineEnabled: st.engineEnabled,
+        signals: st.signals,
+        customShaderUniforms: st.customShaderUniforms,
+        sources: st.sources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, enabled: s.enabled, outputPrefix: s.outputPrefix, lastError: s.lastError })),
+        bindings: st.bindings.map((b) => ({ id: b.id, name: b.name, target: b.target, enabled: b.enabled, lastValue: b.lastValue })),
+        scripts: st.scripts.map((s) => ({ id: s.id, name: s.name, enabled: s.enabled, intervalMs: s.intervalMs, lastError: s.lastError })),
+        surfaces: st.surfaces.map((s) => ({ id: s.id, name: s.name, contentType: s.contentType, slot: s.slot, enabled: s.enabled })),
+      };
+    }
+
+    case "mod.signal.set": {
+      if (p.signals && typeof p.signals === "object") {
+        const clean: Record<string, SignalPrimitive> = {};
+        for (const [k, v] of Object.entries(p.signals as Record<string, unknown>)) {
+          if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") {
+            clean[k] = v;
+          }
+        }
+        reactiveEngine.pushSignals(clean, "agent-api");
+        return { updated: Object.keys(clean) };
+      }
+      const key = String(p.key || "").trim();
+      if (!key) throw new Error("Provide 'key' + 'value' or 'signals' object.");
+      const val = p.value as SignalPrimitive;
+      if (typeof val !== "number" && typeof val !== "string" && typeof val !== "boolean") {
+        throw new Error("'value' must be a number, string, or boolean.");
+      }
+      reactiveEngine.pushSignal(key, val, {
+        unit: typeof p.unit === "string" ? p.unit : undefined,
+        label: typeof p.label === "string" ? p.label : undefined,
+        sourceId: "agent-api",
+      });
+      return { key, value: val };
+    }
+
+    case "mod.source.upsert": {
+      const id = String(p.id || `src-agent-${Date.now().toString(36).slice(-4)}`);
+      const existing = reactiveEngine.getSnapshot().sources.find((s) => s.id === id);
+      const next: ReactiveDataSource = {
+        id,
+        name: String(p.name ?? existing?.name ?? id),
+        emoji: String(p.emoji ?? existing?.emoji ?? "⚡"),
+        description: String(p.description ?? existing?.description ?? "Agent-managed data source"),
+        kind: (p.kind as DataSourceKind) ?? existing?.kind ?? "shell",
+        enabled: typeof p.enabled === "boolean" ? p.enabled : existing?.enabled ?? true,
+        intervalMs: Math.max(500, Number(p.intervalMs ?? existing?.intervalMs ?? 5000)),
+        outputPrefix: String(p.outputPrefix ?? existing?.outputPrefix ?? "custom"),
+        code: String(p.code ?? existing?.code ?? ""),
+        parser: typeof p.parser === "string" ? p.parser : existing?.parser,
+      };
+      return { source: reactiveEngine.upsertSource(next) };
+    }
+
+    case "mod.source.run": {
+      const id = String(p.id || "");
+      return await reactiveEngine.runSource(id);
+    }
+
+    case "mod.source.remove": {
+      return { removed: reactiveEngine.removeSource(String(p.id || "")) };
+    }
+
+    case "mod.binding.upsert": {
+      const id = String(p.id || `bind-agent-${Date.now().toString(36).slice(-4)}`);
+      const existing = reactiveEngine.getSnapshot().bindings.find((b) => b.id === id);
+      const next: ReactiveBinding = {
+        id,
+        name: String(p.name ?? existing?.name ?? id),
+        description: String(p.description ?? existing?.description ?? "Agent-managed reactive binding"),
+        enabled: typeof p.enabled === "boolean" ? p.enabled : existing?.enabled ?? true,
+        target: (p.target as BindingTarget) ?? existing?.target ?? "theme.accentPrimary",
+        cssVarName: typeof p.cssVarName === "string" ? p.cssVarName : existing?.cssVarName,
+        expression: String(p.expression ?? existing?.expression ?? "0"),
+      };
+      return { binding: reactiveEngine.upsertBinding(next) };
+    }
+
+    case "mod.binding.remove": {
+      return { removed: reactiveEngine.removeBinding(String(p.id || "")) };
+    }
+
+    case "mod.script.upsert": {
+      const id = String(p.id || `script-agent-${Date.now().toString(36).slice(-4)}`);
+      const existing = reactiveEngine.getSnapshot().scripts.find((s) => s.id === id);
+      const next: ReactiveScriptMod = {
+        id,
+        name: String(p.name ?? existing?.name ?? id),
+        emoji: String(p.emoji ?? existing?.emoji ?? "⚡"),
+        description: String(p.description ?? existing?.description ?? "Agent-managed JS reactive script"),
+        enabled: typeof p.enabled === "boolean" ? p.enabled : existing?.enabled ?? true,
+        intervalMs: Math.max(250, Number(p.intervalMs ?? existing?.intervalMs ?? 1500)),
+        code: String(p.code ?? existing?.code ?? ""),
+      };
+      return { script: reactiveEngine.upsertScript(next) };
+    }
+
+    case "mod.script.remove": {
+      return { removed: reactiveEngine.removeScript(String(p.id || "")) };
+    }
+
+    case "mod.surface.upsert": {
+      const id = String(p.id || `surf-agent-${Date.now().toString(36).slice(-4)}`);
+      const existing = reactiveEngine.getSnapshot().surfaces.find((s) => s.id === id);
+      const next: ReactiveSurface = {
+        id,
+        name: String(p.name ?? existing?.name ?? id),
+        emoji: String(p.emoji ?? existing?.emoji ?? "🧩"),
+        description: String(p.description ?? existing?.description ?? "Agent-injected visual surface"),
+        enabled: typeof p.enabled === "boolean" ? p.enabled : existing?.enabled ?? true,
+        contentType: (p.contentType as SurfaceContentType) ?? existing?.contentType ?? "html",
+        slot: (p.slot as SurfaceSlot) ?? existing?.slot ?? "overlay",
+        x: typeof p.x === "number" ? p.x : existing?.x,
+        y: typeof p.y === "number" ? p.y : existing?.y,
+        width: typeof p.width === "number" ? p.width : existing?.width,
+        height: typeof p.height === "number" ? p.height : existing?.height,
+        zIndex: typeof p.zIndex === "number" ? p.zIndex : existing?.zIndex,
+        pointerEvents:
+          p.pointerEvents === "none" || p.pointerEvents === "auto"
+            ? p.pointerEvents
+            : existing?.pointerEvents,
+        html: typeof p.html === "string" ? p.html : existing?.html,
+        iframeUrl: typeof p.iframeUrl === "string" ? p.iframeUrl : existing?.iframeUrl,
+        script: typeof p.script === "string" ? p.script : existing?.script,
+        canvasScript: typeof p.canvasScript === "string" ? p.canvasScript : existing?.canvasScript,
+        pose3d:
+          p.pose3d && typeof p.pose3d === "object"
+            ? (p.pose3d as ReactiveSurface["pose3d"])
+            : existing?.pose3d,
+      };
+      return { surface: reactiveEngine.upsertSurface(next) };
+    }
+
+    case "mod.surface.remove": {
+      return { removed: reactiveEngine.removeSurface(String(p.id || "")) };
+    }
+
     case "mod.reset": {
       modStore.resetAll();
-      wmStore.pushToast("OS Mods Reset", "All mods restored to unkernelOS Stock.", "info");
+      reactiveEngine.resetAll();
+      wmStore.pushToast("OS Mods Reset", "All mods & reactive bindings restored to unkernelOS Stock.", "info");
       return { reset: true };
     }
 

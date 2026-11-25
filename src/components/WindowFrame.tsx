@@ -4,6 +4,7 @@ import { useMods } from "../core/mod-store.ts";
 import { useViewport } from "../core/use-viewport.ts";
 import { spatial3dBridge } from "../gpu/spatial-3d-bridge.ts";
 import { APP_CATALOG, useWm, wmStore, type SnapZone, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
+import { ReactiveSurfaceSlot } from "./ReactiveSurfaceHost.tsx";
 import { getSnapZoneStyle } from "./SnapPreviewOverlay.tsx";
 
 interface WindowFrameProps {
@@ -838,6 +839,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
 
             {/* Workspace, Snap, 3D Camera Focus & Right-Side Controls */}
             <div className="flex items-center gap-1">
+              {focused && <ReactiveSurfaceSlot slot="titlebar" />}
               {is3dSpace && (
                 <button
                   type="button"

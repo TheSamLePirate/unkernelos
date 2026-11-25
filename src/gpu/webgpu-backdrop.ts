@@ -1,4 +1,5 @@
 import { WALLPAPER_SHADERS } from "../core/os-themes.ts";
+import { reactiveEngine } from "../core/reactive-mod-engine.ts";
 import type { WallpaperShaderId } from "../core/schema.ts";
 
 const COMMON_WGSL_PREFIX = /* wgsl */ `
@@ -7,6 +8,22 @@ struct Uniforms {
   width: f32,
   height: f32,
   mode: f32, // 0=aurora, 1=liquid-prism, 2=cyber-grid, 3=nordic-borealis, 4=solar-ember
+  cpu: f32,        // 0..1 live CPU load
+  gpu: f32,        // 0..1 live GPU load
+  ram: f32,        // 0..1 live RAM usage
+  disk: f32,       // 0..1 live Disk usage
+  procs: f32,      // 0..1 normalized process count
+  tokens: f32,     // 0..1 normalized AI agent tokens
+  daylight: f32,   // 0..1 real solar daylight cycle
+  temp: f32,       // 0..1 normalized weather temperature (-10C..40C)
+  mouseX: f32,     // 0..1 cursor X
+  mouseY: f32,     // 0..1 cursor Y
+  rain: f32,       // 0..1 live weather precipitation
+  agentActive: f32,// 0..1 live AI agent burst
+  custom0: f32,    // Reactive mod custom uniform 0
+  custom1: f32,    // Reactive mod custom uniform 1
+  custom2: f32,    // Reactive mod custom uniform 2
+  custom3: f32,    // Reactive mod custom uniform 3
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -212,7 +229,6 @@ export class WebGpuBackdrop {
   private startTime = performance.now();
   private lastDrawTime = 0;
   private modeIndex = 0;
-  private readonly uniformData = new Float32Array(4);
   private readonly reducedMotion: boolean;
   private readonly frameIntervalMs: number;
   private renderedStaticFrame = false;
@@ -327,7 +343,7 @@ export class WebGpuBackdrop {
       });
 
       const uniformBuf = device.createBuffer({
-        size: 16,
+        size: 80, // 20 x f32 (5 x vec4 16-byte aligned live telemetry + custom signals!)
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
 
@@ -384,11 +400,13 @@ export class WebGpuBackdrop {
       return;
     }
     const elapsed = (now - this.startTime) / 1000;
-    this.uniformData[0] = elapsed;
-    this.uniformData[1] = this.canvas.width;
-    this.uniformData[2] = this.canvas.height;
-    this.uniformData[3] = this.modeIndex;
-    this.device.queue.writeBuffer(this.uniformBuf, 0, this.uniformData);
+    const pack = reactiveEngine.getShaderUniformPack(
+      elapsed,
+      this.canvas.width,
+      this.canvas.height,
+      this.modeIndex
+    );
+    this.device.queue.writeBuffer(this.uniformBuf, 0, pack.buffer, pack.byteOffset, pack.byteLength);
 
     const enc = this.device.createCommandEncoder();
     const view = this.ctx.getCurrentTexture().createView();

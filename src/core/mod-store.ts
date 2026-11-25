@@ -556,6 +556,91 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeTokens = {
 
 export const BUILTIN_SHADERS: readonly CustomShaderMod[] = [
   {
+    id: "shader-telemetry-reactor",
+    name: "⚡ Réacteur Télémétrie Live (CPU/RAM/IA)",
+    description: "Shader WGSL 100% réactif : plasma, ondes et couleur pilotés en direct par u.cpu, u.ram, u.tokens, u.mouseX/Y et u.custom0 !",
+    author: "unkernelOS Reactive Lab",
+    previewGradient: "linear-gradient(135deg, #04091a 0%, #0ea5e9 45%, #ec4899 100%)",
+    wgsl: `fn renderCustom(uv: vec2<f32>, aspect: f32, t: f32, px: vec2<f32>) -> vec3<f32> {
+  let energy = clamp(u.cpu * 0.65 + u.ram * 0.25 + u.tokens * 0.55 + u.custom0 * 0.35, 0.05, 1.4);
+  let center = vec2<f32>(0.5 + (u.mouseX - 0.5) * 0.16, 0.5 + (u.mouseY - 0.5) * 0.16);
+  let p = (uv - center) * vec2<f32>(aspect, 1.0);
+  let r = length(p);
+  let a = atan2(p.y, p.x);
+
+  let speed = 1.0 + energy * 2.6;
+  let pulse = 0.5 + 0.5 * sin(r * (14.0 + u.cpu * 18.0) - t * speed * 2.4 + sin(a * 6.0 + t * 1.4));
+  let ring = exp(-abs(r - (0.24 + u.ram * 0.18 + 0.03 * sin(t * 2.0))) * (18.0 - u.tokens * 6.0));
+  let core = exp(-r * r * (6.5 - energy * 1.8));
+
+  let coolCol = vec3<f32>(0.06, 0.72, 0.96);
+  let hotCol  = vec3<f32>(0.96, 0.22, 0.54);
+  let aiCol   = vec3<f32>(0.98, 0.76, 0.18);
+  let baseCol = mix(coolCol, hotCol, clamp(energy, 0.0, 1.0));
+  let accent  = mix(baseCol, aiCol, clamp(u.tokens + u.agentActive * 0.6, 0.0, 1.0));
+
+  var col = vec3<f32>(0.016, 0.022, 0.048);
+  col += baseCol * pow(pulse, 2.6) * (0.28 + energy * 0.34);
+  col += accent * ring * (0.55 + u.agentActive * 0.45);
+  col += vec3<f32>(0.45, 0.28, 0.95) * core * (0.35 + u.gpu * 0.35);
+
+  let gx = abs(fract(px.x / 56.0) - 0.5);
+  let gy = abs(fract(px.y / 56.0) - 0.5);
+  let grid = smoothstep(0.49, 0.5, max(gx, gy));
+  col += accent * grid * (0.04 + u.cpu * 0.08);
+  return col;
+}`,
+    builtin: true,
+  },
+  {
+    id: "shader-circadian-sky",
+    name: "🌅 Ciel Circadien & Météo Live",
+    description: "Ciel atmosphérique vivant piloté par l'heure solaire (u.daylight), la température (u.temp) et la pluie réelle (u.rain).",
+    author: "unkernelOS Reactive Lab",
+    previewGradient: "linear-gradient(135deg, #060b1e 0%, #1d4ed8 45%, #f59e0b 100%)",
+    wgsl: `fn renderCustom(uv: vec2<f32>, aspect: f32, t: f32, px: vec2<f32>) -> vec3<f32> {
+  let day = clamp(u.daylight, 0.0, 1.0);
+  let rain = clamp(u.rain, 0.0, 1.0);
+  let warm = clamp(u.temp, 0.0, 1.0);
+
+  let nightTop = vec3<f32>(0.018, 0.024, 0.068);
+  let nightBot = vec3<f32>(0.045, 0.065, 0.145);
+  let dawnBot  = vec3<f32>(0.68, 0.28, 0.22);
+  let dayTop   = vec3<f32>(0.05, 0.18, 0.44);
+  let dayBot   = mix(vec3<f32>(0.14, 0.44, 0.68), vec3<f32>(0.55, 0.46, 0.28), warm * 0.5);
+
+  let twilight = smoothstep(0.02, 0.25, day) * (1.0 - smoothstep(0.35, 0.7, day));
+  let skyTop = mix(nightTop, dayTop, day);
+  let skyBot = mix(mix(nightBot, dayBot, day), dawnBot, twilight * 0.72);
+  var col = mix(skyBot, skyTop, clamp(uv.y, 0.0, 1.0));
+
+  // Solar / Lunar orb following real daylight height
+  let sunPos = vec2<f32>(0.22 + day * 0.56, 0.18 + day * 0.58);
+  let sd = length((uv - sunPos) * vec2<f32>(aspect, 1.0));
+  let orbCol = mix(vec3<f32>(0.78, 0.88, 1.0), vec3<f32>(1.0, 0.84, 0.48), smoothstep(0.08, 0.45, day));
+  col += orbCol * exp(-sd * 5.2) * (0.45 + day * 0.45) * (1.0 - rain * 0.65);
+
+  // Volumetric clouds & rain veil
+  let c1 = sin(uv.x * 5.2 + t * 0.18 + sin(uv.y * 4.0)) * cos(uv.y * 3.4 - t * 0.12);
+  let cloud = smoothstep(0.15, 0.85, 0.5 + 0.5 * c1);
+  col = mix(col, vec3<f32>(0.18, 0.23, 0.32) * (0.4 + 0.6 * day), cloud * (0.14 + rain * 0.42));
+
+  // Twinkling night stars when daylight is low
+  let cell = floor(uv * vec2<f32>(140.0 * aspect, 140.0));
+  let star = step(0.994, hash21(cell)) * (0.5 + 0.5 * sin(t * 2.6 + hash21(cell + 13.0) * 6.28));
+  col += vec3<f32>(0.9, 0.95, 1.0) * star * (1.0 - day) * (1.0 - rain) * 0.55;
+
+  // Rain streaks when u.rain > 0
+  if (rain > 0.05) {
+    let rx = floor(px.x / 16.0);
+    let streak = step(0.92, hash21(vec2<f32>(rx, floor((px.y - t * 900.0) / 36.0))));
+    col += vec3<f32>(0.55, 0.78, 0.98) * streak * rain * 0.28;
+  }
+  return col;
+}`,
+    builtin: true,
+  },
+  {
     id: "shader-xp-bliss",
     name: "Windows XP Bliss Hills",
     author: "unkernelOS Labs",

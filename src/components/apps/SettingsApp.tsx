@@ -48,6 +48,7 @@ import {
   type WindowOpenAnimKind,
 } from "../../core/mod-store.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "../../core/os-themes.ts";
+import { reactiveEngine, useReactiveMod } from "../../core/reactive-mod-engine.ts";
 import {
   appRuntime,
   SettingsService,
@@ -486,6 +487,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
     }
   );
   const mods = useMods();
+  const reactive = useReactiveMod();
 
   const [tab, setTab] = useState<SettingsTab>(initialTab ?? "appearance");
   const [search, setSearch] = useState("");
@@ -2225,6 +2227,86 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                ═══════════════════════════════════════════════════════════ */}
             {tab === "mods-widgets" && (
               <>
+                <SectionCard
+                  title="Moteur Réactif Temps Réel & Surfaces (HTML / Iframe / Canvas)"
+                  subtitle="Connectez sh / python3 / bun / node / APIs Internet aux shaders WGSL, thèmes, 3D, TopBar & Dock"
+                  badge={reactive.engineEnabled ? "ACTIF" : "PAUSE"}
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => wmStore.openApp("mod-studio")}
+                      className="px-2.5 py-1 rounded-lg text-[11px] bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-200"
+                    >
+                      Ouvrir Studio Réactif
+                    </button>
+                  }
+                >
+                  <ToggleRow
+                    title="Activer le Moteur de Données Réactives"
+                    desc="Exécute les sources Linux/HTTP, les liaisons d'expressions, les scripts JS et les surfaces HTML/Iframe/Canvas"
+                    checked={reactive.engineEnabled}
+                    onChange={(enabled) => reactiveEngine.setEngineEnabled(enabled)}
+                    accent="cyan"
+                  />
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.08]">
+                      <div className="text-[10px] text-zinc-400">Sources Actives</div>
+                      <div className="text-sm font-mono font-bold text-cyan-300">
+                        {reactive.sources.filter((s) => s.enabled).length} / {reactive.sources.length}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.08]">
+                      <div className="text-[10px] text-zinc-400">Liaisons Live</div>
+                      <div className="text-sm font-mono font-bold text-violet-300">
+                        {reactive.bindings.filter((b) => b.enabled).length} / {reactive.bindings.length}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.08]">
+                      <div className="text-[10px] text-zinc-400">Scripts JS</div>
+                      <div className="text-sm font-mono font-bold text-emerald-300">
+                        {reactive.scripts.filter((s) => s.enabled).length} / {reactive.scripts.length}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.08]">
+                      <div className="text-[10px] text-zinc-400">Surfaces Montées</div>
+                      <div className="text-sm font-mono font-bold text-fuchsia-300">
+                        {reactive.surfaces.filter((s) => s.enabled).length} / {reactive.surfaces.length}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 pt-2 border-t border-white/[0.07]">
+                    <div className="text-[11px] font-medium text-zinc-300">
+                      Surfaces Rapides (HTML / Iframe / Canvas)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {reactive.surfaces.map((s) => (
+                        <div
+                          key={s.id}
+                          className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${
+                            s.enabled
+                              ? "bg-fuchsia-500/12 border-fuchsia-400/35"
+                              : "bg-white/[0.02] border-white/[0.08]"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-medium text-white truncate">
+                              {s.emoji} {s.name}
+                            </div>
+                            <div className="text-[9.5px] font-mono text-zinc-400">
+                              {s.contentType} · {s.slot}
+                            </div>
+                          </div>
+                          <ToggleSwitch
+                            checked={s.enabled}
+                            onChange={(enabled) => reactiveEngine.upsertSurface({ ...s, enabled })}
+                            accent="pink"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </SectionCard>
+
                 <SectionCard
                   title="Mods Système & Visuels Actifs"
                   subtitle="Activez et calibrez en direct les paramètres de chaque mod installé"

@@ -39,6 +39,7 @@ import { SettingsService, useSubscriptionRef } from "../core/runtime.ts";
 import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
 import { useViewport } from "../core/use-viewport.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
+import { ReactiveSurfaceSlot } from "./ReactiveSurfaceHost.tsx";
 
 const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   "agent-studio": Bot,
@@ -481,6 +482,8 @@ export const Dock: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false })
               </React.Fragment>
             );
           })}
+          {/* Injectable Reactive Mod Surfaces inside the Dock (HTML / Canvas meters) */}
+          <ReactiveSurfaceSlot slot="dock" />
         </div>
       </nav>
     </div>

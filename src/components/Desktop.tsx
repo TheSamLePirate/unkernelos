@@ -5,6 +5,7 @@ import { attachAgentOsBridge, detachAgentOsBridge } from "../core/agent-os-api.t
 import { clipboardStore } from "../core/clipboard-store.ts";
 import { modStore, ULTRA_HD_BACKDROPS, useMods } from "../core/mod-store.ts";
 import { applyOsThemeToDocument } from "../core/os-themes.ts";
+import { reactiveEngine } from "../core/reactive-mod-engine.ts";
 import {
   appRuntime,
   GithubAuthService,
@@ -35,6 +36,7 @@ import { MissionControlOverlay } from "./MissionControlOverlay.tsx";
 import { MobileNavBar } from "./MobileNavBar.tsx";
 import { NotificationCenter } from "./NotificationCenter.tsx";
 import { OsEyeCandyLayer } from "./OsEyeCandyLayer.tsx";
+import { Reactive3dPanels, ReactiveSurfaceSlot } from "./ReactiveSurfaceHost.tsx";
 import { ShellTaskbarAndMenu } from "./ShellTaskbarAndMenu.tsx";
 import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
@@ -226,6 +228,12 @@ export const Desktop: React.FC = () => {
       }
     }
   }, [wm.activeWorkspace, mods.shell.compizCube]);
+
+  // Start the Reactive Data & Modding Engine (live signals, sh/python/bun/node/http sources, bindings & JS scripts)
+  useEffect(() => {
+    reactiveEngine.start();
+    return () => reactiveEngine.stop();
+  }, []);
 
   // Sync live OS theme, blur, opacity, UI sound preference & active OS Mod overrides
   useEffect(() => {
@@ -534,14 +542,23 @@ export const Desktop: React.FC = () => {
         )
       )}
 
+      {/* Injectable Full-Screen Reactive Wallpaper Surfaces (HTML / Iframe / Canvas 60fps behind windows) */}
+      <ReactiveSurfaceSlot slot="wallpaper" />
+
       {/* Desktop Wayland Host Root (output geometry + popups/dnd; top-level surfaces mount in WindowFrame) */}
       <div ref={waylandRootRef} className="fixed inset-0 pointer-events-none z-[1] overflow-hidden" />
 
       {/* Desktop Ambient Widgets (Behind Windows, Toggleable) */}
       <DesktopWidgets />
 
+      {/* Injectable Desktop-Layer Reactive Surfaces (HTML / Iframe / Canvas) */}
+      <ReactiveSurfaceSlot slot="desktop" />
+
       {/* AAA Eye-Candy, Cursor Spotlight/Trail, Ambient Particles, Night Shift, Hot Corners & Perf HUD */}
       <OsEyeCandyLayer />
+
+      {/* Injectable Overlay HUD Reactive Surfaces (above windows) */}
+      <ReactiveSurfaceSlot slot="overlay" />
 
       {/* Top Glass Menu Bar */}
       <TopBar />
@@ -709,6 +726,11 @@ export const Desktop: React.FC = () => {
               <Dock embedded3d />
               <ShellTaskbarAndMenu embedded3d />
             </div>
+          )}
+
+          {/* Injectable 3D Spatial Mod Panels (HTML / Iframe / Canvas floating in 3D space!) */}
+          {mods.desktop3d.enabled && (
+            <Reactive3dPanels doubleSided={mods.desktop3d.doubleSidedWindows} />
           )}
         </div>
       </main>

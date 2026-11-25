@@ -16,6 +16,7 @@ import {
   Trash2,
   Upload,
   Wand2,
+  Zap,
 } from "lucide-react";
 import React, { useState } from "react";
 import {
@@ -43,8 +44,17 @@ import {
 import type { SoundProfileId } from "../../core/ui-sounds.ts";
 import { wmStore, type GridLayoutMode } from "../../wm/wm-store.ts";
 import { spatial3dBridge, type Spatial3dLayoutKind } from "../../gpu/spatial-3d-bridge.ts";
+import { ReactiveModStudioPane } from "./ReactiveModStudioPane.tsx";
 
-type ModTab = "variants" | "desktop3d" | "eyecandy" | "theme-dec" | "shaders" | "widgets" | "mods";
+type ModTab =
+  | "variants"
+  | "reactive"
+  | "desktop3d"
+  | "eyecandy"
+  | "theme-dec"
+  | "shaders"
+  | "widgets"
+  | "mods";
 
 const DECORATOR_STYLES: readonly { id: WindowDecoratorStyle; label: string; desc: string }[] = [
   { id: "macos", label: "macOS Tahoe", desc: "Traffic lights modernes" },
@@ -243,6 +253,7 @@ export const ModStudioApp: React.FC = () => {
 
   const TABS: readonly { id: ModTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: "variants", label: "Variantes OS", icon: Sparkles },
+    { id: "reactive", label: "⚡ Réactif & Surfaces", icon: Zap },
     { id: "desktop3d", label: "Bureau 3D WebGPU", icon: Box },
     { id: "eyecandy", label: "Eye Candy & Détails", icon: Wand2 },
     { id: "theme-dec", label: "Thème & Fenêtres", icon: Frame },
@@ -380,6 +391,8 @@ export const ModStudioApp: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+        {tab === "reactive" && <ReactiveModStudioPane />}
+
         {/* ─── TAB 1: OS VARIANTS (16 COMPLETE DESKTOP PARADIGMS) ─────────────── */}
         {tab === "variants" && (
           <div className="space-y-4">

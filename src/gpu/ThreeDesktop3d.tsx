@@ -38,6 +38,7 @@ import {
   type Desktop3dSceneKind,
   type HdriPresetId,
 } from "../core/mod-store.ts";
+import { reactiveEngine } from "../core/reactive-mod-engine.ts";
 import { useWm, wmStore, type WorkspaceId } from "../wm/wm-store.ts";
 import {
   CUBE_HALF_SIZE,
@@ -1732,7 +1733,17 @@ export const ThreeDesktop3d: React.FC = () => {
             menuEl.style.transform = "";
           }
 
-          rimLight.intensity = 2.4 * Math.max(0.3, curCfg.bloomIntensity);
+          // Synchronize custom Reactive Mod 3D Panels (HTML / Iframe / Canvas placed in 3D space!)
+          for (const { el, pose } of spatial3dBridge.panel3dEls.values()) {
+            tmpObj.position.set(pose.x, pose.y, pose.z);
+            tmpObj.rotation.set(pose.rx, pose.ry, pose.rz);
+            tmpObj.scale.set(1, 1, 1);
+            tmpObj.updateMatrixWorld();
+            el.style.transform = toObjectCSSMatrix(tmpObj.matrixWorld);
+          }
+
+          const liveCpuBoost = 1 + (reactiveEngine.getSignalNumeric("sys.cpu", 15) / 100) * 0.45 + reactiveEngine.getSignalNumeric("agent.active", 0) * 0.35;
+          rimLight.intensity = 2.4 * Math.max(0.3, curCfg.bloomIntensity) * liveCpuBoost;
           envRef.current?.update(elapsed, curCfg.cameraSpeed);
 
           r.render(scene, camera);
@@ -1770,6 +1781,9 @@ export const ThreeDesktop3d: React.FC = () => {
       if (spatial3dBridge.cameraStageEl) spatial3dBridge.cameraStageEl.style.transform = "";
       if (spatial3dBridge.dock3dEl) spatial3dBridge.dock3dEl.style.transform = "";
       if (spatial3dBridge.globalMenu3dEl) spatial3dBridge.globalMenu3dEl.style.transform = "";
+      for (const { el } of spatial3dBridge.panel3dEls.values()) {
+        el.style.transform = "";
+      }
       for (const id of windowMeshesRef.current.keys()) {
         const dom = spatial3dBridge.getWindowEl(id);
         if (dom) dom.style.transform = "";

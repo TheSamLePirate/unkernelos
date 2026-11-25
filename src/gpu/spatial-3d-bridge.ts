@@ -297,14 +297,36 @@ export function computeSpatialWindowPoses(
   });
 }
 
+export interface SpatialPanel3dPose {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly rx: number;
+  readonly ry: number;
+  readonly rz: number;
+}
+
 class Spatial3dBridge {
   public cameraStageEl: HTMLDivElement | null = null;
   public dock3dEl: HTMLDivElement | null = null;
   public globalMenu3dEl: HTMLDivElement | null = null;
   private windowEls = new Map<string, HTMLDivElement>();
+  public panel3dEls = new Map<string, { el: HTMLDivElement; pose: SpatialPanel3dPose }>();
   private commandListeners = new Set<(cmd: CameraCommand) => void>();
   public poses = new Map<string, SpatialWindowPose>();
   public depthOffsets = new Map<string, number>();
+
+  public registerPanel3dEl(
+    id: string,
+    el: HTMLDivElement | null,
+    pose?: SpatialPanel3dPose
+  ): void {
+    if (el && pose) {
+      this.panel3dEls.set(id, { el, pose });
+    } else {
+      this.panel3dEls.delete(id);
+    }
+  }
 
   public registerWindowEl(id: string, el: HTMLDivElement | null): void {
     if (el) {
