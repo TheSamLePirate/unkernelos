@@ -25,7 +25,7 @@ set -eu
 
 PREFIX="${MICROML_PREFIX:-/opt/microml}"
 REPO="${MICROML_REPO:-https://github.com/TheSamLePirate/microML.git}"
-REF="${MICROML_REF:-23493c4791cd1953f01e8c655bbdbb77f7a37703}"
+REF="${MICROML_REF:-25d39a3de26a52afb7c92d5f6a7f9b945dcb76de}"
 
 for bin in dune menhir gcc git; do
   if ! command -v "$bin" >/dev/null 2>&1; then

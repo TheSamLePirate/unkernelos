@@ -20,6 +20,7 @@ import {
   Play,
   Plus,
   Radio,
+  ScrollText,
   Sigma,
   SkipBack,
   Type,
@@ -60,6 +61,7 @@ import { appRuntime, useSubscriptionRef } from "../../core/runtime.ts";
 import { ToolchainService, type ToolchainSnapshot } from "../../core/toolchain-service.ts";
 import { VmService, type VmState } from "../../core/vm-service.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
+import { StoryView } from "./proof/StoryView.tsx";
 import { CodeEditor, type CodeEditorHandle, type EditorMarker } from "./shared/CodeEditor.tsx";
 
 const STORAGE_KEY = "unkernelos.poule.source.v1";
@@ -103,7 +105,7 @@ const FAMILY_STYLE: Record<RuleFamily, { text: string; chip: string; bar: string
   hyp: { text: "text-violet-300", chip: "bg-violet-500/15 border-violet-400/35 text-violet-200", bar: "bg-violet-300/60" },
 };
 
-type View = "tree" | "outline" | "rules";
+type View = "tree" | "story" | "outline" | "rules";
 
 export const ProofStudioApp: React.FC = () => {
   const [source, setSource] = useState<string>(() => load() ?? POULE_EXAMPLES[0]!.source);
@@ -526,6 +528,7 @@ export const ProofStudioApp: React.FC = () => {
               {(
                 [
                   ["tree", <GitBranch key="t" className="w-3.5 h-3.5" />, "Arbre"],
+                  ["story", <ScrollText key="s" className="w-3.5 h-3.5" />, "Récit"],
                   ["outline", <ListTree key="o" className="w-3.5 h-3.5" />, "Plan"],
                   ["rules", <Sigma key="r" className="w-3.5 h-3.5" />, "Règles"],
                 ] as const
@@ -588,6 +591,17 @@ export const ProofStudioApp: React.FC = () => {
                         editorRef.current?.reveal(a, b);
                       }
                     }}
+                  />
+                ) : view === "story" ? (
+                  <StoryView
+                    theorem={theorem}
+                    source={checkedSource ?? source}
+                    selectedId={explicitNode?.id ?? null}
+                    onSelect={(id) => {
+                      const n = nodeById.get(id);
+                      if (n) selectNode(n);
+                    }}
+                    onHover={setHoverNodeId}
                   />
                 ) : view === "outline" ? (
                   <div className="p-3">
@@ -682,7 +696,7 @@ export const ProofStudioApp: React.FC = () => {
             </div>
 
             {/* goal panel */}
-            {theorem?.ok && view !== "rules" && selectedNode && (
+            {theorem?.ok && view !== "rules" && view !== "story" && selectedNode && (
               <GoalPanel
                 node={selectedNode}
                 guide={guide}
@@ -962,7 +976,7 @@ const HelpCard: React.FC<{ onClose: () => void }> = ({ onClose }) => (
           </li>
           <li className="rounded-xl bg-black/25 px-2.5 py-2">
             <span className="text-violet-300 font-semibold">3. Vérifie.</span> Le vérificateur répond aussitôt : ✓ prouvé, ou ✗ avec l'erreur
-            soulignée et expliquée. L'arbre montre chaque étape.
+            soulignée et expliquée. L'<b>Arbre</b> montre chaque étape, le <b>Récit</b> raconte la preuve en français.
           </li>
         </ol>
         <div className="mt-2 flex flex-wrap gap-1.5">

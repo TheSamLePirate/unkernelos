@@ -897,10 +897,14 @@ export const POULE_EXAMPLES: readonly PouleExample[] = [
    - pred p : ()             déclare une proposition p().
    - theorem nom : FORMULE = PREUVE
    - Place le curseur dans une preuve : le panneau de droite montre
-     ce que tu sais (les hypothèses) et ce qu'il reste à prouver.     *)
+     ce que tu sais (les hypothèses) et ce qu'il reste à prouver.
+   - Les commentaires (*@ ... *) donnent un sens aux symboles :
+     l'onglet « Récit » raconte alors chaque preuve en français.     *)
 
 pred p : ()
 pred q : ()
+(*@ p : il pleut — la proposition p est vraie *)
+(*@ q : il y a du vent — la proposition q est vraie *)
 
 (* « Si p, alors p. »  On suppose h : p() et on le rend tel quel. *)
 theorem identite : p() -> p() = fun (h : p()) => h
@@ -934,6 +938,12 @@ theorem exercice : q() /\\ p() -> p() = triv
 type Etre = Socrate | Platon
 pred homme : (Etre)
 pred mortel : (Etre)
+(*@ Etre : être — un individu de l'univers du discours *)
+(*@ homme(x) : {x} est un homme — {x} appartient à l'espèce humaine *)
+(*@ mortel(x) : {x} est mortel — {x} mourra un jour *)
+(*@ Socrate : Socrate — le philosophe athénien (−470, −399) *)
+(*@ tous_les_hommes_sont_mortels : la majeure « tous les hommes sont mortels » *)
+(*@ socrate_est_un_homme : la mineure « Socrate est un homme » *)
 
 axiom tous_les_hommes_sont_mortels : forall (x : Etre). homme(x) -> mortel(x)
 axiom socrate_est_un_homme : homme(Socrate)
@@ -958,6 +968,9 @@ theorem barbara : forall (y : Etre). homme(y) -> mortel(y) =
 pred p : ()
 pred q : ()
 pred r : ()
+(*@ p : il pleut — la proposition p est vraie *)
+(*@ q : le sol est mouillé — la proposition q est vraie *)
+(*@ r : je prends mon parapluie — la proposition r est vraie *)
 
 theorem ou_commutatif : p() \\/ q() -> q() \\/ p() =
   fun (h : p() \\/ q()) =>
@@ -991,6 +1004,8 @@ theorem distributivite : p() /\\ (q() \\/ r()) -> (p() /\\ q()) \\/ (p() /\\ r()
 
 pred a : ()
 pred b : ()
+(*@ a : la porte est ouverte — la proposition a est vraie *)
+(*@ b : il y a un courant d'air — la proposition b est vraie *)
 
 theorem contraposee : (a() -> b()) -> (b() -> Bottom) -> a() -> Bottom =
   fun (f : a() -> b()) => fun (nb : b() -> Bottom) => fun (x : a()) => nb (f x)
@@ -1029,9 +1044,13 @@ theorem ex_falso : Bottom -> a() = fun (h : Bottom) => abort h : a()
 
 type Nat = Zero | Succ of Nat
 pred pair : (Nat)
+(*@ Nat : entier naturel — un nombre 0, 1, 2, … construit par Zero et Succ *)
+(*@ pair(n) : {n} est pair — {n} est divisible par 2 *)
 
 axiom zero_pair : pair(Zero)
 axiom plus_deux : forall (n : Nat). pair(n) -> pair(Succ(Succ(n)))
+(*@ zero_pair : le fait que 0 est pair *)
+(*@ plus_deux : la règle « ajouter 2 conserve la parité » *)
 
 (* ∀E : on instancie l'axiome avec un terme précis *)
 theorem deux_pair : pair(Succ(Succ(Zero))) = plus_deux [Zero] zero_pair
@@ -1053,6 +1072,10 @@ theorem plus_quatre : forall (n : Nat). pair(n) -> pair(Succ(Succ(Succ(Succ(n)))
 pred p : (D)
 pred q : (D)
 pred aime : (D, D)
+(*@ D : une personne — un élément du domaine D *)
+(*@ p(x) : {x} est poli — {x} vérifie la propriété p *)
+(*@ q(x) : {x} est ponctuel — {x} vérifie la propriété q *)
+(*@ aime(x, y) : {x} aime {y} — la relation aime relie {x} à {y} *)
 
 theorem pour_tout_et : (forall (x : D). p(x) /\\ q(x)) -> (forall (x : D). p(x)) /\\ (forall (x : D). q(x)) =
   fun (h : forall (x : D). p(x) /\\ q(x)) =>
@@ -1083,6 +1106,8 @@ theorem echange_quantificateurs : (exists (x : D). forall (y : D). aime(x, y)) -
 
 type Personne = Barbier | Villageois
 pred rase : (Personne, Personne)
+(*@ Personne : une personne — un habitant du village *)
+(*@ rase(x, y) : {x} rase {y} — la relation « raser » relie {x} à {y} *)
 
 theorem pas_de_tel_barbier :
   (exists (b : Personne). forall (x : Personne).
@@ -1114,6 +1139,14 @@ type M = Ici | Ailleurs
 pred acc : (M, M)
 pred a : (M)
 pred b : (M)
+(*@ M : monde possible — une façon complète dont les choses auraient pu être *)
+(*@ acc(w, v) : {v} est envisageable depuis {w} — le monde {v} est accessible depuis le monde {w} *)
+(*@ a(w) : A est vrai dans {w} — la proposition A est vraie dans le monde {w} *)
+(*@ b(w) : B est vrai dans {w} — la proposition B est vraie dans le monde {w} *)
+(*@ reflexivite : la réflexivité (tout monde est accessible depuis lui-même) *)
+(*@ serialite : la sérialité (tout monde a au moins un monde accessible) *)
+(*@ transitivite : la transitivité de l'accessibilité *)
+(*@ symetrie : la symétrie de l'accessibilité *)
 
 (* K — vrai dans tous les cadres : □(A → B) → □A → □B *)
 theorem k : forall (w : M).
@@ -1175,6 +1208,17 @@ theorem brouwer : forall (w : M). a(w) -> forall (v : M). acc(w, v) -> exists (u
 type Monde = Reel | Autre
 pred acc : (Monde, Monde)
 pred etre_max : (Monde)
+
+(* Le vocabulaire : le mot usuel, puis (après —) sa définition rigoureuse.
+   L'onglet « Récit » s'en sert pour raconter la preuve en français.     *)
+(*@ Monde : monde possible — une manière complète et cohérente dont les choses auraient pu être *)
+(*@ Reel : notre monde — le monde actuel *)
+(*@ etre_max(w) : Dieu existe dans {w} — un être maximalement grand (omnipotent, omniscient et parfaitement bon dans tous les mondes) existe dans {w} *)
+(*@ acc(w, v) : {v} est concevable depuis {w} — {v} est accessible depuis {w} *)
+(*@ symetrie_s5 : la symétrie de S5 (si un monde est concevable depuis un autre, l'inverse est vrai aussi) *)
+(*@ p1_necessite : la prémisse de nécessité P1 (si Dieu existe quelque part, il existe partout où l'on peut aller de là) *)
+(*@ p2_possibilite : la prémisse de possibilité P2 (il est possible que Dieu existe) *)
+(*@ p2_parodie : la prémisse parodique (il est possible que Dieu n'existe pas) *)
 
 axiom symetrie_s5 : forall (w : Monde). forall (v : Monde). acc(w, v) -> acc(v, w)
 axiom p1_necessite : forall (w : Monde). etre_max(w) -> forall (v : Monde). acc(w, v) -> etre_max(v)
