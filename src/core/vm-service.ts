@@ -446,22 +446,54 @@ export const VmLive = Layer.effect(
           );
         },
         onProgress: (p) => {
-          const stageMap: Record<string, [string, number]> = {
-            download: ["Downloading unkernel.wasm...", 25],
-            compile: ["Compiling Linux 7.x WebAssembly module...", 55],
-            memory: ["Allocating guest RAM & page tables...", 75],
-            boot: ["Booting Linux kernel & mounting rootfs...", 92],
-          };
-          const [label, basePct] = stageMap[p.stage] ?? [p.stage, 50];
-          const pct =
-            p.stage === "download" && "total" in p && p.total && "loaded" in p && p.loaded
-              ? Math.round(10 + (p.loaded / p.total) * 35)
-              : basePct;
+          let label = "Initialisation du noyau Linux…";
+          let pct = 50;
+
+          if (p.stage === "worker") {
+            label = p.jspi
+              ? "Initialisation des Web Workers SMP (JSPI actif)…"
+              : "Initialisation du Web Worker noyau…";
+            pct = 12;
+          } else if (p.stage === "download") {
+            const loaded = "loaded" in p && typeof p.loaded === "number" ? p.loaded : 0;
+            const total = "total" in p && typeof p.total === "number" ? p.total : 0;
+            if (total > 0) {
+              const mbL = (loaded / (1024 * 1024)).toFixed(1);
+              const mbT = (total / (1024 * 1024)).toFixed(1);
+              label = `Téléchargement unkernel.wasm (${mbL} / ${mbT} Mo)…`;
+              pct = Math.round(14 + (loaded / total) * 30);
+            } else {
+              label = "Téléchargement du noyau unkernel.wasm…";
+              pct = 26;
+            }
+          } else if (p.stage === "compile") {
+            label = "Compilation WebAssembly du noyau Linux 7.x…";
+            pct = 48;
+          } else if (p.stage === "compiled") {
+            const ms = "ms" in p && typeof p.ms === "number" ? Math.round(p.ms) : 0;
+            const bits = "memory64" in p && p.memory64 ? "wasm64" : "wasm32";
+            label = `Module ${bits} compilé (${ms} ms) — préparation mémoire…`;
+            pct = 58;
+          } else if (p.stage === "memory") {
+            label = "Allocation RAM invité & tables de pages…";
+            pct = 66;
+          } else if (p.stage === "instantiate") {
+            label = "Instanciation de la VM & périphériques virtio…";
+            pct = 74;
+          } else if (p.stage === "start") {
+            label = "Démarrage Linux & montage du système EROFS…";
+            pct = 84;
+          } else {
+            label = `Boot: ${String((p as { stage: string }).stage)}…`;
+            pct = 62;
+          }
+
           Effect.runFork(
             SubscriptionRef.update(stateRef, (s) => ({
               ...s,
               bootStage: label,
-              bootProgress: pct,
+              // Never regress backwards if worker/download events interleave
+              bootProgress: Math.max(s.bootProgress, pct),
             }))
           );
         },
@@ -634,9 +666,8 @@ export const VmLive = Layer.effect(
 
         yield* SubscriptionRef.update(stateRef, (s): VmState => ({
           ...s,
-          phase: "running",
-          bootStage: "Linux kernel online",
-          bootProgress: 100,
+          bootStage: "Synchronisation de l'environnement & des ponts vsock…",
+          bootProgress: Math.max(s.bootProgress, 92),
           stats: initialStats,
           cpus: initialStats.cpus,
           transport,
@@ -645,7 +676,21 @@ export const VmLive = Layer.effect(
 
         // Inject user credentials/env & start telemetry/port fibers
         yield* syncCredentials();
+
+        yield* SubscriptionRef.update(stateRef, (s): VmState => ({
+          ...s,
+          bootStage: "Activation du bureau WebGPU & des services…",
+          bootProgress: Math.max(s.bootProgress, 97),
+        }));
+
         yield* startBackgroundFibers;
+
+        yield* SubscriptionRef.update(stateRef, (s): VmState => ({
+          ...s,
+          phase: "running",
+          bootStage: "Système Linux prêt",
+          bootProgress: 100,
+        }));
       });
 
     const suspend = (): Effect.Effect<void, KernelNotRunningError | KernelBootError> =>

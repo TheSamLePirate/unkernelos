@@ -254,6 +254,22 @@
   animation: pulse-glow 2.4s ease-in-out infinite;
 }
 
+@keyframes boot-shimmer-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(220%); }
+}
+
+.boot-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  width: 45%;
+  animation: boot-shimmer-slide 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 /* Dynamic theme fallback wallpaper if WebGPU is disabled */
 .wallpaper-fallback {
   background: var(--wallpaper-fallback-bg);
