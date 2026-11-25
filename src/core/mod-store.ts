@@ -3100,10 +3100,22 @@ class ModEngineStore {
     return variant;
   }
 
+  private reactiveBundleHooks: {
+    exportConfig: () => unknown;
+    importConfig: (data: unknown) => void;
+  } | null = null;
+
+  public attachReactiveBundleHooks(hooks: {
+    exportConfig: () => unknown;
+    importConfig: (data: unknown) => void;
+  }): void {
+    this.reactiveBundleHooks = hooks;
+  }
+
   public exportBundleJson(): string {
     return JSON.stringify(
       {
-        schema: "unkernelos-mod-pack/v2",
+        schema: "unkernelos-mod-pack/v3",
         exportedAt: new Date().toISOString(),
         activeVariantId: this.state.activeVariantId,
         theme: this.state.theme,
@@ -3120,6 +3132,7 @@ class ModEngineStore {
         shaders: this.state.shaders,
         widgets: this.state.widgets,
         variants: this.state.variants.filter((v) => !v.builtin),
+        reactive: this.reactiveBundleHooks?.exportConfig(),
       },
       null,
       2
@@ -3128,7 +3141,7 @@ class ModEngineStore {
 
   public importBundleJson(jsonText: string): { ok: boolean; error?: string } {
     try {
-      const data = JSON.parse(jsonText) as Partial<ModState>;
+      const data = JSON.parse(jsonText) as Partial<ModState> & { reactive?: unknown };
       this.setState((s) => ({
         ...s,
         activeVariantId: data.activeVariantId ?? s.activeVariantId,
@@ -3156,6 +3169,9 @@ class ModEngineStore {
         widgets: data.widgets ? mergeById(BUILTIN_WIDGETS, data.widgets) : s.widgets,
         variants: data.variants ? mergeById(BUILTIN_VARIANTS, data.variants) : s.variants,
       }));
+      if (data.reactive && this.reactiveBundleHooks) {
+        this.reactiveBundleHooks.importConfig(data.reactive);
+      }
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };

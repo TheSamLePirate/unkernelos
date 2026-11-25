@@ -178,6 +178,14 @@ const AGENT_API_EXAMPLES: readonly { title: string; cmd: string }[] = [
     title: "Afficher Météo Live + Bourse Crypto + Healthcheck",
     cmd: `osctl call mod.widget.upsert '{"id":"widget-weather-live","enabled":true}'`,
   },
+  {
+    title: "Source Python3 Linux → Bus de Signaux Réactifs",
+    cmd: `osctl call mod.source.upsert '{"id":"src-py","kind":"python","enabled":true,"intervalMs":5000,"outputPrefix":"py","code":"import json,os;print(json.dumps({\\"procs\\":len([d for d in os.listdir(\\"/proc\\") if d.isdigit()])}))"}'`,
+  },
+  {
+    title: "Lier Couleur d'Accent au CPU + Injecter Surface TopBar / 3D",
+    cmd: `osctl call mod.surface.upsert '{"id":"surf-ai-pill","contentType":"html","slot":"topbar","enabled":true,"html":"<span style=\\"color:#38bdf8;font:10px monospace\\">⚡ {{sys.cpu}}% · {{agent.tokens}}t</span>"}'`,
+  },
 ];
 
 const STARTER_WGSL = `fn renderCustom(uv: vec2<f32>, aspect: f32, t: f32, px: vec2<f32>) -> vec3<f32> {

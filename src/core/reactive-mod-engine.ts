@@ -1568,6 +1568,37 @@ class ReactiveModEngine {
     return true;
   }
 
+  public exportConfig(): {
+    engineEnabled: boolean;
+    sources: readonly ReactiveDataSource[];
+    bindings: readonly ReactiveBinding[];
+    scripts: readonly ReactiveScriptMod[];
+    surfaces: readonly ReactiveSurface[];
+  } {
+    return {
+      engineEnabled: this.state.engineEnabled,
+      sources: this.state.sources.map((s) => ({ ...s, lastOutput: undefined, lastError: undefined })),
+      bindings: this.state.bindings.map((b) => ({ ...b, lastValue: undefined, lastError: undefined })),
+      scripts: this.state.scripts.map((s) => ({ ...s, lastError: undefined })),
+      surfaces: this.state.surfaces,
+    };
+  }
+
+  public importConfig(data: Partial<ReactiveModState> | undefined): void {
+    if (!data || typeof data !== "object") return;
+    this.state = {
+      ...this.state,
+      engineEnabled: typeof data.engineEnabled === "boolean" ? data.engineEnabled : this.state.engineEnabled,
+      sources: data.sources ? mergeById(BUILTIN_DATA_SOURCES, data.sources) : this.state.sources,
+      bindings: data.bindings ? mergeById(BUILTIN_BINDINGS, data.bindings) : this.state.bindings,
+      scripts: data.scripts ? mergeById(BUILTIN_SCRIPTS, data.scripts) : this.state.scripts,
+      surfaces: data.surfaces ? mergeById(BUILTIN_SURFACES, data.surfaces) : this.state.surfaces,
+    };
+    this.syncSchedulers();
+    if (this.state.engineEnabled) this.evaluateBindings();
+    this.emit(true);
+  }
+
   public resetAll(): void {
     this.scriptStates.clear();
     this.state = {
@@ -1585,6 +1616,12 @@ class ReactiveModEngine {
 }
 
 export const reactiveEngine = new ReactiveModEngine();
+
+// Wire full reactive config (sources, bindings, scripts, surfaces) into Mod Pack v3 JSON export/import!
+modStore.attachReactiveBundleHooks({
+  exportConfig: () => reactiveEngine.exportConfig(),
+  importConfig: (data) => reactiveEngine.importConfig(data as Partial<ReactiveModState>),
+});
 
 export function useReactiveMod(): ReactiveModState {
   return useSyncExternalStore(reactiveEngine.subscribe, reactiveEngine.getSnapshot);
