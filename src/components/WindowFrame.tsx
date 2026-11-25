@@ -1,4 +1,4 @@
-import { Crosshair, Layers, Maximize2, Minimize2, Minus, PanelLeft, PanelRight, Pin, Square, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Crosshair, Layers, Maximize2, Minimize2, Minus, PanelLeft, PanelRight, Pin, Square, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useMods } from "../core/mod-store.ts";
 import { useViewport } from "../core/use-viewport.ts";
@@ -54,7 +54,10 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
   const [minimizingFx, setMinimizingFx] = useState(false);
   const [wobble, setWobble] = useState({ skewX: 0, skewY: 0, rot: 0 });
   const [hoverTilt, setHoverTilt] = useState({ rx: 0, ry: 0 });
+  const [titleMenuPos, setTitleMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [sheenX, setSheenX] = useState<number | null>(null);
   const frameElRef = useRef<HTMLDivElement>(null);
+  const ec = mods.eyeCandy;
 
   const handleCloseWindow = () => {
     if (fx.burnClose && !is3dSpace && !isMobile) {
@@ -319,7 +322,10 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       ? `perspective(1200px) rotateX(${hoverTilt.rx}deg) rotateY(${hoverTilt.ry}deg)`
       : undefined;
 
+  const userWinOpacity = win.opacity ?? 1;
   const dragOpacityFactor = interacting && fx.dragGhostOpacity ? 0.86 : 1;
+  const effectiveOpacity = (focused ? 1 : dec.unfocusedOpacity) * dragOpacityFactor * userWinOpacity;
+  const shadedHeight = dec.titlebarHeightPx + (dec.titlebarAccentBar && focused ? 2 : 0) + 2;
   const inactiveFilter = !focused && fx.dimInactive && !is3dSpace ? "brightness(0.82) saturate(0.75)" : undefined;
   const openAnimClass =
     fx.openAnimation === "genie"
@@ -338,10 +344,10 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         left: 0,
         top: 0,
         width: win.width,
-        height: win.height,
+        height: win.shaded ? shadedHeight : win.height,
         borderRadius: `${dec.radiusPx}px`,
         borderWidth: `${dec.borderWidthPx}px`,
-        opacity: (focused ? 1 : Math.max(0.86, dec.unfocusedOpacity)) * dragOpacityFactor,
+        opacity: (focused ? 1 : Math.max(0.86, dec.unfocusedOpacity)) * dragOpacityFactor * userWinOpacity,
         backfaceVisibility: mods.desktop3d.doubleSidedWindows ? "visible" : "hidden",
         WebkitBackfaceVisibility: mods.desktop3d.doubleSidedWindows ? "visible" : "hidden",
         pointerEvents: "auto",
@@ -353,13 +359,13 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
               left: win.x,
               top: win.y,
               width: win.width,
-              height: win.height,
+              height: win.shaded ? shadedHeight : win.height,
             }),
         zIndex: win.pinned ? win.zIndex + 5000 : win.zIndex,
         display: !visible || win.minimized ? "none" : "flex",
         borderRadius: isMobile ? undefined : `${dec.radiusPx}px`,
         borderWidth: isMobile ? undefined : `${dec.borderWidthPx}px`,
-        opacity: (focused ? 1 : dec.unfocusedOpacity) * dragOpacityFactor,
+        opacity: effectiveOpacity,
         filter: inactiveFilter,
         boxShadow:
           focused && !isMobile && dec.activeGlowPx > 0
@@ -717,11 +723,24 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         />
       )}
 
-      {/* Titlebar */}
+      {/* Titlebar (supports Right-Click Power Menu, Live Cursor Specular Sheen & Shade!) */}
       <div
         data-unkernel-titlebar="true"
         onPointerDown={onHeaderPointerDown}
         onPointerUp={onHeaderPointerUpMobile}
+        onPointerMove={(e) => {
+          if (!ec.specularSheen || isMobile) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          setSheenX(Math.round(((e.clientX - rect.left) / Math.max(1, rect.width)) * 100));
+        }}
+        onPointerLeave={() => setSheenX(null)}
+        onContextMenu={(e) => {
+          if (isMobile) return;
+          e.preventDefault();
+          e.stopPropagation();
+          wmStore.focusWindow(win.id);
+          setTitleMenuPos({ x: e.nativeEvent.offsetX, y: dec.titlebarHeightPx + 4 });
+        }}
         onDoubleClick={() => {
           if (isMobile) return;
           if (is3dSpace) {
@@ -737,6 +756,15 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           isMobile ? "" : "cursor-grab active:cursor-grabbing"
         }`}
       >
+        {/* Dynamic Cursor-Tracking Liquid Glass Specular Glint */}
+        {ec.specularSheen && sheenX !== null && !isMobile && (
+          <div
+            style={{
+              background: `radial-gradient(140px circle at ${sheenX}% 50%, rgba(255,255,255,0.18), transparent 70%)`,
+            }}
+            className="pointer-events-none absolute inset-0"
+          />
+        )}
         {isMobile ? (
           <>
             {/* Subtle iOS swipe-pill indicator */}
@@ -835,6 +863,20 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
                 <>
                   <button
                     type="button"
+                    onClick={() => wmStore.toggleShadeWindow(win.id)}
+                    title={win.shaded ? "Dérouler la fenêtre" : "Enrouler en barre de titre (Shade)"}
+                    className={`${isTabletTouch ? "p-2" : "p-1"} rounded-lg hover:bg-white/10 active:scale-90 transition cursor-pointer ${
+                      win.shaded ? "text-cyan-300 bg-cyan-500/18" : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    {win.shaded ? (
+                      <ChevronDown className={isTabletTouch ? "w-4 h-4" : "w-3.5 h-3.5"} />
+                    ) : (
+                      <ChevronUp className={isTabletTouch ? "w-4 h-4" : "w-3.5 h-3.5"} />
+                    )}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => wmStore.togglePinWindow(win.id)}
                     title={win.pinned ? "Unpin Always-on-Top (PiP)" : "Pin Always-on-Top (PiP)"}
                     className={`${isTabletTouch ? "p-2" : "p-1"} rounded-lg hover:bg-white/10 active:scale-90 transition ${
@@ -871,13 +913,131 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         )}
       </div>
 
-      {/* Window Content */}
-      <div
-        style={{ borderBottomLeftRadius: `${dec.radiusPx}px`, borderBottomRightRadius: `${dec.radiusPx}px` }}
-        className="relative flex-1 min-h-0 overflow-hidden window-content-contain"
-      >
-        {children}
-      </div>
+      {/* Rich Titlebar Right-Click Power Menu (Shade, PiP, Live Opacity, Snap, Workspaces) */}
+      {titleMenuPos && !isMobile && (
+        <div
+          onMouseLeave={() => setTitleMenuPos(null)}
+          style={{ left: `${Math.min(Math.max(8, titleMenuPos.x), Math.max(8, win.width - 236))}px`, top: `${titleMenuPos.y}px` }}
+          className="absolute z-[95] w-56 p-2 rounded-2xl glass-surface-focused border border-white/20 shadow-2xl text-[11px] text-zinc-100 space-y-1.5 animate-window-in"
+        >
+          <div className="px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-zinc-400">
+            Options de Fenêtre
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              wmStore.toggleShadeWindow(win.id);
+              setTitleMenuPos(null);
+            }}
+            className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-white/12 transition cursor-pointer"
+          >
+            {win.shaded ? "▼ Dérouler la fenêtre" : "▲ Enrouler en barre (Shade)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              wmStore.togglePinWindow(win.id);
+              setTitleMenuPos(null);
+            }}
+            className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-white/12 transition cursor-pointer"
+          >
+            {win.pinned ? "📌 Détacher (PiP)" : "📌 Toujours au-dessus (PiP)"}
+          </button>
+
+          {/* Live Per-Window Opacity Slider */}
+          <div className="px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 space-y-1">
+            <div className="flex justify-between text-[10px]">
+              <span className="text-zinc-300">Opacité fenêtre</span>
+              <span className="font-mono text-cyan-300">{Math.round(userWinOpacity * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={35}
+              max={100}
+              step={5}
+              value={Math.round(userWinOpacity * 100)}
+              onChange={(e) => wmStore.setWindowOpacity(win.id, Number(e.target.value) / 100)}
+              className="w-full accent-cyan-400 h-1.5"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 pt-0.5">
+            {(
+              [
+                ["left", "◧ Gauche"],
+                ["right", "◨ Droite"],
+                ["top-left", "◰ Haut-G"],
+                ["top-right", "◳ Haut-D"],
+                ["bottom-left", "◱ Bas-G"],
+                ["bottom-right", "◲ Bas-D"],
+              ] as readonly [SnapZone, string][]
+            ).map(([zone, lbl]) => (
+              <button
+                key={zone}
+                type="button"
+                onClick={() => {
+                  wmStore.snapWindow(win.id, zone);
+                  setTitleMenuPos(null);
+                }}
+                className="px-2 py-1 rounded-lg bg-white/[0.04] hover:bg-white/14 text-[10px] text-left cursor-pointer"
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between px-2 py-1 border-t border-white/10">
+            <span className="text-[10px] text-zinc-400">Bureau</span>
+            <div className="flex gap-1">
+              {([1, 2, 3, 4] as WorkspaceId[]).map((ws) => (
+                <button
+                  key={ws}
+                  type="button"
+                  onClick={() => {
+                    wmStore.moveWindowToWorkspace(win.id, ws);
+                    setTitleMenuPos(null);
+                  }}
+                  className={`w-5 h-5 rounded-md font-mono text-[10px] cursor-pointer ${
+                    win.workspace === ws ? "bg-cyan-400 text-black font-bold" : "bg-white/8 hover:bg-white/18"
+                  }`}
+                >
+                  {ws}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {is3dSpace && (
+            <button
+              type="button"
+              onClick={() => {
+                spatial3dBridge.dispatchCamera({ kind: "focus-window", windowId: win.id });
+                setTitleMenuPos(null);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-xl bg-cyan-500/18 hover:bg-cyan-500/30 text-cyan-200 cursor-pointer"
+            >
+              🎯 Focus Caméra 3D (1:1)
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Window Content (Hidden when Shaded / Rolled-Up!) */}
+      {!win.shaded && (
+        <div
+          style={{ borderBottomLeftRadius: `${dec.radiusPx}px`, borderBottomRightRadius: `${dec.radiusPx}px` }}
+          className="relative flex-1 min-h-0 overflow-hidden window-content-contain"
+        >
+          {children}
+        </div>
+      )}
+
+      {/* Live Geometry Telemetry Badge while dragging/resizing! */}
+      {interacting && ec.geometryHud && !isMobile && (
+        <div className="pointer-events-none absolute top-11 right-3 z-40 px-2 py-0.5 rounded-lg bg-black/82 backdrop-blur-xl border border-cyan-400/45 text-[10px] font-mono text-cyan-200 shadow-lg">
+          {Math.round(win.width)} × {Math.round(win.height)} · ({Math.round(win.x)}, {Math.round(win.y)})
+        </div>
+      )}
 
       {/* Apple VisionOS Bottom Glass Grab Bar & Circular Close Pill Ornament */}
       {visionOrnament && !isMobile && !win.maximized && (

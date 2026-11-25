@@ -23,11 +23,15 @@ import {
   modStore,
   ULTRA_HD_BACKDROPS,
   useMods,
+  type AmbientParticlesKind,
+  type ColorProfileKind,
+  type CursorTrailKind,
   type CustomDesktopWidget,
   type CustomShaderMod,
   type Desktop3dSceneKind,
   type DockStyleKind,
   type HdriPresetId,
+  type HotCornerAction,
   type ModKind,
   type OsMod,
   type TaskbarModeKind,
@@ -36,10 +40,11 @@ import {
   type WindowDecoratorStyle,
   type WindowOpenAnimKind,
 } from "../../core/mod-store.ts";
+import type { SoundProfileId } from "../../core/ui-sounds.ts";
 import { wmStore, type GridLayoutMode } from "../../wm/wm-store.ts";
 import { spatial3dBridge, type Spatial3dLayoutKind } from "../../gpu/spatial-3d-bridge.ts";
 
-type ModTab = "variants" | "desktop3d" | "theme-dec" | "shaders" | "widgets" | "mods";
+type ModTab = "variants" | "desktop3d" | "eyecandy" | "theme-dec" | "shaders" | "widgets" | "mods";
 
 const DECORATOR_STYLES: readonly { id: WindowDecoratorStyle; label: string; desc: string }[] = [
   { id: "macos", label: "macOS Tahoe", desc: "Traffic lights modernes" },
@@ -239,10 +244,11 @@ export const ModStudioApp: React.FC = () => {
   const TABS: readonly { id: ModTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: "variants", label: "Variantes OS", icon: Sparkles },
     { id: "desktop3d", label: "Bureau 3D WebGPU", icon: Box },
+    { id: "eyecandy", label: "Eye Candy & Détails", icon: Wand2 },
     { id: "theme-dec", label: "Thème & Fenêtres", icon: Frame },
-    { id: "shaders", label: "Shaders WGSL", icon: Wand2 },
+    { id: "shaders", label: "Shaders WGSL", icon: Palette },
     { id: "widgets", label: "Widgets Bureau", icon: Layers },
-    { id: "mods", label: "Mods, CSS & API", icon: Code2 },
+    { id: "mods", label: "Mods, Config & API", icon: Code2 },
   ];
 
   const activeModsCount = mods.mods.filter((m) => m.enabled).length;
@@ -920,6 +926,362 @@ export const ModStudioApp: React.FC = () => {
                   onChange={(e) => modStore.setDesktop3d({ mouseParallax: Number(e.target.value) })}
                   className="w-full accent-amber-400"
                 />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB 2.5: AAA EYE CANDY, HOT CORNERS, OPTICS, SOUND & DOCK PRO ─── */}
+        {tab === "eyecandy" && (
+          <div className="space-y-4">
+            {/* 1. Cursor & Tactile Micro-Interactions */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-cyan-950/35 via-[#0c1020] to-violet-950/35 border border-cyan-400/25 space-y-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+                Curseur, Micro-Interactions & Retour Tactile
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.eyeCandy.cursorSpotlight}
+                    onChange={(e) => modStore.setEyeCandy({ cursorSpotlight: e.target.checked })}
+                    className="accent-cyan-400"
+                  />
+                  <span>🔦 Spotlight Ambiant Curseur</span>
+                </label>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.eyeCandy.clickRipples}
+                    onChange={(e) => modStore.setEyeCandy({ clickRipples: e.target.checked })}
+                    className="accent-violet-400"
+                  />
+                  <span>💧 Ondes Lumineuses au Clic</span>
+                </label>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.eyeCandy.specularSheen}
+                    onChange={(e) => modStore.setEyeCandy({ specularSheen: e.target.checked })}
+                    className="accent-sky-400"
+                  />
+                  <span>✨ Reflet Spéculaire sur Barres</span>
+                </label>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.eyeCandy.geometryHud}
+                    onChange={(e) => modStore.setEyeCandy({ geometryHud: e.target.checked })}
+                    className="accent-emerald-400"
+                  />
+                  <span>📐 Badge Géométrie W×H au Drag</span>
+                </label>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.eyeCandy.edgeBreathGlow}
+                    onChange={(e) => modStore.setEyeCandy({ edgeBreathGlow: e.target.checked })}
+                    className="accent-fuchsia-400"
+                  />
+                  <span>🌊 Halo Respirant Bords d'Écran</span>
+                </label>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.eyeCandy.showPerfHud}
+                    onChange={(e) => modStore.setEyeCandy({ showPerfHud: e.target.checked })}
+                    className="accent-amber-400"
+                  />
+                  <span>⚡ HUD Perf Live (FPS / Heap / GPU)</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="space-y-1.5">
+                  <div className="text-[11px] text-zinc-400">Traînée Fluide du Curseur (60fps)</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        ["none", "Désactivée"],
+                        ["aurora", "🌈 Aurore"],
+                        ["stardust", "✨ Poussière d'Étoiles"],
+                        ["neon-ribbon", "⚡ Ruban Néon"],
+                      ] as readonly [CursorTrailKind, string][]
+                    ).map(([id, lbl]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => modStore.setEyeCandy({ cursorTrail: id })}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] border cursor-pointer ${
+                          mods.eyeCandy.cursorTrail === id
+                            ? "bg-cyan-500/25 border-cyan-400 text-white font-semibold"
+                            : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="text-[11px] text-zinc-400">Pack Acoustique WebAudio</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        ["crystal", "💎 Crystal"],
+                        ["mechanical", "⌨️ Mécanique"],
+                        ["synth-retro", "🎹 Synth"],
+                        ["zen-wood", "🎋 Zen Bois"],
+                        ["silent", "🔇 Muet"],
+                      ] as readonly [SoundProfileId, string][]
+                    ).map(([id, lbl]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => modStore.setEyeCandy({ soundProfile: id })}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] border cursor-pointer ${
+                          mods.eyeCandy.soundProfile === id
+                            ? "bg-violet-500/25 border-violet-400 text-white font-semibold"
+                            : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Ambient Desktop Weather / Particles & Cinema Optics */}
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+                Particules Ambiantes, Optique Cinéma & Night Shift
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-[11px] text-zinc-400">Ambiance Particules Bureau (60fps GPU-friendly)</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ["none", "Aucune"],
+                      ["sakura", "🌸 Pétales Sakura"],
+                      ["snow", "❄️ Neige Douce"],
+                      ["fireflies", "✨ Lucioles Biolum."],
+                      ["rain", "🌧️ Pluie Cyber"],
+                      ["matrix-sparks", "🟢 Étincelles Matrix"],
+                      ["embers", "🔥 Braises Dorées"],
+                    ] as readonly [AmbientParticlesKind, string][]
+                  ).map(([id, lbl]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => modStore.setEyeCandy({ ambientParticles: id })}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] border cursor-pointer ${
+                        mods.eyeCandy.ambientParticles === id
+                          ? "bg-emerald-500/25 border-emerald-400 text-white font-semibold"
+                          : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-[11px] text-zinc-400">Étalonnage Couleur Cinéma (Color Profile)</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ["neutral", "Neutre Calibré"],
+                      ["oled-vivid", "OLED Vivid"],
+                      ["cinema-warm", "Cinéma Chaud"],
+                      ["nordic-cool", "Nordique Froid"],
+                      ["cyber-hdr", "Cyber HDR"],
+                      ["monochrome-ink", "Encre Monochrome"],
+                    ] as readonly [ColorProfileKind, string][]
+                  ).map(([id, lbl]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => modStore.setEyeCandy({ colorProfile: id })}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] border cursor-pointer ${
+                        mods.eyeCandy.colorProfile === id
+                          ? "bg-amber-500/25 border-amber-400 text-white font-semibold"
+                          : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-amber-200">Night Shift (Chaleur)</span>
+                    <span className="font-mono text-amber-300">{mods.eyeCandy.nightShiftWarmth}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={mods.eyeCandy.nightShiftWarmth}
+                    onChange={(e) => modStore.setEyeCandy({ nightShiftWarmth: Number(e.target.value) })}
+                    className="w-full accent-amber-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-zinc-300">Grain Verre Quartz</span>
+                    <span className="font-mono text-cyan-300">{mods.eyeCandy.glassGrain}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={2}
+                    value={mods.eyeCandy.glassGrain}
+                    onChange={(e) => modStore.setEyeCandy({ glassGrain: Number(e.target.value) })}
+                    className="w-full accent-cyan-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-zinc-300">Vignettage Cinéma</span>
+                    <span className="font-mono text-violet-300">{mods.eyeCandy.vignetteStrength}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={80}
+                    step={2}
+                    value={mods.eyeCandy.vignetteStrength}
+                    onChange={(e) => modStore.setEyeCandy({ vignetteStrength: Number(e.target.value) })}
+                    className="w-full accent-violet-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-zinc-300">Densité Particules</span>
+                    <span className="font-mono text-emerald-300">{Math.round(mods.eyeCandy.ambientParticleDensity * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.3}
+                    max={2}
+                    step={0.1}
+                    value={mods.eyeCandy.ambientParticleDensity}
+                    onChange={(e) => modStore.setEyeCandy({ ambientParticleDensity: Number(e.target.value) })}
+                    className="w-full accent-emerald-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Real 4-Corner macOS/Hyprland Hot Corners + Dock Pro Controls */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-violet-300">
+                  Coins Actifs (Hot Corners — survol 240ms)
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 text-xs">
+                  {(
+                    [
+                      ["topLeft", "↖ Haut-Gauche"],
+                      ["topRight", "↗ Haut-Droite"],
+                      ["bottomLeft", "↙ Bas-Gauche"],
+                      ["bottomRight", "↘ Bas-Droite"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="space-y-1">
+                      <span className="text-[10px] text-zinc-400">{label}</span>
+                      <select
+                        value={mods.eyeCandy.hotCorners[key]}
+                        onChange={(e) =>
+                          modStore.setEyeCandy({
+                            hotCorners: {
+                              ...mods.eyeCandy.hotCorners,
+                              [key]: e.target.value as HotCornerAction,
+                            },
+                          })
+                        }
+                        className="w-full bg-black/45 border border-white/15 rounded-xl px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer"
+                      >
+                        <option value="none">Désactivé</option>
+                        <option value="mission-control">Mission Control</option>
+                        <option value="launcher">Launchpad Apps</option>
+                        <option value="command-palette">Spotlight ⌘K</option>
+                        <option value="desktop-3d">Basculer Bureau 3D</option>
+                        <option value="grid-tile">Grille Auto 2D</option>
+                        <option value="minimize-all">Afficher le Bureau</option>
+                        <option value="lock-screen">Verrouiller l'écran</option>
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-fuchsia-300">
+                  Super-Options du Dock Liquid Glass
+                </div>
+                <div className="flex flex-wrap gap-4 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(mods.shell.dockAutoHide)}
+                      onChange={(e) => modStore.setShell({ dockAutoHide: e.target.checked })}
+                      className="accent-cyan-400"
+                    />
+                    Auto-Hide magnétique (macOS)
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={mods.shell.dockReflection !== false}
+                      onChange={(e) => modStore.setShell({ dockReflection: e.target.checked })}
+                      className="accent-fuchsia-400"
+                    />
+                    Reflet spéculaire supérieur
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-zinc-300">Force du Zoom</span>
+                      <span className="font-mono text-cyan-300">{Math.round((mods.shell.dockMagStrength ?? 0.48) * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={0.85}
+                      step={0.05}
+                      value={mods.shell.dockMagStrength ?? 0.48}
+                      onChange={(e) => modStore.setShell({ dockMagStrength: Number(e.target.value) })}
+                      className="w-full accent-cyan-400"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-zinc-300">Taille des Icônes</span>
+                      <span className="font-mono text-fuchsia-300">{Math.round((mods.shell.dockIconScale ?? 1) * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.8}
+                      max={1.25}
+                      step={0.05}
+                      value={mods.shell.dockIconScale ?? 1}
+                      onChange={(e) => modStore.setShell({ dockIconScale: Number(e.target.value) })}
+                      className="w-full accent-fuchsia-400"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1751,47 +2113,97 @@ export const ModStudioApp: React.FC = () => {
                   .map((m) => (
                     <div
                       key={m.id}
-                      className={`p-3.5 rounded-2xl border transition flex items-start justify-between gap-3 ${
+                      className={`p-3.5 rounded-2xl border transition space-y-2.5 ${
                         m.enabled
                           ? "bg-violet-500/14 border-violet-400/45"
                           : "bg-white/[0.03] border-white/10"
                       }`}
                     >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-bold text-white">{m.name}</span>
-                          <span className="px-1.5 py-0.2 rounded bg-white/10 text-[9px] font-mono text-zinc-300">
-                            {m.scope}
-                          </span>
-                          <span className="px-1.5 py-0.2 rounded bg-cyan-500/15 text-[9px] font-mono text-cyan-200">
-                            {m.kind}
-                          </span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-white">{m.name}</span>
+                            <span className="px-1.5 py-0.2 rounded bg-white/10 text-[9px] font-mono text-zinc-300">
+                              {m.scope}
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded bg-cyan-500/15 text-[9px] font-mono text-cyan-200">
+                              {m.kind}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 leading-snug">{m.description}</p>
                         </div>
-                        <p className="text-[11px] text-zinc-400 leading-snug">{m.description}</p>
-                      </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {!m.builtin && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {!m.builtin && (
+                            <button
+                              type="button"
+                              onClick={() => modStore.uninstallMod(m.id)}
+                              className="p-1.5 rounded-lg bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => modStore.uninstallMod(m.id)}
-                            className="p-1.5 rounded-lg bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 cursor-pointer"
+                            onClick={() => modStore.toggleMod(m.id)}
+                            className={`px-3 py-1 rounded-xl text-[11px] font-semibold cursor-pointer ${
+                              m.enabled
+                                ? "bg-emerald-500 text-black"
+                                : "bg-white/10 hover:bg-white/20 text-zinc-200"
+                            }`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            {m.enabled ? "ON" : "OFF"}
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => modStore.toggleMod(m.id)}
-                          className={`px-3 py-1 rounded-xl text-[11px] font-semibold cursor-pointer ${
-                            m.enabled
-                              ? "bg-emerald-500 text-black"
-                              : "bg-white/10 hover:bg-white/20 text-zinc-200"
-                          }`}
-                        >
-                          {m.enabled ? "ON" : "OFF"}
-                        </button>
+                        </div>
                       </div>
+
+                      {/* Per-Mod Live Granular Parameters (Sliders & Color Pickers for EVERY Mod!) */}
+                      {m.params && m.params.length > 0 && (
+                        <div className="pt-2 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {m.params.map((spec) => {
+                            const val = m.paramValues?.[spec.key] ?? spec.defaultValue;
+                            return spec.type === "color" ? (
+                              <label key={spec.key} className="flex items-center justify-between gap-2 text-[10.5px]">
+                                <span className="text-zinc-300 truncate">{spec.label}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="color"
+                                    value={String(val)}
+                                    onChange={(e) => {
+                                      if (!m.enabled) modStore.toggleMod(m.id, true);
+                                      modStore.configureMod(m.id, { [spec.key]: e.target.value });
+                                    }}
+                                    className="w-6 h-5 rounded cursor-pointer bg-transparent border-0"
+                                  />
+                                  <span className="font-mono text-[9.5px] text-zinc-400">{String(val)}</span>
+                                </div>
+                              </label>
+                            ) : (
+                              <div key={spec.key} className="space-y-0.5">
+                                <div className="flex justify-between text-[10px]">
+                                  <span className="text-zinc-300 truncate">{spec.label}</span>
+                                  <span className="font-mono text-cyan-300">
+                                    {val}
+                                    {spec.unit ?? ""}
+                                  </span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={spec.min ?? 0}
+                                  max={spec.max ?? 100}
+                                  step={spec.step ?? 1}
+                                  value={Number(val)}
+                                  onChange={(e) => {
+                                    if (!m.enabled) modStore.toggleMod(m.id, true);
+                                    modStore.configureMod(m.id, { [spec.key]: Number(e.target.value) });
+                                  }}
+                                  className="w-full accent-violet-400 h-1.5"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   ))}
               </div>

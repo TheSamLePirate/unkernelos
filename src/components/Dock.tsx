@@ -136,17 +136,20 @@ export const Dock: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false })
   const [pointerRelX, setPointerRelX] = useState<number | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [bouncingKey, setBouncingKey] = useState<string | null>(null);
+  const [autoHideRevealed, setAutoHideRevealed] = useState(false);
 
   const extraRunningIds = Array.from(
     new Set(wm.windows.map((w) => w.appId).filter((id) => !PINNED_DOCK_IDS.includes(id)))
   );
   const visibleIds: readonly AppId[] = [...PINNED_DOCK_IDS, ...extraRunningIds];
 
-  // Fit all icons cleanly with balanced spacing across desktop & iPad widths
+  // Fit all icons cleanly with balanced spacing across desktop & iPad widths + user dockIconScale!
   const totalSlots = visibleIds.length + 2;
   const maxAvailablePerSlot = Math.floor((viewportWidth - 88 - 2 * DIVIDER_SLOT_W) / Math.max(1, totalSlots)) - SLOT_GAP;
-  const baseSize = Math.max(36, Math.min(46, maxAvailablePerSlot));
-  const magEnabled = cfg.dockMagnification && !isTouch && viewportWidth >= 900;
+  const iconScale = mods.shell.dockIconScale ?? 1.0;
+  const baseSize = Math.round(Math.max(32, Math.min(54, Math.max(36, Math.min(46, maxAvailablePerSlot)) * iconScale)));
+  const magStrength = mods.shell.dockMagStrength ?? 0.48;
+  const magEnabled = cfg.dockMagnification && magStrength > 0.01 && !isTouch && viewportWidth >= 900;
 
   const triggerBounce = useCallback((key: string) => {
     setBouncingKey(key);
@@ -251,8 +254,8 @@ export const Dock: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false })
     const t = Math.cos((dist / radius) * (Math.PI / 2));
     const smooth = t * t;
     return {
-      scale: 1 + smooth * 0.48,
-      lift: smooth * 13,
+      scale: 1 + smooth * magStrength,
+      lift: smooth * (magStrength * 27),
     };
   };
 
@@ -263,30 +266,46 @@ export const Dock: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false })
   const isTaskbar = dockStyle === "full-taskbar" && !embedded3d;
   const isCyberRail = dockStyle === "cyber-rail";
   const isMinimalPill = dockStyle === "minimal-pill";
+  const autoHideActive = Boolean(mods.shell.dockAutoHide) && !embedded3d;
+  const dockHidden = hiddenForKeyboard || (autoHideActive && !autoHideRevealed);
 
   const trayHeight = baseSize + TRAY_PAD_Y * 2;
   const dividerHeight = Math.round(baseSize * 0.56);
   const dividerOffsetBottom = Math.round((baseSize - dividerHeight) / 2);
 
   return (
-    <div
-      style={
-        embedded3d
-          ? undefined
-          : {
-              bottom: isTaskbar ? "0px" : "max(0.75rem, env(safe-area-inset-bottom))",
-            }
-      }
-      className={
-        embedded3d
-          ? "flex justify-center pointer-events-none"
-          : `hidden md:flex fixed ${
-              isTaskbar ? "inset-x-0" : "left-1/2 -translate-x-1/2"
-            } z-50 justify-center pointer-events-none transition-all duration-200 ${
-              hiddenForKeyboard ? "translate-y-28 opacity-0" : "translate-y-0 opacity-100"
-            }`
-      }
-    >
+    <>
+      {/* Magnetic Bottom Reveal Edge when Dock Auto-Hide is active */}
+      {autoHideActive && (
+        <div
+          onPointerEnter={() => setAutoHideRevealed(true)}
+          className="fixed bottom-0 inset-x-0 h-3.5 z-[49] hidden md:block"
+        />
+      )}
+      <div
+        onPointerEnter={() => {
+          if (autoHideActive) setAutoHideRevealed(true);
+        }}
+        onPointerLeave={() => {
+          if (autoHideActive) setAutoHideRevealed(false);
+        }}
+        style={
+          embedded3d
+            ? undefined
+            : {
+                bottom: isTaskbar ? "0px" : "max(0.75rem, env(safe-area-inset-bottom))",
+              }
+        }
+        className={
+          embedded3d
+            ? "flex justify-center pointer-events-none"
+            : `hidden md:flex fixed ${
+                isTaskbar ? "inset-x-0" : "left-1/2 -translate-x-1/2"
+              } z-50 justify-center pointer-events-none transition-all duration-300 ease-out ${
+                dockHidden ? "translate-y-24 opacity-0" : "translate-y-0 opacity-100"
+              }`
+        }
+      >
       <nav
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
@@ -300,20 +319,24 @@ export const Dock: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false })
           isTaskbar ? "w-full justify-center" : ""
         }`}
       >
-        {/* Frosted Liquid Glass Tray (adapts to modded dockStyle & dockRadiusPx!) */}
+        {/* Frosted Liquid Glass Tray (adapts to modded dockStyle, dockRadiusPx & optional glossy reflection!) */}
         <div
           style={{
             height: `${trayHeight}px`,
             borderRadius: isTaskbar ? "0px" : `${mods.shell.dockRadiusPx}px`,
           }}
-          className={`glass-dock pointer-events-none absolute inset-x-0 bottom-0 transition-all duration-150 ${
+          className={`glass-dock pointer-events-none absolute inset-x-0 bottom-0 transition-all duration-150 overflow-hidden ${
             isCyberRail
               ? "!border-cyan-400/45 shadow-[0_0_28px_rgba(34,211,238,0.28)]"
               : isMinimalPill
               ? "!bg-black/45 !border-white/12"
               : ""
           }`}
-        />
+        >
+          {mods.shell.dockReflection !== false && (
+            <div className="absolute inset-x-3 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/45 to-transparent" />
+          )}
+        </div>
 
         {/* Icons Row — overflow-visible & pixel-aligned baseline! */}
         <div
@@ -454,5 +477,6 @@ export const Dock: React.FC<{ embedded3d?: boolean }> = ({ embedded3d = false })
         </div>
       </nav>
     </div>
+    </>
   );
 };

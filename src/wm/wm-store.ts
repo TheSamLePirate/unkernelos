@@ -447,6 +447,8 @@ export interface WindowInstance {
   readonly minimized: boolean;
   readonly maximized: boolean;
   readonly pinned?: boolean;
+  readonly shaded?: boolean;
+  readonly opacity?: number; // 0.35..1
   readonly snap: SnapZone;
   readonly props?: Record<string, unknown>;
 }
@@ -899,6 +901,24 @@ class WindowManagerStore {
       windows: s.windows.map((w) =>
         w.id === id ? { ...w, pinned: pinned ?? !w.pinned, zIndex } : w
       ),
+    }));
+  }
+
+  public toggleShadeWindow(id: string, shaded?: boolean): void {
+    uiSounds.playShade();
+    this.setState((s) => ({
+      ...s,
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, shaded: shaded ?? !w.shaded, maximized: false } : w
+      ),
+    }));
+  }
+
+  public setWindowOpacity(id: string, opacity: number): void {
+    const clamped = Math.max(0.35, Math.min(1, Number(opacity.toFixed(2))));
+    this.setState((s) => ({
+      ...s,
+      windows: s.windows.map((w) => (w.id === id ? { ...w, opacity: clamped } : w)),
     }));
   }
 

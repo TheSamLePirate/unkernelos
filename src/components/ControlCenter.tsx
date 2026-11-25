@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import {
+  Activity,
   Download,
   LayoutGrid,
   Lock,
@@ -8,13 +9,16 @@ import {
   Play,
   RotateCcw,
   Settings,
+  Sliders,
   Sparkles,
+  Sun,
   Volume2,
   VolumeX,
   Wand2,
   ZoomIn,
 } from "lucide-react";
 import React from "react";
+import { modStore, useMods, type AmbientParticlesKind } from "../core/mod-store.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "../core/os-themes.ts";
 import { pwaStore, usePwa } from "../core/pwa-service.ts";
 import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../core/runtime.ts";
@@ -27,6 +31,7 @@ import { useWm, wmStore } from "../wm/wm-store.ts";
 
 export const ControlCenter: React.FC = () => {
   const wm = useWm();
+  const mods = useMods();
   const pwa = usePwa();
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
@@ -264,6 +269,79 @@ export const ControlCenter: React.FC = () => {
               onChange={(e) => patchCfg({ glassOpacity: Number(e.target.value) / 100 })}
               className="w-full accent-cyan-400 h-1.5"
             />
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between text-[11px]">
+              <span className="flex items-center gap-1 text-amber-200">
+                <Sun className="w-3 h-3" /> Night Shift (Chaleur)
+              </span>
+              <span className="font-mono text-amber-300">{mods.eyeCandy.nightShiftWarmth}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={mods.eyeCandy.nightShiftWarmth}
+              onChange={(e) => modStore.setEyeCandy({ nightShiftWarmth: Number(e.target.value) })}
+              className="w-full accent-amber-400 h-1.5"
+            />
+          </div>
+        </div>
+
+        {/* Instant Eye-Candy Ambient Atmosphere & Perf HUD */}
+        <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/8 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-zinc-300">Ambiance & Eye Candy</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => modStore.setEyeCandy({ showPerfHud: !mods.eyeCandy.showPerfHud })}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-mono border cursor-pointer ${
+                  mods.eyeCandy.showPerfHud
+                    ? "bg-emerald-500/22 border-emerald-400/50 text-emerald-200"
+                    : "bg-white/5 border-white/10 text-zinc-400"
+                }`}
+                title="Afficher FPS / Heap HUD"
+              >
+                <Activity className="w-2.5 h-2.5" /> FPS
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  wmStore.setControlCenter(false);
+                  wmStore.openApp("mod-studio");
+                }}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-fuchsia-500/20 border border-fuchsia-400/40 text-[9.5px] text-fuchsia-200 hover:bg-fuchsia-500/30 cursor-pointer"
+              >
+                <Sliders className="w-2.5 h-2.5" /> Studio
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {(
+              [
+                ["none", "Off"],
+                ["sakura", "🌸 Sakura"],
+                ["snow", "❄️ Neige"],
+                ["fireflies", "✨ Lucioles"],
+                ["rain", "🌧️ Pluie"],
+                ["embers", "🔥 Braises"],
+              ] as readonly [AmbientParticlesKind, string][]
+            ).map(([id, lbl]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => modStore.setEyeCandy({ ambientParticles: id })}
+                className={`px-2 py-0.5 rounded-lg text-[10px] border transition cursor-pointer ${
+                  mods.eyeCandy.ambientParticles === id
+                    ? "bg-cyan-500/25 border-cyan-300/60 text-white font-semibold"
+                    : "bg-white/[0.03] border-white/8 text-zinc-400 hover:text-white"
+                }`}
+              >
+                {lbl}
+              </button>
+            ))}
           </div>
         </div>
 

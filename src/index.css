@@ -290,6 +290,49 @@
   animation: fx-chroma-pulse 3.8s ease-in-out infinite;
 }
 
+/* AAA Eye-Candy: Click Ripples, Frosted Quartz Film Grain, Edge Breath & Cinema Color Profiles */
+@keyframes os-ripple-expand {
+  0% { transform: translate(-50%, -50%) scale(0.15); opacity: 0.72; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+.os-click-ripple {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent-cyan);
+  box-shadow: 0 0 14px var(--accent-primary);
+  animation: os-ripple-expand 480ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.os-film-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+@keyframes os-edge-breath-anim {
+  0%, 100% { box-shadow: inset 0 0 42px -12px var(--accent-primary); }
+  50% { box-shadow: inset 0 0 68px -8px var(--accent-cyan); }
+}
+.os-edge-breath {
+  animation: os-edge-breath-anim 6s ease-in-out infinite;
+}
+
+html[data-color-profile="oled-vivid"] #root {
+  filter: contrast(1.09) saturate(1.22);
+}
+html[data-color-profile="cinema-warm"] #root {
+  filter: sepia(0.14) saturate(1.12) contrast(1.04);
+}
+html[data-color-profile="nordic-cool"] #root {
+  filter: hue-rotate(-8deg) saturate(0.92) contrast(1.05) brightness(1.02);
+}
+html[data-color-profile="cyber-hdr"] #root {
+  filter: contrast(1.14) saturate(1.38) brightness(1.03);
+}
+html[data-color-profile="monochrome-ink"] #root {
+  filter: grayscale(0.92) contrast(1.12);
+}
+
 @keyframes overlay-fade {
   from {
     opacity: 0;

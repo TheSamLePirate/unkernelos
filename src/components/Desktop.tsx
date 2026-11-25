@@ -34,6 +34,7 @@ import { LockScreen } from "./LockScreen.tsx";
 import { MissionControlOverlay } from "./MissionControlOverlay.tsx";
 import { MobileNavBar } from "./MobileNavBar.tsx";
 import { NotificationCenter } from "./NotificationCenter.tsx";
+import { OsEyeCandyLayer } from "./OsEyeCandyLayer.tsx";
 import { ShellTaskbarAndMenu } from "./ShellTaskbarAndMenu.tsx";
 import { SnapPreviewOverlay } from "./SnapPreviewOverlay.tsx";
 import { TopBar } from "./TopBar.tsx";
@@ -230,7 +231,7 @@ export const Desktop: React.FC = () => {
     applyOsThemeToDocument(cfg.osTheme, cfg.glassBlur, cfg.glassOpacity);
     modStore.applyDomOverrides();
     uiSounds.setEnabled(cfg.uiSounds);
-  }, [cfg.osTheme, cfg.glassBlur, cfg.glassOpacity, cfg.uiSounds, mods.theme, mods.mods, mods.userCss, mods.decorator.style, mods.shell]);
+  }, [cfg.osTheme, cfg.glassBlur, cfg.glassOpacity, cfg.uiSounds, mods.theme, mods.mods, mods.userCss, mods.decorator.style, mods.shell, mods.eyeCandy]);
 
   // WebGPU Animated Live Shader Wallpaper (5 stock shaders + custom WGSL shader mods; paused when 3D Desktop is active)
   useEffect(() => {
@@ -535,6 +536,9 @@ export const Desktop: React.FC = () => {
 
       {/* Desktop Ambient Widgets (Behind Windows, Toggleable) */}
       <DesktopWidgets />
+
+      {/* AAA Eye-Candy, Cursor Spotlight/Trail, Ambient Particles, Night Shift, Hot Corners & Perf HUD */}
+      <OsEyeCandyLayer />
 
       {/* Top Glass Menu Bar */}
       <TopBar />

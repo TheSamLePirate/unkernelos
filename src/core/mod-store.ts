@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { Spatial3dLayoutKind } from "../gpu/spatial-3d-bridge.ts";
 import type { OsThemeId, WallpaperShaderId } from "./schema.ts";
+import type { SoundProfileId } from "./ui-sounds.ts";
 
 export type WindowDecoratorStyle =
   | "macos"
@@ -249,10 +250,68 @@ export interface DecoratorModConfig {
   readonly unfocusedOpacity: number; // 0.65..1
 }
 
+export type CursorTrailKind = "none" | "aurora" | "stardust" | "neon-ribbon";
+export type AmbientParticlesKind =
+  | "none"
+  | "sakura"
+  | "snow"
+  | "fireflies"
+  | "rain"
+  | "matrix-sparks"
+  | "embers";
+export type ColorProfileKind =
+  | "neutral"
+  | "oled-vivid"
+  | "cinema-warm"
+  | "nordic-cool"
+  | "cyber-hdr"
+  | "monochrome-ink";
+export type HotCornerAction =
+  | "none"
+  | "mission-control"
+  | "launcher"
+  | "command-palette"
+  | "desktop-3d"
+  | "grid-tile"
+  | "lock-screen"
+  | "minimize-all";
+
+export interface HotCornersConfig {
+  readonly topLeft: HotCornerAction;
+  readonly topRight: HotCornerAction;
+  readonly bottomLeft: HotCornerAction;
+  readonly bottomRight: HotCornerAction;
+}
+
+export interface EyeCandyConfig {
+  readonly cursorSpotlight: boolean;
+  readonly cursorSpotlightSize: number; // 180..620
+  readonly cursorSpotlightOpacity: number; // 0..0.45
+  readonly cursorTrail: CursorTrailKind;
+  readonly clickRipples: boolean;
+  readonly ambientParticles: AmbientParticlesKind;
+  readonly ambientParticleDensity: number; // 0.3..2.0
+  readonly nightShiftWarmth: number; // 0..100
+  readonly colorProfile: ColorProfileKind;
+  readonly glassGrain: number; // 0..100
+  readonly vignetteStrength: number; // 0..80
+  readonly edgeBreathGlow: boolean;
+  readonly specularSheen: boolean;
+  readonly geometryHud: boolean;
+  readonly soundProfile: SoundProfileId;
+  readonly motionSpeed: number; // 0.3..2.0
+  readonly showPerfHud: boolean;
+  readonly hotCorners: HotCornersConfig;
+}
+
 export interface ShellModConfig {
   readonly taskbarMode: TaskbarModeKind;
   readonly dockStyle: DockStyleKind;
   readonly dockRadiusPx: number;
+  readonly dockAutoHide?: boolean;
+  readonly dockMagStrength?: number; // 0..1.0
+  readonly dockIconScale?: number; // 0.8..1.25
+  readonly dockReflection?: boolean;
   readonly topBarStyle: TopBarStyleKind;
   readonly brandLabel: string;
   readonly showStockWidgets: boolean;
@@ -309,6 +368,17 @@ export interface CustomDesktopWidget {
 
 export type ModKind = "theme" | "decorator" | "shader" | "widget" | "css" | "shell";
 
+export interface ModParamSpec {
+  readonly key: string;
+  readonly label: string;
+  readonly type: "range" | "color";
+  readonly min?: number;
+  readonly max?: number;
+  readonly step?: number;
+  readonly unit?: string;
+  readonly defaultValue: number | string;
+}
+
 export interface OsMod {
   readonly id: string;
   readonly name: string;
@@ -321,6 +391,8 @@ export interface OsMod {
   readonly enabled: boolean;
   readonly builtin?: boolean;
   readonly css?: string;
+  readonly params?: readonly ModParamSpec[];
+  readonly paramValues?: Record<string, number | string>;
   readonly themePatch?: Partial<CustomThemeTokens>;
   readonly decoratorPatch?: Partial<DecoratorModConfig>;
   readonly shellPatch?: Partial<ShellModConfig>;
@@ -355,6 +427,7 @@ export interface ModState {
   readonly shell: ShellModConfig;
   readonly desktop3d: Desktop3dModConfig;
   readonly fx: WindowFxConfig;
+  readonly eyeCandy: EyeCandyConfig;
   readonly activeBackdropImageId: string | null; // Ultra-HD 2D NASA/4K backdrop (Earth, Moon, Jupiter, etc.)
   readonly customBackdropImageUrl: string;
   readonly activeShaderModId: string | null;
@@ -399,6 +472,32 @@ export const DEFAULT_WINDOW_FX: WindowFxConfig = {
   chromaBorder: false,
 };
 
+export const DEFAULT_EYE_CANDY: EyeCandyConfig = {
+  cursorSpotlight: true,
+  cursorSpotlightSize: 360,
+  cursorSpotlightOpacity: 0.14,
+  cursorTrail: "none",
+  clickRipples: true,
+  ambientParticles: "none",
+  ambientParticleDensity: 1.0,
+  nightShiftWarmth: 0,
+  colorProfile: "neutral",
+  glassGrain: 14,
+  vignetteStrength: 16,
+  edgeBreathGlow: false,
+  specularSheen: true,
+  geometryHud: true,
+  soundProfile: "crystal",
+  motionSpeed: 1.0,
+  showPerfHud: false,
+  hotCorners: {
+    topLeft: "mission-control",
+    topRight: "none",
+    bottomLeft: "launcher",
+    bottomRight: "none",
+  },
+};
+
 export const DEFAULT_DECORATOR: DecoratorModConfig = {
   style: "macos",
   buttonPosition: "left",
@@ -417,6 +516,10 @@ export const DEFAULT_SHELL: ShellModConfig = {
   taskbarMode: "dock",
   dockStyle: "floating-glass",
   dockRadiusPx: 22,
+  dockAutoHide: false,
+  dockMagStrength: 0.48,
+  dockIconScale: 1.0,
+  dockReflection: true,
   topBarStyle: "glass",
   brandLabel: "unkernelOS",
   showStockWidgets: true,
@@ -1251,13 +1354,18 @@ export const BUILTIN_MODS: readonly OsMod[] = [
     id: "mod-crt-scanlines",
     name: "CRT Scanlines & Phosphore",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "general",
-    description: "Superpose des lignes de balayage CRT rétro et un léger vignettage sur tout le bureau.",
+    description: "Superpose des lignes de balayage CRT rétro réglables et un vignettage cathodique sur tout le bureau.",
     tags: ["retro", "cyberpunk", "overlay"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "opacity", label: "Intensité scanlines", type: "range", min: 0.04, max: 0.45, step: 0.01, defaultValue: 0.14 },
+      { key: "pitch", label: "Espacement lignes", type: "range", min: 2, max: 6, step: 1, unit: "px", defaultValue: 3 },
+      { key: "vignette", label: "Vignettage CRT", type: "range", min: 0, max: 0.7, step: 0.05, defaultValue: 0.36 },
+    ],
     css: `body::after {
   content: "";
   position: fixed;
@@ -1265,60 +1373,73 @@ export const BUILTIN_MODS: readonly OsMod[] = [
   pointer-events: none;
   z-index: 9999;
   background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,0.13) 0px, rgba(0,0,0,0.13) 1px, transparent 1px, transparent 3px),
-    radial-gradient(circle at center, transparent 58%, rgba(0,0,0,0.36) 100%);
+    repeating-linear-gradient(0deg, rgba(0,0,0,{{opacity}}) 0px, rgba(0,0,0,{{opacity}}) 1px, transparent 1px, transparent {{pitch}}px),
+    radial-gradient(circle at center, transparent 58%, rgba(0,0,0,{{vignette}}) 100%);
 }`,
   },
   {
     id: "mod-rgb-chroma-borders",
     name: "Bordures Prismatiques RGB Actives",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "specific",
-    description: "Ajoute un halo prismatique animé cyan/violet/magenta autour de la fenêtre active et du Dock.",
+    description: "Halo prismatique animé bi-couleur autour de la fenêtre active et du Dock (couleurs, vitesse & rayon réglables).",
     tags: ["glow", "windows", "rgb", "hyprland"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "colorA", label: "Couleur 1", type: "color", defaultValue: "#22d3ee" },
+      { key: "colorB", label: "Couleur 2", type: "color", defaultValue: "#e879f9" },
+      { key: "speed", label: "Cycle animation", type: "range", min: 1, max: 12, step: 0.5, unit: "s", defaultValue: 4.5 },
+      { key: "spread", label: "Rayon du halo", type: "range", min: 14, max: 72, step: 2, unit: "px", defaultValue: 38 },
+    ],
     css: `@keyframes unkernel-chroma-border {
-  0% { border-color: rgba(34, 211, 238, 0.78); box-shadow: 0 28px 80px -12px rgba(0,0,0,0.85), 0 0 36px -6px rgba(34,211,238,0.55); }
-  50% { border-color: rgba(232, 121, 249, 0.8); box-shadow: 0 28px 80px -12px rgba(0,0,0,0.85), 0 0 40px -6px rgba(232,121,249,0.56); }
-  100% { border-color: rgba(34, 211, 238, 0.78); box-shadow: 0 28px 80px -12px rgba(0,0,0,0.85), 0 0 36px -6px rgba(34,211,238,0.55); }
+  0% { border-color: {{colorA}}; box-shadow: 0 28px 80px -12px rgba(0,0,0,0.85), 0 0 {{spread}}px -6px {{colorA}}; }
+  50% { border-color: {{colorB}}; box-shadow: 0 28px 80px -12px rgba(0,0,0,0.85), 0 0 {{spread}}px -6px {{colorB}}; }
+  100% { border-color: {{colorA}}; box-shadow: 0 28px 80px -12px rgba(0,0,0,0.85), 0 0 {{spread}}px -6px {{colorA}}; }
 }
 .glass-surface-focused {
-  animation: unkernel-chroma-border 4.5s ease-in-out infinite;
+  animation: unkernel-chroma-border {{speed}}s ease-in-out infinite;
 }`,
   },
   {
     id: "mod-liquid-chrome-rim",
     name: "Reflets Liquid Chrome / VisionOS",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "general",
     description: "Intensifie les arêtes spéculaires cristallines façon macOS Tahoe / VisionOS sur fenêtres et dock.",
     tags: ["liquid-glass", "specular", "macos", "visionos"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "topSheen", label: "Brillance arête haute", type: "range", min: 0.1, max: 0.75, step: 0.05, defaultValue: 0.38 },
+      { key: "tint", label: "Reflet secondaire", type: "color", defaultValue: "#7dd3fc" },
+    ],
     css: `.glass-surface, .glass-surface-focused, .glass-dock, .glass-widget {
   box-shadow:
     0 28px 72px -12px rgba(0, 0, 0, 0.72),
-    0 1.5px 0 0 rgba(255, 255, 255, 0.36) inset,
-    0 -1px 0 0 rgba(125, 211, 252, 0.18) inset,
-    1px 0 0 0 rgba(255, 255, 255, 0.14) inset;
+    0 1.5px 0 0 rgba(255, 255, 255, {{topSheen}}) inset,
+    0 -1px 0 0 {{tint}} inset,
+    1px 0 0 0 rgba(255, 255, 255, 0.16) inset;
 }`,
   },
   {
     id: "mod-win95-bevel",
     name: "Windows 95 Classic 3D Bevel",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "specific",
-    description: "Châssis gris classique #c0c0c0 biseauté 3D authentique, zéro flou, ombres nettes 1995.",
+    description: "Châssis gris classique biseauté 3D authentique, zéro flou, ombres nettes 1995.",
     tags: ["windows", "win95", "retro"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "shadowPx", label: "Ombre portée", type: "range", min: 0, max: 10, step: 1, unit: "px", defaultValue: 4 },
+    ],
     css: `.glass-surface, .glass-surface-focused {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -1328,24 +1449,28 @@ export const BUILTIN_MODS: readonly OsMod[] = [
   box-shadow:
     inset 1px 1px 0 #ffffff,
     inset -1px -1px 0 #808080,
-    4px 4px 0 rgba(0, 0, 0, 0.38) !important;
+    {{shadowPx}}px {{shadowPx}}px 0 rgba(0, 0, 0, 0.38) !important;
 }`,
   },
   {
     id: "mod-winxp-luna",
     name: "Windows XP Luna Glossy Frame",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "specific",
-    description: "Bordures bleu roi Luna brillant et coins supérieurs arrondis emblématiques de Windows XP.",
+    description: "Bordures bleu roi Luna brillant (ou Olive/Argent !) et coins supérieurs arrondis emblématiques.",
     tags: ["windows", "winxp", "luna"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "frameColor", label: "Teinte Luna", type: "color", defaultValue: "#0054e3" },
+      { key: "borderPx", label: "Épaisseur cadre", type: "range", min: 2, max: 5, step: 1, unit: "px", defaultValue: 3 },
+    ],
     css: `.glass-surface, .glass-surface-focused {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border: 3px solid #0054e3 !important;
+  border: {{borderPx}}px solid {{frameColor}} !important;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.5),
     0 14px 36px rgba(0, 24, 96, 0.55) !important;
@@ -1355,18 +1480,22 @@ export const BUILTIN_MODS: readonly OsMod[] = [
     id: "mod-compiz-emerald-glow",
     name: "Compiz / Beryl Emerald Crystal Glow",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "specific",
-    description: "Halo émeraude/cyan transparent façon Emerald Theme Manager de Compiz Fusion.",
+    description: "Halo cristal transparent façon Emerald Theme Manager de Compiz Fusion.",
     tags: ["linux", "compiz", "beryl", "3d"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "glowColor", label: "Couleur cristal", type: "color", defaultValue: "#10b981" },
+      { key: "glowPx", label: "Halo néon", type: "range", min: 16, max: 80, step: 4, unit: "px", defaultValue: 44 },
+    ],
     css: `.glass-surface-focused {
-  border-color: rgba(52, 211, 153, 0.72) !important;
+  border-color: {{glowColor}} !important;
   box-shadow:
     0 32px 90px -10px rgba(0, 0, 0, 0.85),
-    0 0 42px -4px rgba(16, 185, 129, 0.45),
+    0 0 {{glowPx}}px -4px {{glowColor}},
     inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
 }`,
   },
@@ -1374,72 +1503,220 @@ export const BUILTIN_MODS: readonly OsMod[] = [
     id: "mod-aqua-pinstripes",
     name: "Mac OS X Aqua Pinstripes",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "specific",
     description: "Rayures fines métallisées et barres de titre brillantes inspirées de Mac OS X Tiger.",
     tags: ["apple", "macos", "aqua"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "stripeOp", label: "Contraste rayures", type: "range", min: 0.03, max: 0.22, step: 0.01, defaultValue: 0.07 },
+      { key: "gloss", label: "Reflet gel Aqua", type: "range", min: 0.1, max: 0.45, step: 0.03, defaultValue: 0.26 },
+    ],
     css: `[data-unkernel-titlebar] {
   background-image:
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px),
-    linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.05) 50%, rgba(0,0,0,0.18) 100%) !important;
+    repeating-linear-gradient(0deg, rgba(255,255,255,{{stripeOp}}) 0px, rgba(255,255,255,{{stripeOp}}) 1px, transparent 1px, transparent 3px),
+    linear-gradient(180deg, rgba(255,255,255,{{gloss}}) 0%, rgba(255,255,255,0.05) 50%, rgba(0,0,0,0.18) 100%) !important;
 }`,
   },
   {
     id: "mod-neon-hud-type",
     name: "Typographie HUD Cybernétique",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "specific",
     description: "Titres de fenêtres & barres système en monospace lumineux majuscule.",
     tags: ["typography", "hud", "cyberpunk"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "glowColor", label: "Lueur texte", type: "color", defaultValue: "#22d3ee" },
+      { key: "tracking", label: "Espacement lettres", type: "range", min: 0.02, max: 0.18, step: 0.01, unit: "em", defaultValue: 0.07 },
+    ],
     css: `[data-unkernel-titlebar] {
   font-family: var(--font-mono) !important;
-  letter-spacing: 0.06em;
+  letter-spacing: {{tracking}}em;
   text-transform: uppercase;
-  text-shadow: 0 0 12px var(--accent-cyan);
+  text-shadow: 0 0 12px {{glowColor}};
 }`,
   },
   {
     id: "mod-compact-tiling",
     name: "Performance Feather (Zero-Blur)",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "general",
     description: "Désactive le backdrop-blur pour une réactivité instantanée façon LXDE / XFCE / i3.",
     tags: ["linux", "xfce", "lxde", "performance"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "scrollPx", label: "Largeur scrollbar", type: "range", min: 2, max: 8, step: 1, unit: "px", defaultValue: 4 },
+    ],
     css: `.glass-surface, .glass-surface-focused, .glass-dock, .glass-bar {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
-::-webkit-scrollbar { width: 4px; height: 4px; }`,
+::-webkit-scrollbar { width: {{scrollPx}}px; height: {{scrollPx}}px; }`,
   },
   {
     id: "mod-cinematic-vignette",
     name: "Vignettage Cinéma & Profondeur",
     author: "unkernelOS Labs",
-    version: "1.0.0",
+    version: "2.0.0",
     kind: "css",
     scope: "general",
-    description: "Vignettage studio subtil sur les bords pour sublimer le contraste des fenêtres.",
+    description: "Vignettage studio réglable sur les bords pour sublimer le contraste des fenêtres.",
     tags: ["cinema", "zen", "ambient"],
     enabled: false,
     builtin: true,
+    params: [
+      { key: "depth", label: "Intensité ombre", type: "range", min: 0.1, max: 0.75, step: 0.05, defaultValue: 0.42 },
+      { key: "inner", label: "Zone claire centrale", type: "range", min: 35, max: 75, step: 5, unit: "%", defaultValue: 55 },
+    ],
     css: `body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 4;
-  background: radial-gradient(ellipse 85% 85% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.42) 100%);
+  background: radial-gradient(ellipse 85% 85% at 50% 50%, transparent {{inner}}%, rgba(0, 0, 0, {{depth}}) 100%);
+}`,
+  },
+  // ─── 6 BRAND-NEW LUXURY EYE-CANDY & POWER-USER MODS ────────────────────────
+  {
+    id: "mod-neon-dock-underlight",
+    name: "Neon Underlight (Dock & Fenêtre Active)",
+    author: "unkernelOS Labs",
+    version: "1.0.0",
+    kind: "css",
+    scope: "specific",
+    description: "Projette un rétro-éclairage néon diffus sous le Dock et la fenêtre active façon cockpit OLED.",
+    tags: ["eye-candy", "neon", "dock", "oled"],
+    enabled: false,
+    builtin: true,
+    params: [
+      { key: "color", label: "Couleur néon", type: "color", defaultValue: "#38bdf8" },
+      { key: "blur", label: "Diffusion", type: "range", min: 20, max: 90, step: 5, unit: "px", defaultValue: 48 },
+    ],
+    css: `.glass-dock {
+  box-shadow: 0 18px {{blur}}px -4px {{color}}, 0 1px 0 rgba(255,255,255,0.28) inset !important;
+}
+.glass-surface-focused {
+  box-shadow: 0 26px {{blur}}px -10px {{color}}, 0 28px 80px -12px rgba(0,0,0,0.85) !important;
+}`,
+  },
+  {
+    id: "mod-sequoia-elevation",
+    name: "macOS Sequoia Multi-Layer Elevation",
+    author: "unkernelOS Labs",
+    version: "1.0.0",
+    kind: "css",
+    scope: "general",
+    description: "Ombres physiques multi-couches ultra-douces et fin liséré cristal 0.5px sur chaque surface.",
+    tags: ["macos", "luxury", "shadows"],
+    enabled: false,
+    builtin: true,
+    params: [
+      { key: "depth", label: "Profondeur ombre", type: "range", min: 30, max: 120, step: 5, unit: "px", defaultValue: 85 },
+      { key: "rimOp", label: "Liséré cristal", type: "range", min: 0.08, max: 0.45, step: 0.02, defaultValue: 0.24 },
+    ],
+    css: `.glass-surface-focused {
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.35),
+    0 24px 48px -12px rgba(0,0,0,0.6),
+    0 48px {{depth}}px -16px rgba(0,0,0,0.85),
+    0 0 0 0.5px rgba(255,255,255,{{rimOp}}) inset,
+    0 1px 0 rgba(255,255,255,{{rimOp}}) inset !important;
+}`,
+  },
+  {
+    id: "mod-amber-phosphor",
+    name: "Terminal Ambre Phosphore (IBM / Fallout)",
+    author: "unkernelOS Labs",
+    version: "1.0.0",
+    kind: "css",
+    scope: "general",
+    description: "Halo ambre chaleureux rétro-futuriste sur les bordures, barres de titre et textes systèmes.",
+    tags: ["retro", "amber", "phosphor"],
+    enabled: false,
+    builtin: true,
+    params: [
+      { key: "amber", label: "Couleur phosphore", type: "color", defaultValue: "#f59e0b" },
+      { key: "bloom", label: "Intensité bloom", type: "range", min: 8, max: 44, step: 2, unit: "px", defaultValue: 22 },
+    ],
+    css: `.glass-surface-focused, .glass-dock {
+  border-color: {{amber}} !important;
+  box-shadow: 0 0 {{bloom}}px -4px {{amber}}, 0 24px 70px rgba(0,0,0,0.85) !important;
+}
+[data-unkernel-titlebar] {
+  color: {{amber}} !important;
+  text-shadow: 0 0 10px {{amber}};
+}`,
+  },
+  {
+    id: "mod-frosted-prism-glass",
+    name: "Verre Dépoli Prismatique (VisionOS Ultra)",
+    author: "unkernelOS Labs",
+    version: "1.0.0",
+    kind: "css",
+    scope: "general",
+    description: "Amplifie la saturation optique du flou de verre (saturate 240%) et ajoute un reflet diagonal irisé.",
+    tags: ["visionos", "glass", "eye-candy"],
+    enabled: false,
+    builtin: true,
+    params: [
+      { key: "sat", label: "Saturation optique", type: "range", min: 140, max: 300, step: 10, unit: "%", defaultValue: 240 },
+      { key: "sheenOp", label: "Reflet diagonal", type: "range", min: 0.04, max: 0.24, step: 0.02, defaultValue: 0.11 },
+    ],
+    css: `.glass-surface, .glass-surface-focused, .glass-dock, .glass-widget {
+  backdrop-filter: blur(var(--glass-blur-effective)) saturate({{sat}}%) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur-effective)) saturate({{sat}}%) !important;
+  background-image: linear-gradient(135deg, rgba(255,255,255,{{sheenOp}}) 0%, transparent 44%, rgba(56,189,248,0.05) 100%) !important;
+}`,
+  },
+  {
+    id: "mod-zen-focus-dim",
+    name: "Mode Focus Zen (Auto-Atténuation Chrome)",
+    author: "unkernelOS Labs",
+    version: "1.0.0",
+    kind: "css",
+    scope: "general",
+    description: "Atténue doucement la TopBar, le Dock et les fenêtres inactives tant qu'ils ne sont pas survolés.",
+    tags: ["focus", "zen", "minimal"],
+    enabled: false,
+    builtin: true,
+    params: [
+      { key: "idleOp", label: "Opacité au repos", type: "range", min: 0.25, max: 0.9, step: 0.05, defaultValue: 0.55 },
+    ],
+    css: `header.glass-bar, .glass-dock {
+  opacity: {{idleOp}};
+  transition: opacity 220ms ease;
+}
+header.glass-bar:hover, .glass-dock:hover {
+  opacity: 1;
+}`,
+  },
+  {
+    id: "mod-swiss-editorial-type",
+    name: "Typographie Éditoriale Ultra-Raffinée",
+    author: "unkernelOS Labs",
+    version: "1.0.0",
+    kind: "css",
+    scope: "general",
+    description: "Ajuste le crénage optique, les chiffres tabulaires et la finesse des titres façon design suisse.",
+    tags: ["typography", "swiss", "luxury"],
+    enabled: false,
+    builtin: true,
+    params: [
+      { key: "tracking", label: "Crénage optique", type: "range", min: -0.04, max: 0.06, step: 0.005, unit: "em", defaultValue: -0.015 },
+    ],
+    css: `body {
+  letter-spacing: {{tracking}}em;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
 }`,
   },
 ];
@@ -2324,6 +2601,7 @@ function createDefaultState(): ModState {
     shell: { ...DEFAULT_SHELL },
     desktop3d: { ...DEFAULT_DESKTOP_3D },
     fx: { ...DEFAULT_WINDOW_FX },
+    eyeCandy: { ...DEFAULT_EYE_CANDY, hotCorners: { ...DEFAULT_EYE_CANDY.hotCorners } },
     activeBackdropImageId: null,
     customBackdropImageUrl: "",
     activeShaderModId: null,
@@ -2391,6 +2669,11 @@ function loadModState(): ModState {
       shell: { ...def.shell, ...(p.shell ?? {}) },
       desktop3d: normalizeDesktop3d(p.desktop3d),
       fx: { ...def.fx, ...(p.fx ?? {}) },
+      eyeCandy: {
+        ...def.eyeCandy,
+        ...(p.eyeCandy ?? {}),
+        hotCorners: { ...def.eyeCandy.hotCorners, ...(p.eyeCandy?.hotCorners ?? {}) },
+      },
       activeBackdropImageId: typeof p.activeBackdropImageId === "string" ? p.activeBackdropImageId : null,
       customBackdropImageUrl: typeof p.customBackdropImageUrl === "string" ? p.customBackdropImageUrl : "",
       activeShaderModId: typeof p.activeShaderModId === "string" ? p.activeShaderModId : null,
@@ -2467,11 +2750,19 @@ class ModEngineStore {
     root.dataset.dockStyle = s.shell.dockStyle;
     root.dataset.taskbarMode = s.shell.taskbarMode;
     root.dataset.topbarStyle = s.shell.topBarStyle;
+    root.dataset.colorProfile = s.eyeCandy.colorProfile;
 
     const cssParts: string[] = [];
     for (const mod of s.mods) {
       if (mod.enabled && mod.css && mod.css.trim()) {
-        cssParts.push(`/* Mod: ${mod.name} (${mod.id}) */\n${mod.css}`);
+        let compiled = mod.css;
+        if (mod.params && mod.params.length > 0) {
+          for (const spec of mod.params) {
+            const val = mod.paramValues?.[spec.key] ?? spec.defaultValue;
+            compiled = compiled.split(`{{${spec.key}}}`).join(String(val));
+          }
+        }
+        cssParts.push(`/* Mod: ${mod.name} (${mod.id}) */\n${compiled}`);
       }
     }
     if (s.userCss.trim()) {
@@ -2504,6 +2795,31 @@ class ModEngineStore {
 
   public setFx(patch: Partial<WindowFxConfig>): void {
     this.setState((s) => ({ ...s, fx: { ...s.fx, ...patch } }));
+  }
+
+  public setEyeCandy(patch: Partial<EyeCandyConfig>): void {
+    this.setState((s) => ({
+      ...s,
+      eyeCandy: {
+        ...s.eyeCandy,
+        ...patch,
+        hotCorners: patch.hotCorners
+          ? { ...s.eyeCandy.hotCorners, ...patch.hotCorners }
+          : s.eyeCandy.hotCorners,
+      },
+    }));
+  }
+
+  public configureMod(id: string, paramPatch: Record<string, number | string>): OsMod | null {
+    const exists = this.state.mods.some((m) => m.id === id);
+    if (!exists) return null;
+    this.setState((s) => ({
+      ...s,
+      mods: s.mods.map((m) =>
+        m.id === id ? { ...m, paramValues: { ...(m.paramValues ?? {}), ...paramPatch } } : m
+      ),
+    }));
+    return this.state.mods.find((m) => m.id === id) ?? null;
   }
 
   public setBackdropImage(id: string | null, customUrl?: string): void {
@@ -2694,6 +3010,7 @@ class ModEngineStore {
         shell: this.state.shell,
         desktop3d: this.state.desktop3d,
         fx: this.state.fx,
+        eyeCandy: this.state.eyeCandy,
         activeBackdropImageId: this.state.activeBackdropImageId,
         customBackdropImageUrl: this.state.customBackdropImageUrl,
         activeShaderModId: this.state.activeShaderModId,
@@ -2719,6 +3036,13 @@ class ModEngineStore {
         shell: data.shell ? { ...s.shell, ...data.shell } : s.shell,
         desktop3d: data.desktop3d ? normalizeDesktop3d({ ...s.desktop3d, ...data.desktop3d }) : s.desktop3d,
         fx: data.fx ? { ...s.fx, ...data.fx } : s.fx,
+        eyeCandy: data.eyeCandy
+          ? {
+              ...s.eyeCandy,
+              ...data.eyeCandy,
+              hotCorners: { ...s.eyeCandy.hotCorners, ...(data.eyeCandy.hotCorners ?? {}) },
+            }
+          : s.eyeCandy,
         activeBackdropImageId:
           data.activeBackdropImageId !== undefined ? data.activeBackdropImageId : s.activeBackdropImageId,
         customBackdropImageUrl:

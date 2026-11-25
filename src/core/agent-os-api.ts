@@ -11,6 +11,7 @@ import {
   type CustomThemeTokens,
   type DecoratorModConfig,
   type Desktop3dModConfig,
+  type EyeCandyConfig,
   type ModKind,
   type OsMod,
   type ShellModConfig,
@@ -985,6 +986,47 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
       },
     },
     example: { openAnimation: "flip3d", wobblyDrag: true, burnClose: true, hoverTilt3d: true, chromaBorder: true },
+  },
+  {
+    method: "mod.configure",
+    category: "theme",
+    summary: "Fine-tune any installed OS mod's live parameters (colors, opacity, speed, thickness, blur, glow) by mod ID.",
+    paramsSchema: {
+      type: "object",
+      required: ["id", "params"],
+      properties: {
+        id: { type: "string" },
+        params: { type: "object" },
+        enabled: { type: "boolean" },
+      },
+    },
+    example: { id: "mod-rgb-chroma-borders", enabled: true, params: { colorA: "#38bdf8", colorB: "#f43f5e", speed: 3 } },
+  },
+  {
+    method: "mod.eyecandy.set",
+    category: "theme",
+    summary: "Control all AAA Eye-Candy & OS micro-details: cursorSpotlight, cursorTrail (none|aurora|stardust|neon-ribbon), clickRipples, ambientParticles (none|sakura|snow|fireflies|rain|matrix-sparks|embers), nightShiftWarmth (0..100), colorProfile (neutral|oled-vivid|cinema-warm|nordic-cool|cyber-hdr|monochrome-ink), glassGrain (0..100), vignetteStrength (0..80), edgeBreathGlow, specularSheen, geometryHud, soundProfile (crystal|mechanical|synth-retro|zen-wood|silent), showPerfHud, hotCorners.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        cursorSpotlight: { type: "boolean" },
+        cursorTrail: { type: "string", enum: ["none", "aurora", "stardust", "neon-ribbon"] },
+        clickRipples: { type: "boolean" },
+        ambientParticles: { type: "string", enum: ["none", "sakura", "snow", "fireflies", "rain", "matrix-sparks", "embers"] },
+        ambientParticleDensity: { type: "number" },
+        nightShiftWarmth: { type: "number" },
+        colorProfile: { type: "string", enum: ["neutral", "oled-vivid", "cinema-warm", "nordic-cool", "cyber-hdr", "monochrome-ink"] },
+        glassGrain: { type: "number" },
+        vignetteStrength: { type: "number" },
+        edgeBreathGlow: { type: "boolean" },
+        specularSheen: { type: "boolean" },
+        geometryHud: { type: "boolean" },
+        soundProfile: { type: "string", enum: ["crystal", "mechanical", "synth-retro", "zen-wood", "silent"] },
+        showPerfHud: { type: "boolean" },
+        hotCorners: { type: "object" },
+      },
+    },
+    example: { ambientParticles: "fireflies", cursorTrail: "aurora", nightShiftWarmth: 20, soundProfile: "zen-wood", showPerfHud: true },
   },
   {
     method: "mod.backdrop.set",
@@ -2102,6 +2144,10 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
         "taskbarMode",
         "dockStyle",
         "dockRadiusPx",
+        "dockAutoHide",
+        "dockMagStrength",
+        "dockIconScale",
+        "dockReflection",
         "topBarStyle",
         "brandLabel",
         "showStockWidgets",
@@ -2146,6 +2192,24 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
         modStore.setShell({ compizWobbly: p.wobblyDrag });
       }
       return { fx: modStore.getSnapshot().fx };
+    }
+
+    case "mod.configure": {
+      const id = String(p.id ?? "").trim();
+      if (!id) throw new Error("id is required");
+      if (typeof p.enabled === "boolean") modStore.toggleMod(id, p.enabled);
+      const paramPatch =
+        p.params && typeof p.params === "object"
+          ? (p.params as Record<string, number | string>)
+          : {};
+      const updated = modStore.configureMod(id, paramPatch);
+      if (!updated) throw new Error(`Mod '${id}' not found`);
+      return { mod: updated };
+    }
+
+    case "mod.eyecandy.set": {
+      modStore.setEyeCandy(p as Partial<EyeCandyConfig>);
+      return { eyeCandy: modStore.getSnapshot().eyeCandy };
     }
 
     case "mod.backdrop.set": {
