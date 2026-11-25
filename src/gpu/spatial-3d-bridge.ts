@@ -3,6 +3,7 @@ import type { WindowInstance, WorkspaceId } from "../wm/wm-store.ts";
 
 export type Spatial3dLayoutKind =
   | "curved-cockpit"
+  | "spatial-grid"
   | "compiz-cube"
   | "studio-desk"
   | "gallery-ring";
@@ -61,7 +62,7 @@ export function toObjectCSSMatrix(matrixWorld: THREE.Matrix4): string {
   );
 }
 
-export const CUBE_HALF_SIZE = 740;
+export const CUBE_HALF_SIZE = 760;
 
 /**
  * Computes true 3D world poses `(x, y, z, rx, ry, rz)` for every open OS window
@@ -73,12 +74,12 @@ export function computeSpatialWindowPoses(
   activeWorkspace: WorkspaceId,
   layout: Spatial3dLayoutKind,
   viewportW: number,
-  viewportH: number
+  viewportH: number,
+  depthOffsets?: ReadonlyMap<string, number>
 ): SpatialWindowPose[] {
   const vw = Math.max(800, viewportW);
   const vh = Math.max(600, viewportH);
 
-  // Filter non-minimized windows for gallery/studio layout ordering
   const activeWsVisible = windows
     .filter((w) => w.workspace === activeWorkspace && !w.minimized)
     .sort((a, b) => a.zIndex - b.zIndex);
@@ -89,13 +90,14 @@ export function computeSpatialWindowPoses(
 
   return windows.map((w) => {
     const isFocused = w.id === activeWindowId && w.workspace === activeWorkspace && !w.minimized;
+    const userDepth = depthOffsets?.get(w.id) ?? 0;
 
     if (w.minimized) {
       return {
         id: w.id,
         workspace: w.workspace,
         x: 0,
-        y: -2000,
+        y: -2500,
         z: 0,
         rx: 0,
         ry: 0,
@@ -107,7 +109,6 @@ export function computeSpatialWindowPoses(
       };
     }
 
-    // Center of window in 2D desktop coordinates relative to viewport center
     const winW = w.maximized ? Math.min(1180, vw - 80) : w.width;
     const winH = w.maximized ? Math.min(720, vh - 130) : w.height;
     const cx = w.maximized ? 0 : w.x + w.width / 2 - vw / 2;
@@ -119,9 +120,9 @@ export function computeSpatialWindowPoses(
         .filter((x) => x.workspace === w.workspace && !x.minimized)
         .sort((a, b) => a.zIndex - b.zIndex);
       const stackIdx = Math.max(0, sameWs.findIndex((x) => x.id === w.id));
-      const faceOut = CUBE_HALF_SIZE + 38 + stackIdx * 36 + (isFocused ? 24 : 0);
-      const localX = Math.max(-520, Math.min(520, cx * 0.82));
-      const localY = Math.max(-260, Math.min(310, cy * 0.78 + 30));
+      const faceOut = CUBE_HALF_SIZE + 44 + stackIdx * 42 + (isFocused ? 28 : 0) + userDepth;
+      const localX = Math.max(-520, Math.min(520, cx * 0.85));
+      const localY = Math.max(-250, Math.min(340, cy * 0.82 + 45));
 
       // Workspace 1 = Front (+Z), 2 = Right (+X), 3 = Back (-Z), 4 = Left (-X)
       const faceAngle = (w.workspace - 1) * (Math.PI / 2);
@@ -146,20 +147,20 @@ export function computeSpatialWindowPoses(
       };
     }
 
-    // 2. 360° SPATIAL GALLERY RING (all open windows float around you in a 3D ring!)
+    // 2. 360° SPATIAL GALLERY RING (all open windows float around you in a 3D panoramic ring!)
     if (layout === "gallery-ring") {
       const idx = Math.max(0, allNonMinimized.findIndex((x) => x.id === w.id));
       const total = Math.max(1, allNonMinimized.length);
-      const radius = Math.max(1050, total * 230);
+      const radius = Math.max(1120, total * 255);
       const angle = total === 1 ? 0 : (idx / total) * Math.PI * 2;
-      const lift = isFocused ? 70 : 0;
-      const r = radius - lift;
+      const lift = (isFocused ? 85 : 0) + userDepth;
+      const r = Math.max(550, radius - lift);
       return {
         id: w.id,
         workspace: w.workspace,
         x: Math.sin(angle) * r,
-        y: 45 + (isFocused ? 18 : 0),
-        z: -Math.cos(angle) * r + radius - 140,
+        y: 65 + (isFocused ? 18 : 0),
+        z: -Math.cos(angle) * r + radius - 160,
         rx: 0,
         ry: -angle,
         rz: 0,
@@ -170,13 +171,13 @@ export function computeSpatialWindowPoses(
       };
     }
 
-    // Other layouts show the active workspace's windows in 3D space
+    // Active workspace layouts
     if (w.workspace !== activeWorkspace) {
       return {
         id: w.id,
         workspace: w.workspace,
         x: 0,
-        y: -2000,
+        y: -2500,
         z: 0,
         rx: 0,
         ry: 0,
@@ -191,18 +192,55 @@ export function computeSpatialWindowPoses(
     const idx = Math.max(0, activeWsVisible.findIndex((x) => x.id === w.id));
     const count = activeWsVisible.length;
 
-    // 3. 3D VIRTUAL STUDIO WORKSTATION DESK (ergonomic triple-monitor / wing-monitor setup over a physical 3D desk!)
+    // 3. 3D SPATIAL COMMAND GRID WALL (zero-overlap curved multi-row × multi-column 3D grid!)
+    if (layout === "spatial-grid") {
+      const cols = count <= 1 ? 1 : count <= 2 ? 2 : count <= 6 ? Math.min(3, Math.ceil(Math.sqrt(count))) : 4;
+      const rows = Math.max(1, Math.ceil(count / cols));
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+
+      const cellW = count === 1 ? Math.min(1120, winW) : cols === 2 ? 860 : cols === 3 ? 760 : 680;
+      const cellH = rows === 1 ? Math.min(680, winH) : 540;
+      const gapX = 76;
+      const gapY = 74;
+
+      const rowCount = row === rows - 1 ? count - row * cols : cols;
+      const flatX = (col - (rowCount - 1) / 2) * (cellW + gapX);
+      const flatY = ((rows - 1) / 2 - row) * (cellH + gapY) + 90;
+
+      const wallRadius = 2650;
+      const theta = flatX / wallRadius;
+      const zCurve = wallRadius - Math.cos(theta) * wallRadius;
+      const x = Math.sin(theta) * wallRadius;
+      const z = zCurve + (isFocused ? 75 : 0) + userDepth - 140;
+
+      return {
+        id: w.id,
+        workspace: w.workspace,
+        x,
+        y: flatY,
+        z,
+        rx: -((flatY - 90) * 0.00014),
+        ry: -theta * 0.85,
+        rz: 0,
+        width: cellW,
+        height: cellH,
+        visible: true,
+        focused: isFocused,
+      };
+    }
+
+    // 4. 3D VIRTUAL STUDIO WORKSTATION DESK (ergonomic triple-monitor / wing-monitor setup over a physical 3D desk!)
     if (layout === "studio-desk") {
-      // Put the focused window center stage, wings to left & right!
       const focusedIdx = activeWsVisible.findIndex((x) => x.id === activeWindowId);
       const others = activeWsVisible.filter((x) => x.id !== activeWindowId);
-      if (isFocused || focusedIdx === -1 && idx === count - 1) {
+      if (isFocused || (focusedIdx === -1 && idx === count - 1)) {
         return {
           id: w.id,
           workspace: w.workspace,
-          x: cx * 0.25,
-          y: 75 + cy * 0.18,
-          z: 60,
+          x: cx * 0.35,
+          y: 85 + cy * 0.25,
+          z: 70 + userDepth,
           rx: -0.02,
           ry: 0,
           rz: 0,
@@ -215,13 +253,13 @@ export function computeSpatialWindowPoses(
       const oIdx = Math.max(0, others.findIndex((x) => x.id === w.id));
       const side = oIdx % 2 === 0 ? -1 : 1;
       const tier = Math.floor(oIdx / 2);
-      const wingX = side * (860 + tier * 520);
-      const wingZ = -180 - tier * 240;
+      const wingX = side * (920 + tier * 560);
+      const wingZ = -180 - tier * 240 + userDepth;
       return {
         id: w.id,
         workspace: w.workspace,
         x: wingX,
-        y: 80 + tier * 40,
+        y: 88 + tier * 40,
         z: wingZ,
         rx: -0.02,
         ry: -side * 0.44,
@@ -233,16 +271,16 @@ export function computeSpatialWindowPoses(
       };
     }
 
-    // 4. CURVED SPATIAL COCKPIT (Apple VisionOS / Minority Report Ergonomic 3D Arc)
-    const arcRadius = 1520;
-    const spreadX = count > 1 ? cx * 1.05 + (idx - (count - 1) / 2) * 140 : cx * 0.85;
-    const clampedX = Math.max(-1350, Math.min(1350, spreadX));
+    // 5. CURVED SPATIAL COCKPIT (Apple VisionOS / Minority Report Ergonomic 3D Arc)
+    const arcRadius = 1580;
+    const spreadX = count > 1 ? cx * 1.15 + (idx - (count - 1) / 2) * 145 : cx * 0.92;
+    const clampedX = Math.max(-1480, Math.min(1480, spreadX));
     const theta = clampedX / arcRadius;
-    const depthOffset = idx * 42 + (isFocused ? 95 : 0);
+    const depthOffset = idx * 46 + (isFocused ? 95 : 0);
     const r = arcRadius - depthOffset;
     const x = Math.sin(theta) * r;
-    const z = (arcRadius - Math.cos(theta) * r) * 0.9 + depthOffset - 160;
-    const y = Math.max(-200, Math.min(340, cy * 0.72 + 55));
+    const z = (arcRadius - Math.cos(theta) * r) * 0.9 + depthOffset + userDepth - 160;
+    const y = Math.max(-180, Math.min(420, cy * 0.8 + 65));
 
     return {
       id: w.id,
@@ -250,7 +288,7 @@ export function computeSpatialWindowPoses(
       x,
       y,
       z,
-      rx: -y * 0.00018,
+      rx: -y * 0.00016,
       ry: -theta * 0.92,
       rz: 0,
       width: Math.min(winW, 1120),
@@ -266,6 +304,7 @@ class Spatial3dBridge {
   private windowEls = new Map<string, HTMLDivElement>();
   private commandListeners = new Set<(cmd: CameraCommand) => void>();
   public poses = new Map<string, SpatialWindowPose>();
+  public depthOffsets = new Map<string, number>();
 
   public registerWindowEl(id: string, el: HTMLDivElement | null): void {
     if (el) {
@@ -277,6 +316,19 @@ class Spatial3dBridge {
 
   public getWindowEl(id: string): HTMLDivElement | undefined {
     return this.windowEls.get(id);
+  }
+
+  public setWindowDepth(id: string, z: number): void {
+    const clamped = Math.max(-750, Math.min(750, Math.round(z)));
+    this.depthOffsets.set(id, clamped);
+  }
+
+  public getWindowDepth(id: string): number {
+    return this.depthOffsets.get(id) ?? 0;
+  }
+
+  public resetDepthOffsets(): void {
+    this.depthOffsets.clear();
   }
 
   public onCameraCommand(fn: (cmd: CameraCommand) => void): () => void {

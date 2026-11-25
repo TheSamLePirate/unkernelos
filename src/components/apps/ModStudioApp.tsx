@@ -19,20 +19,23 @@ import {
 } from "lucide-react";
 import React, { useState } from "react";
 import {
+  HDRI_PRESETS,
   modStore,
   useMods,
   type CustomDesktopWidget,
   type CustomShaderMod,
   type Desktop3dSceneKind,
   type DockStyleKind,
+  type HdriPresetId,
   type ModKind,
   type OsMod,
   type TaskbarModeKind,
   type TopBarStyleKind,
   type VariantFamily,
   type WindowDecoratorStyle,
+  type WindowOpenAnimKind,
 } from "../../core/mod-store.ts";
-import { wmStore } from "../../wm/wm-store.ts";
+import { wmStore, type GridLayoutMode } from "../../wm/wm-store.ts";
 import { spatial3dBridge, type Spatial3dLayoutKind } from "../../gpu/spatial-3d-bridge.ts";
 
 type ModTab = "variants" | "desktop3d" | "theme-dec" | "shaders" | "widgets" | "mods";
@@ -126,38 +129,45 @@ const SCENES_3D: readonly {
     gradient: "from-fuchsia-950 via-rose-900/60 to-cyan-950",
   },
   {
+    id: "space-station",
+    name: "Orbital Space Station",
+    emoji: "🛸",
+    desc: "Passerelle orbitale géante avec planète 3D à anneaux en rotation, lune en orbite et arches métalliques",
+    gradient: "from-slate-950 via-blue-950/75 to-indigo-950",
+  },
+  {
     id: "kyoto-sanctuary",
     name: "Kyoto Sanctuary",
     emoji: "🪷",
-    desc: "Lanternes de cristal flottantes jade & sakura, ondes concentriques sur eau miroir & lucioles",
+    desc: "Grand Torii vermillon, lanternes de cristal flottantes jade & sakura, lac miroir et lucioles",
     gradient: "from-teal-950 via-emerald-900/50 to-pink-950/60",
   },
 ];
 
 const AGENT_API_EXAMPLES: readonly { title: string; cmd: string }[] = [
   {
-    title: "Activer Compiz / Beryl 3D (Cube + Wobbly Windows)",
+    title: "Grille 3D + HDRI Sunset 360° + Ombres + Recto-Verso",
+    cmd: `osctl call mod.desktop3d.set '{"enabled":true,"layout":"spatial-grid","scene":"space-station","hdriPreset":"sunset","shadowsEnabled":true,"doubleSidedWindows":true}'`,
+  },
+  {
+    title: "Organiser toutes les fenêtres en Grille 2D",
+    cmd: `osctl call wm.grid '{"mode":"master-stack"}'`,
+  },
+  {
+    title: "Activer tous les effets de fenêtres (Wobbly, Burn, Genie, Tilt 3D)",
+    cmd: `osctl call mod.fx.set '{"openAnimation":"flip3d","wobblyDrag":true,"burnClose":true,"genieMinimize":true,"hoverTilt3d":true,"chromaBorder":true}'`,
+  },
+  {
+    title: "Activer Compiz / Beryl 3D (Cube 4 Bureaux + Wobbly)",
     cmd: `osctl call mod.variant.apply '{"id":"linux-compiz-beryl"}'`,
   },
   {
-    title: "Passer en Windows 95, XP ou Windows 11",
-    cmd: `osctl call mod.variant.apply '{"id":"windows-xp"}'`,
+    title: "Afficher Météo Live + Bourse Crypto + Healthcheck",
+    cmd: `osctl call mod.widget.upsert '{"id":"widget-weather-live","enabled":true}'`,
   },
   {
-    title: "Passer en Linux GNOME 47 / KDE Plasma / XFCE",
-    cmd: `osctl call mod.variant.apply '{"id":"linux-kde-plasma"}'`,
-  },
-  {
-    title: "Passer en Apple VisionOS Spatial 3D ou iOS SpringBoard",
+    title: "Passer en Apple VisionOS Spatial 3D ou Windows XP/11",
     cmd: `osctl call mod.variant.apply '{"id":"vision-spatial-3d"}'`,
-  },
-  {
-    title: "Activer Wobbly Windows + Cube 3D sur n'importe quel OS",
-    cmd: `osctl call mod.shell.set '{"compizWobbly":true,"compizCube":true,"desktopIcons":true}'`,
-  },
-  {
-    title: "Créer un widget HTML/JS live sur le bureau",
-    cmd: `osctl call mod.widget.upsert '{"id":"agent-banner","title":"Agent HUD","emoji":"🤖","x":40,"y":60,"width":240,"height":96,"enabled":true,"html":"<body style=margin:0;padding:12px;color:#22d3ee;font-family:monospace><b>AGENT ONLINE</b><br>Modding via osctl</body>"}'`,
   },
 ];
 
@@ -555,37 +565,48 @@ export const ModStudioApp: React.FC = () => {
               </div>
             </div>
 
-            {/* 4 True 3D Spatial Window Layouts */}
+            {/* 5 True 3D Spatial Window Layouts */}
             <div className="space-y-2">
-              <div className="text-xs font-bold uppercase tracking-wider text-cyan-300">
-                Disposition 3D des Fenêtres dans l'Espace
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+                  Disposition 3D des Fenêtres dans l'Espace
+                </div>
+                <span className="text-[10px] font-mono text-zinc-400">
+                  Vol libre : <b className="text-cyan-200">ZQSD / WASD</b> · Regard : <b className="text-violet-200">← ↑ ↓ →</b> · Profondeur : <b className="text-emerald-200">Shift + Glisser</b>
+                </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                 {(
                   [
                     {
                       id: "curved-cockpit" as Spatial3dLayoutKind,
                       emoji: "🥽",
-                      name: "Arc Spatial (VisionOS)",
-                      desc: "Fenêtres disposées en arc cylindrique ergonomique autour de vous",
+                      name: "Arc Spatial",
+                      desc: "Arc cylindrique VisionOS ergonomique autour de vous",
+                    },
+                    {
+                      id: "spatial-grid" as Spatial3dLayoutKind,
+                      emoji: "⊞",
+                      name: "Mur Grille 3D",
+                      desc: "Grille multi-lignes courbe zéro chevauchement en 3D !",
                     },
                     {
                       id: "compiz-cube" as Spatial3dLayoutKind,
                       emoji: "🧊",
-                      name: "Cube 4 Bureaux (Compiz)",
-                      desc: "Les 4 bureaux (1–4) montés simultanément sur les 4 faces d'un Cube 3D !",
+                      name: "Cube 4 Bureaux",
+                      desc: "Bureaux 1–4 montés sur les 4 faces d'un Cube 3D Compiz",
                     },
                     {
                       id: "studio-desk" as Spatial3dLayoutKind,
                       emoji: "🖥️",
                       name: "Bureau Studio 3D",
-                      desc: "Poste physique 3D avec écran principal au centre & moniteurs latéraux",
+                      desc: "Poste physique 3D avec écran central & ailes latérales",
                     },
                     {
                       id: "gallery-ring" as Spatial3dLayoutKind,
                       emoji: "🪐",
                       name: "Anneau 360°",
-                      desc: "Toutes vos fenêtres ouvertes en anneau panoramique 360° dans la pièce",
+                      desc: "Toutes vos fenêtres en anneau panoramique 360°",
                     },
                   ]
                 ).map((lay) => {
@@ -595,7 +616,7 @@ export const ModStudioApp: React.FC = () => {
                       key={lay.id}
                       type="button"
                       onClick={() => modStore.setDesktop3d({ enabled: true, layout: lay.id })}
-                      className={`text-left p-3.5 rounded-2xl border transition cursor-pointer ${
+                      className={`text-left p-3 rounded-2xl border transition cursor-pointer ${
                         active && mods.desktop3d.enabled
                           ? "bg-gradient-to-br from-cyan-500/22 to-violet-500/22 border-cyan-300 text-white shadow-lg"
                           : "bg-white/[0.04] hover:bg-white/[0.08] border-white/12 text-zinc-200"
@@ -604,10 +625,66 @@ export const ModStudioApp: React.FC = () => {
                       <div className="text-xs font-bold">
                         {lay.emoji} {lay.name}
                       </div>
-                      <p className="text-[11px] text-zinc-400 mt-1 leading-snug">{lay.desc}</p>
+                      <p className="text-[10px] text-zinc-400 mt-1 leading-snug">{lay.desc}</p>
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Real 360° HDRI Skybox & PBR IBL Reflections Picker */}
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                  Skybox 360° HDRI & Reflets PBR (Poly Haven / Drei CDN)
+                </div>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.desktop3d.hdriBackground}
+                    onChange={(e) => modStore.setDesktop3d({ hdriBackground: e.target.checked })}
+                    className="accent-amber-400"
+                  />
+                  Afficher l'HDRI en ciel 360°
+                </label>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {HDRI_PRESETS.map((h) => {
+                  const active = mods.desktop3d.hdriPreset === h.id;
+                  return (
+                    <button
+                      key={h.id}
+                      type="button"
+                      onClick={() => modStore.setDesktop3d({ enabled: true, hdriPreset: h.id as HdriPresetId })}
+                      className={`px-3 py-2 rounded-xl border text-left text-xs transition cursor-pointer ${
+                        active
+                          ? "bg-amber-500/20 border-amber-300/70 text-white font-semibold"
+                          : "bg-white/[0.03] hover:bg-white/[0.08] border-white/10 text-zinc-300"
+                      }`}
+                    >
+                      {h.emoji} {h.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={mods.desktop3d.hdriUrl}
+                  onChange={(e) => modStore.setDesktop3d({ hdriUrl: e.target.value })}
+                  placeholder="URL .hdr personnalisé (ex: https://cdn.jsdelivr.net/.../scene_1k.hdr)"
+                  className="flex-1 px-3 py-1.5 rounded-xl bg-black/40 border border-white/15 text-xs font-mono text-zinc-200 outline-none select-text"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (mods.desktop3d.hdriUrl.trim()) {
+                      modStore.setDesktop3d({ enabled: true, hdriPreset: "custom" });
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500/25 hover:bg-amber-500/35 border border-amber-400/45 text-xs font-semibold text-amber-100 cursor-pointer"
+                >
+                  Charger HDRI
+                </button>
               </div>
             </div>
 
@@ -647,21 +724,34 @@ export const ModStudioApp: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/10">
               <label className="flex items-center justify-between gap-3 text-xs cursor-pointer">
                 <div>
-                  <div className="font-semibold text-white">Fenêtres Spatiales 3D (Profondeur Z)</div>
-                  <div className="text-[11px] text-zinc-400">Fait reculer subtilement les fenêtres inactives en perspective</div>
+                  <div className="font-semibold text-white">☀️ Lumières & Ombres Dynamiques 3D</div>
+                  <div className="text-[11px] text-zinc-400">Ombres portées douces (PCFSoftShadowMap 2048px) sur le sol & bureau</div>
                 </div>
                 <input
                   type="checkbox"
-                  checked={mods.desktop3d.spatialWindows}
-                  onChange={(e) => modStore.setDesktop3d({ spatialWindows: e.target.checked })}
-                  className="accent-cyan-400 w-4 h-4"
+                  checked={mods.desktop3d.shadowsEnabled}
+                  onChange={(e) => modStore.setDesktop3d({ shadowsEnabled: e.target.checked })}
+                  className="accent-amber-400 w-4 h-4"
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-3 text-xs cursor-pointer">
+                <div>
+                  <div className="font-semibold text-white">👁️ Fenêtres Visibles des 2 Côtés</div>
+                  <div className="text-[11px] text-zinc-400">Cadres métalliques évidés recto/verso pour lire les fenêtres par derrière</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={mods.desktop3d.doubleSidedWindows}
+                  onChange={(e) => modStore.setDesktop3d({ doubleSidedWindows: e.target.checked })}
+                  className="accent-emerald-400 w-4 h-4"
                 />
               </label>
 
               <label className="flex items-center justify-between gap-3 text-xs cursor-pointer">
                 <div>
                   <div className="font-semibold text-white">Caméra Orbitale Libre 360°</div>
-                  <div className="text-[11px] text-zinc-400">Permet de cliquer-glisser sur le bureau pour orbiter & zoomer</div>
+                  <div className="text-[11px] text-zinc-400">Cliquer-glisser le fond pour orbiter, molette zoom, ZQSD + Flèches pour voler</div>
                 </div>
                 <input
                   type="checkbox"
@@ -670,6 +760,22 @@ export const ModStudioApp: React.FC = () => {
                   className="accent-violet-400 w-4 h-4"
                 />
               </label>
+
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-zinc-300">Vitesse de vol ZQSD / WASD</span>
+                  <span className="font-mono text-emerald-300">{mods.desktop3d.moveSpeed.toFixed(1)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.3}
+                  max={3}
+                  step={0.1}
+                  value={mods.desktop3d.moveSpeed}
+                  onChange={(e) => modStore.setDesktop3d({ moveSpeed: Number(e.target.value) })}
+                  className="w-full accent-emerald-400"
+                />
+              </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
@@ -993,6 +1099,135 @@ export const ModStudioApp: React.FC = () => {
                     className="w-full px-3 py-1.5 rounded-xl bg-black/40 border border-white/15 text-xs text-white font-semibold outline-none"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Window Effects Engine (All Window FX!) + 2D Grid Tiling */}
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-fuchsia-300">
+                  Moteur d'Effets de Fenêtres (Window FX) & Grille 2D
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ["grid", "⊞ Grille 2D"],
+                      ["split-2", "◫ Split 50/50"],
+                      ["master-stack", "▤ Master+Stack"],
+                      ["columns-3", "▥ 3 Col."],
+                      ["cascade", "❐ Cascade"],
+                    ] as readonly [GridLayoutMode, string][]
+                  ).map(([m, lbl]) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        modStore.setDesktop3d({ enabled: false });
+                        wmStore.tileWorkspace(m);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-white/[0.06] hover:bg-cyan-500/25 border border-white/12 text-[10px] font-medium text-zinc-200 hover:text-white cursor-pointer"
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-[11px] text-zinc-400">Animation d'ouverture des fenêtres</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ["spring", "🌀 Spring Élastique"],
+                      ["genie", "🧞 Effet Génie (macOS)"],
+                      ["flip3d", "🃏 Flip 3D (Compiz)"],
+                      ["zoom", "🔍 Zoom Rapide"],
+                      ["fade", "🌫️ Fondu Doux"],
+                    ] as readonly [WindowOpenAnimKind, string][]
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => modStore.setFx({ openAnimation: id })}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] border cursor-pointer ${
+                        mods.fx.openAnimation === id
+                          ? "bg-fuchsia-500/25 border-fuchsia-400 text-white font-semibold"
+                          : "bg-white/5 border-white/10 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/8 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.fx.wobblyDrag || mods.shell.compizWobbly}
+                    onChange={(e) => {
+                      modStore.setFx({ wobblyDrag: e.target.checked });
+                      modStore.setShell({ compizWobbly: e.target.checked });
+                    }}
+                    className="accent-emerald-400"
+                  />
+                  <span>🧊 Wobbly Drag (Gélatine Compiz)</span>
+                </label>
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/8 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.fx.genieMinimize}
+                    onChange={(e) => modStore.setFx({ genieMinimize: e.target.checked })}
+                    className="accent-cyan-400"
+                  />
+                  <span>🧞 Genie Minimize (Lampe magique)</span>
+                </label>
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/8 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.fx.burnClose}
+                    onChange={(e) => modStore.setFx({ burnClose: e.target.checked })}
+                    className="accent-orange-400"
+                  />
+                  <span>🔥 Burn Close (Combustion Compiz)</span>
+                </label>
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/8 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.fx.hoverTilt3d}
+                    onChange={(e) => modStore.setFx({ hoverTilt3d: e.target.checked })}
+                    className="accent-violet-400"
+                  />
+                  <span>🧲 Inclinaison 3D Magnétique (Hover)</span>
+                </label>
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/8 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.fx.dragGhostOpacity}
+                    onChange={(e) => modStore.setFx({ dragGhostOpacity: e.target.checked })}
+                    className="accent-sky-400"
+                  />
+                  <span>👻 Transparence fantôme au Drag</span>
+                </label>
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/8 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.fx.dimInactive}
+                    onChange={(e) => modStore.setFx({ dimInactive: e.target.checked })}
+                    className="accent-amber-400"
+                  />
+                  <span>🎬 Assombrir fenêtres inactives</span>
+                </label>
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/8 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mods.fx.chromaBorder}
+                    onChange={(e) => modStore.setFx({ chromaBorder: e.target.checked })}
+                    className="accent-fuchsia-400"
+                  />
+                  <span>🌈 Bordure Prismatique Chroma</span>
+                </label>
               </div>
             </div>
 

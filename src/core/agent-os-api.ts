@@ -14,6 +14,7 @@ import {
   type ModKind,
   type OsMod,
   type ShellModConfig,
+  type WindowFxConfig,
 } from "./mod-store.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "./os-themes.ts";
 import { pwaStore } from "./pwa-service.ts";
@@ -42,6 +43,7 @@ import {
   APP_CATALOG,
   wmStore,
   type AppId,
+  type GridLayoutMode,
   type SnapZone,
   type WorkspaceId,
 } from "../wm/wm-store.ts";
@@ -954,22 +956,59 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
     example: { taskbarMode: "winxp", desktopIcons: true, compizWobbly: true },
   },
   {
+    method: "wm.grid",
+    category: "wm",
+    summary: "Arrange all open windows on the active workspace into a clean 2D Grid layout (grid, split-2, master-stack, columns-3, cascade).",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", enum: ["grid", "split-2", "master-stack", "columns-3", "cascade"] },
+      },
+    },
+    example: { mode: "master-stack" },
+  },
+  {
+    method: "mod.fx.set",
+    category: "theme",
+    summary: "Live-mod all Window Effects: openAnimation (spring, genie, zoom, flip3d, fade), wobblyDrag, genieMinimize, burnClose, hoverTilt3d, dragGhostOpacity, dimInactive, chromaBorder.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        openAnimation: { type: "string", enum: ["spring", "genie", "zoom", "flip3d", "fade"] },
+        wobblyDrag: { type: "boolean" },
+        genieMinimize: { type: "boolean" },
+        burnClose: { type: "boolean" },
+        hoverTilt3d: { type: "boolean" },
+        dragGhostOpacity: { type: "boolean" },
+        dimInactive: { type: "boolean" },
+        chromaBorder: { type: "boolean" },
+      },
+    },
+    example: { openAnimation: "flip3d", wobblyDrag: true, burnClose: true, hoverTilt3d: true, chromaBorder: true },
+  },
+  {
     method: "mod.desktop3d.set",
     category: "theme",
-    summary: "Control the True Spatial 3D WebGPU Desktop (real interactive windows in 3D space!): enabled, layout (curved-cockpit, compiz-cube, studio-desk, gallery-ring), scene (compiz-cube, vision-horizon, cyber-observatory, liquid-monolith, cyberpunk-city, kyoto-sanctuary), camera (focus, overview, reset).",
+    summary: "Control the True Spatial 3D WebGPU Desktop: enabled, layout (curved-cockpit, spatial-grid, compiz-cube, studio-desk, gallery-ring), scene (compiz-cube, vision-horizon, cyber-observatory, space-station, liquid-monolith, cyberpunk-city, kyoto-sanctuary), hdriPreset (studio, sunset, dawn, city, forest, night, loft, none, custom), hdriUrl, hdriBackground, shadowsEnabled, doubleSidedWindows, moveSpeed, camera (focus, overview, reset).",
     paramsSchema: {
       type: "object",
       properties: {
         enabled: { type: "boolean" },
-        layout: { type: "string", enum: ["curved-cockpit", "compiz-cube", "studio-desk", "gallery-ring"] },
-        scene: { type: "string", enum: ["compiz-cube", "vision-horizon", "cyber-observatory", "liquid-monolith", "cyberpunk-city", "kyoto-sanctuary"] },
+        layout: { type: "string", enum: ["curved-cockpit", "spatial-grid", "compiz-cube", "studio-desk", "gallery-ring"] },
+        scene: { type: "string", enum: ["compiz-cube", "vision-horizon", "cyber-observatory", "space-station", "liquid-monolith", "cyberpunk-city", "kyoto-sanctuary"] },
+        hdriPreset: { type: "string", enum: ["studio", "sunset", "dawn", "city", "forest", "night", "loft", "none", "custom"] },
+        hdriUrl: { type: "string" },
+        hdriBackground: { type: "boolean" },
+        shadowsEnabled: { type: "boolean" },
+        doubleSidedWindows: { type: "boolean" },
+        moveSpeed: { type: "number" },
         camera: { type: "string", enum: ["focus", "overview", "reset"] },
         cameraSpeed: { type: "number" },
         bloomIntensity: { type: "number" },
         particleDensity: { type: "number" },
       },
     },
-    example: { enabled: true, layout: "compiz-cube", scene: "compiz-cube", camera: "overview" },
+    example: { enabled: true, layout: "spatial-grid", scene: "space-station", hdriPreset: "sunset", shadowsEnabled: true, doubleSidedWindows: true },
   },
   {
     method: "mod.shader.set",
@@ -2063,12 +2102,49 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       return { shell: modStore.getSnapshot().shell };
     }
 
+    case "wm.grid": {
+      const mode = (
+        ["grid", "split-2", "master-stack", "columns-3", "cascade"].includes(String(p.mode))
+          ? String(p.mode)
+          : "grid"
+      ) as GridLayoutMode;
+      const arranged = wmStore.tileWorkspace(mode);
+      return { mode, arranged };
+    }
+
+    case "mod.fx.set": {
+      const patch: Record<string, unknown> = {};
+      for (const k of [
+        "openAnimation",
+        "wobblyDrag",
+        "genieMinimize",
+        "burnClose",
+        "hoverTilt3d",
+        "dragGhostOpacity",
+        "dimInactive",
+        "chromaBorder",
+      ]) {
+        if (p[k] !== undefined) patch[k] = p[k];
+      }
+      modStore.setFx(patch as Partial<WindowFxConfig>);
+      if (typeof p.wobblyDrag === "boolean") {
+        modStore.setShell({ compizWobbly: p.wobblyDrag });
+      }
+      return { fx: modStore.getSnapshot().fx };
+    }
+
     case "mod.desktop3d.set": {
       const patch: Record<string, unknown> = {};
       for (const k of [
         "enabled",
         "layout",
         "scene",
+        "hdriPreset",
+        "hdriUrl",
+        "hdriBackground",
+        "shadowsEnabled",
+        "doubleSidedWindows",
+        "moveSpeed",
         "spatialWindows",
         "interactiveOrbit",
         "cameraSpeed",

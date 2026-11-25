@@ -50,7 +50,77 @@ export type Desktop3dSceneKind =
   | "vision-horizon"
   | "liquid-monolith"
   | "cyberpunk-city"
+  | "space-station"
   | "kyoto-sanctuary";
+
+export type HdriPresetId =
+  | "none"
+  | "studio"
+  | "sunset"
+  | "dawn"
+  | "city"
+  | "forest"
+  | "night"
+  | "loft"
+  | "custom";
+
+export interface HdriPresetMeta {
+  readonly id: HdriPresetId;
+  readonly name: string;
+  readonly emoji: string;
+  readonly url: string;
+}
+
+export const HDRI_PRESETS: readonly HdriPresetMeta[] = [
+  {
+    id: "studio",
+    name: "Studio Softbox",
+    emoji: "💡",
+    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/studio_small_03_1k.hdr",
+  },
+  {
+    id: "sunset",
+    name: "Venice Sunset 360°",
+    emoji: "🌅",
+    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/venice_sunset_1k.hdr",
+  },
+  {
+    id: "dawn",
+    name: "Alpine Dawn 360°",
+    emoji: "🏔️",
+    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/kiara_1_dawn_1k.hdr",
+  },
+  {
+    id: "city",
+    name: "Berlin Plaza 360°",
+    emoji: "🏙️",
+    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/potsdamer_platz_1k.hdr",
+  },
+  {
+    id: "forest",
+    name: "Alpine Forest 360°",
+    emoji: "🌲",
+    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/forest_slope_1k.hdr",
+  },
+  {
+    id: "night",
+    name: "Starry Night 360°",
+    emoji: "🌌",
+    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/dikhololo_night_1k.hdr",
+  },
+  {
+    id: "loft",
+    name: "Architect Loft 360°",
+    emoji: "🏛️",
+    url: "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/lebombo_1k.hdr",
+  },
+  {
+    id: "none",
+    name: "Procédural (Sans HDRI)",
+    emoji: "✨",
+    url: "",
+  },
+];
 
 export type VariantFamily = "windows" | "linux" | "apple" | "creative";
 
@@ -58,12 +128,31 @@ export interface Desktop3dModConfig {
   readonly enabled: boolean;
   readonly layout: Spatial3dLayoutKind;
   readonly scene: Desktop3dSceneKind;
+  readonly hdriPreset: HdriPresetId;
+  readonly hdriUrl: string;
+  readonly hdriBackground: boolean;
+  readonly shadowsEnabled: boolean;
+  readonly doubleSidedWindows: boolean;
+  readonly moveSpeed: number; // 0.3..3
   readonly spatialWindows: boolean;
   readonly interactiveOrbit: boolean;
   readonly cameraSpeed: number; // 0..2
   readonly bloomIntensity: number; // 0..2
   readonly particleDensity: number; // 0.25..2
   readonly mouseParallax: number; // 0..2
+}
+
+export type WindowOpenAnimKind = "spring" | "genie" | "zoom" | "flip3d" | "fade";
+
+export interface WindowFxConfig {
+  readonly openAnimation: WindowOpenAnimKind;
+  readonly wobblyDrag: boolean;
+  readonly genieMinimize: boolean;
+  readonly burnClose: boolean;
+  readonly hoverTilt3d: boolean;
+  readonly dragGhostOpacity: boolean;
+  readonly dimInactive: boolean;
+  readonly chromaBorder: boolean;
 }
 
 export interface DecoratorModConfig {
@@ -173,6 +262,7 @@ export interface OsVariant {
   readonly decorator: DecoratorModConfig;
   readonly shell: ShellModConfig;
   readonly desktop3d?: Partial<Desktop3dModConfig>;
+  readonly fx?: Partial<WindowFxConfig>;
   readonly enabledModIds: readonly string[];
   readonly enabledWidgetIds: readonly string[];
   readonly builtin?: boolean;
@@ -184,6 +274,7 @@ export interface ModState {
   readonly decorator: DecoratorModConfig;
   readonly shell: ShellModConfig;
   readonly desktop3d: Desktop3dModConfig;
+  readonly fx: WindowFxConfig;
   readonly activeShaderModId: string | null;
   readonly shaderCompileError: string | null;
   readonly mods: readonly OsMod[];
@@ -199,12 +290,29 @@ export const DEFAULT_DESKTOP_3D: Desktop3dModConfig = {
   enabled: false,
   layout: "curved-cockpit",
   scene: "cyber-observatory",
+  hdriPreset: "studio",
+  hdriUrl: "",
+  hdriBackground: true,
+  shadowsEnabled: true,
+  doubleSidedWindows: true,
+  moveSpeed: 1.0,
   spatialWindows: true,
   interactiveOrbit: true,
   cameraSpeed: 0.7,
   bloomIntensity: 1.0,
   particleDensity: 1.0,
   mouseParallax: 1.0,
+};
+
+export const DEFAULT_WINDOW_FX: WindowFxConfig = {
+  openAnimation: "spring",
+  wobblyDrag: false,
+  genieMinimize: true,
+  burnClose: false,
+  hoverTilt3d: false,
+  dragGhostOpacity: true,
+  dimInactive: false,
+  chromaBorder: false,
 };
 
 export const DEFAULT_DECORATOR: DecoratorModConfig = {
@@ -682,6 +790,370 @@ window.addEventListener('message',e=>{
       'PORTS : '+(d.ports&&d.ports.length?d.ports.map(p=>':'+p).join(' '):'none')+'<span class="blink">_</span>';
   }
 });
+</script></body></html>`,
+  },
+  // ─── 5 REAL-TIME INTERACTIVE LIVE-DATA WIDGETS ────────────────────────────
+  {
+    id: "widget-weather-live",
+    title: "Météo Live (Open-Meteo / OpenWeather)",
+    emoji: "🌤️",
+    description: "Météo temps réel mondiale par ville (sans clé via Open-Meteo + support clé OpenWeatherMap) avec vent, humidité & prévisions 3 jours.",
+    x: 26,
+    y: 54,
+    width: 288,
+    height: 224,
+    enabled: false,
+    transparent: false,
+    builtin: true,
+    html: `<!doctype html><html><head><style>
+*{box-sizing:border-box;margin:0}html,body{width:100%;height:100%;padding:12px 14px;background:transparent;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.row{display:flex;align-items:center;gap:6px}
+input{flex:1;min-width:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:4px 8px;color:#fff;font-size:11px;outline:none}
+button{background:rgba(56,189,248,.22);border:1px solid rgba(56,189,248,.4);color:#e0f2fe;border-radius:8px;padding:4px 8px;font-size:10px;font-weight:600;cursor:pointer}
+button:hover{background:rgba(56,189,248,.38)}
+.hero{display:flex;align-items:center;justify-content:space-between}
+.temp{font:700 34px/1 system-ui;letter-spacing:-.03em}
+.meta{font-size:11px;color:#94a3b8;display:flex;gap:10px}
+.days{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:auto}
+.d{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:6px;text-align:center;font-size:10px}
+.d b{display:block;font-size:12px;color:#fff;margin-top:2px}
+#owRow{display:none}
+</style></head><body>
+<div class="row">
+  <input id="city" value="Paris" placeholder="Ville (Paris, Tokyo, NYC…)"/>
+  <button id="go">OK</button>
+  <button id="cfg" title="Clé OpenWeatherMap (optionnel)">⚙️</button>
+</div>
+<div class="row" id="owRow">
+  <input id="owKey" placeholder="Clé API OpenWeatherMap (optionnel)"/>
+</div>
+<div class="hero">
+  <div>
+    <div style="font-size:12px;font-weight:700" id="loc">Paris</div>
+    <div style="font-size:10px;color:#7dd3fc" id="desc">Chargement météo live…</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <span id="ico" style="font-size:28px">⛅</span>
+    <span class="temp" id="tmp">--°</span>
+  </div>
+</div>
+<div class="meta"><span id="wind">💨 -- km/h</span><span id="hum">💧 --%</span><span id="src" style="margin-left:auto;opacity:.7">Open-Meteo</span></div>
+<div class="days" id="days"></div>
+<script>
+const WMO={0:['☀️','Dégagé'],1:['🌤️','Peu nuageux'],2:['⛅','Partiellement nuageux'],3:['☁️','Couvert'],45:['🌫️','Brouillard'],51:['🌦️','Bruine'],61:['🌧️','Pluie'],63:['🌧️','Pluie modérée'],71:['❄️','Neige'],80:['🌦️','Averses'],95:['⛈️','Orage']};
+const wmo=c=>WMO[c]||WMO[Math.floor(c/10)*10]||['⛅','Variable'];
+const cityEl=document.getElementById('city'),owEl=document.getElementById('owKey'),owRow=document.getElementById('owRow');
+document.getElementById('cfg').onclick=()=>{owRow.style.display=owRow.style.display==='flex'?'none':'flex';};
+async function load(){
+  const q=cityEl.value.trim()||'Paris', key=owEl.value.trim();
+  document.getElementById('desc').textContent='Synchronisation…';
+  try{
+    if(key){
+      const r=await fetch('https://api.openweathermap.org/data/2.5/weather?q='+encodeURIComponent(q)+'&units=metric&lang=fr&appid='+encodeURIComponent(key));
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.message||'OWM error');
+      document.getElementById('loc').textContent=d.name+(d.sys?.country?', '+d.sys.country:'');
+      document.getElementById('desc').textContent=d.weather?.[0]?.description||'OK';
+      document.getElementById('tmp').textContent=Math.round(d.main.temp)+'°';
+      document.getElementById('ico').textContent=d.main.temp>22?'☀️':d.weather?.[0]?.main==='Rain'?'🌧️':'⛅';
+      document.getElementById('wind').textContent='💨 '+Math.round((d.wind?.speed||0)*3.6)+' km/h';
+      document.getElementById('hum').textContent='💧 '+d.main.humidity+'%';
+      document.getElementById('src').textContent='OpenWeather';
+      document.getElementById('days').innerHTML='<div class="d">Ressenti<b>'+Math.round(d.main.feels_like)+'°</b></div><div class="d">Min<b>'+Math.round(d.main.temp_min)+'°</b></div><div class="d">Max<b>'+Math.round(d.main.temp_max)+'°</b></div>';
+      return;
+    }
+    const g=await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=fr&name='+encodeURIComponent(q))).json();
+    const hit=g.results?.[0];
+    if(!hit) throw new Error('Ville introuvable');
+    const w=await (await fetch('https://api.open-meteo.com/v1/forecast?latitude='+hit.latitude+'&longitude='+hit.longitude+'&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=4')).json();
+    const [ic,tx]=wmo(w.current.weather_code);
+    document.getElementById('loc').textContent=hit.name+(hit.country_code?', '+hit.country_code:'');
+    document.getElementById('desc').textContent=tx;
+    document.getElementById('ico').textContent=ic;
+    document.getElementById('tmp').textContent=Math.round(w.current.temperature_2m)+'°';
+    document.getElementById('wind').textContent='💨 '+Math.round(w.current.wind_speed_10m)+' km/h';
+    document.getElementById('hum').textContent='💧 '+w.current.relative_humidity_2m+'%';
+    document.getElementById('src').textContent='Open-Meteo';
+    const dn=w.daily;
+    document.getElementById('days').innerHTML=[1,2,3].map(i=>{
+      const day=new Date(dn.time[i]+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short'});
+      return '<div class="d">'+day+' '+wmo(dn.weather_code[i])[0]+'<b>'+Math.round(dn.temperature_2m_max[i])+'° / '+Math.round(dn.temperature_2m_min[i])+'°</b></div>';
+    }).join('');
+  }catch(e){
+    document.getElementById('desc').textContent='Hors-ligne ('+e.message+')';
+  }
+}
+document.getElementById('go').onclick=load;
+cityEl.onkeydown=e=>{if(e.key==='Enter')load();};
+load();setInterval(load,300000);
+</script></body></html>`,
+  },
+  {
+    id: "widget-markets-live",
+    title: "Bourse & Crypto Live",
+    emoji: "📈",
+    description: "Cours temps réel BTC, ETH, SOL, PAXG (Or) & indices via API Binance/CoinGecko avec sparklines & variation 24h.",
+    x: 326,
+    y: 54,
+    width: 300,
+    height: 230,
+    enabled: false,
+    transparent: false,
+    builtin: true,
+    html: `<!doctype html><html><head><style>
+*{box-sizing:border-box;margin:0}html,body{width:100%;height:100%;padding:12px 14px;background:transparent;color:#f8fafc;font-family:ui-monospace,SFMono-Regular,system-ui,monospace;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.hdr{display:flex;justify-content:space-between;align-items:center;font-size:10px;letter-spacing:.08em;color:#94a3b8;text-transform:uppercase}
+.btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#e2e8f0;border-radius:7px;padding:2px 7px;font-size:10px;cursor:pointer}
+.list{display:flex;flex-direction:column;gap:5px;flex:1;overflow-y:auto}
+.item{display:grid;grid-template-columns:68px 1fr auto;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.sym{font-weight:700;font-size:12px;color:#fff}.sub{font-size:9px;color:#94a3b8}
+.px{text-align:right;font-size:12px;font-weight:700}
+.up{color:#34d399;font-size:10px}.dn{color:#fb7185;font-size:10px}
+</style></head><body>
+<div class="hdr"><span>📈 Live Markets</span><span><span id="ts">--:--</span> <button class="btn" id="ref">↻</button></span></div>
+<div class="list" id="list"><div style="font-size:11px;color:#94a3b8">Connexion flux marchés…</div></div>
+<script>
+const PAIRS=[
+  {s:'BTCUSDT',n:'Bitcoin',t:'BTC'},
+  {s:'ETHUSDT',n:'Ethereum',t:'ETH'},
+  {s:'SOLUSDT',n:'Solana',t:'SOL'},
+  {s:'PAXGUSDT',n:'Gold Oz',t:'XAU'},
+];
+function spark(up){
+  const col=up?'#34d399':'#fb7185';
+  let d='M0 14';
+  for(let i=1;i<=10;i++){const y=4+Math.random()*14+(up?(10-i)*0.4:i*0.4);d+=' L'+(i*7)+' '+Math.min(20,Math.max(2,y)).toFixed(1);}
+  return '<svg width="70" height="22" viewBox="0 0 70 22"><path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.7" stroke-linecap="round"/></svg>';
+}
+async function load(){
+  try{
+    const syms=encodeURIComponent(JSON.stringify(PAIRS.map(p=>p.s)));
+    const r=await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols='+syms);
+    const data=await r.json();
+    const map=Object.fromEntries(data.map(x=>[x.symbol,x]));
+    document.getElementById('list').innerHTML=PAIRS.map(p=>{
+      const d=map[p.s]; if(!d) return '';
+      const price=Number(d.lastPrice), chg=Number(d.priceChangePercent), up=chg>=0;
+      const fmt=price>=1000?price.toLocaleString('en-US',{maximumFractionDigits:0}):price.toLocaleString('en-US',{maximumFractionDigits:2});
+      return '<div class="item"><div><div class="sym">'+p.t+'</div><div class="sub">'+p.n+'</div></div><div>'+spark(up)+'</div><div class="px">$'+fmt+'<div class="'+(up?'up':'dn')+'">'+(up?'+':'')+chg.toFixed(2)+'%</div></div></div>';
+    }).join('');
+    document.getElementById('ts').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }catch{
+    try{
+      const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,pax-gold&vs_currencies=usd&include_24hr_change=true');
+      const d=await r.json();
+      const rows=[['BTC','Bitcoin',d.bitcoin],['ETH','Ethereum',d.ethereum],['SOL','Solana',d.solana],['XAU','Gold Oz',d['pax-gold']]];
+      document.getElementById('list').innerHTML=rows.map(([t,n,v])=>{
+        if(!v)return '';const up=v.usd_24h_change>=0;
+        return '<div class="item"><div><div class="sym">'+t+'</div><div class="sub">'+n+'</div></div><div>'+spark(up)+'</div><div class="px">$'+Number(v.usd).toLocaleString('en-US',{maximumFractionDigits:2})+'<div class="'+(up?'up':'dn')+'">'+(up?'+':'')+Number(v.usd_24h_change||0).toFixed(2)+'%</div></div></div>';
+      }).join('');
+      document.getElementById('ts').textContent='CoinGecko';
+    }catch(e){
+      document.getElementById('list').innerHTML='<div style="font-size:11px;color:#fb7185">Flux indisponible ('+e.message+')</div>';
+    }
+  }
+}
+document.getElementById('ref').onclick=load;
+load();setInterval(load,20000);
+</script></body></html>`,
+  },
+  {
+    id: "widget-json-inspector",
+    title: "Live JSON Server Feed",
+    emoji: "🔌",
+    description: "Interroge n'importe quelle API JSON distante avec rafraîchissement auto, temps de réponse ms et extraction de clé.",
+    x: 26,
+    y: 292,
+    width: 312,
+    height: 236,
+    enabled: false,
+    transparent: false,
+    builtin: true,
+    html: `<!doctype html><html><head><style>
+*{box-sizing:border-box;margin:0}html,body{width:100%;height:100%;padding:12px;background:transparent;color:#e2e8f0;font-family:ui-monospace,SFMono-Regular,monospace;display:flex;flex-direction:column;gap:7px;overflow:hidden}
+.row{display:flex;gap:5px}
+input,select{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:4px 7px;color:#fff;font-size:10px;outline:none;font-family:inherit}
+input{flex:1;min-width:0}
+button{background:rgba(168,85,247,.28);border:1px solid rgba(192,132,252,.45);color:#f3e8ff;border-radius:8px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer}
+.meta{display:flex;justify-content:space-between;font-size:9px;color:#94a3b8}
+.ok{color:#34d399}.err{color:#fb7185}
+pre{flex:1;overflow:auto;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px;font-size:10px;line-height:1.45;color:#7dd3fc;white-space:pre-wrap;word-break:break-word}
+</style></head><body>
+<div class="row">
+  <input id="url" value="https://api.github.com/repos/TheSamLePirate/unkernelos" placeholder="https://api.example.com/data.json"/>
+  <button id="go">Fetch</button>
+</div>
+<div class="row">
+  <input id="path" placeholder="Clé (ex: stargazers_count ou vide=tout)"/>
+  <select id="iv"><option value="0">Manuel</option><option value="15000" selected>15s</option><option value="60000">60s</option></select>
+</div>
+<div class="meta"><span id="st">Prêt</span><span id="lat">-- ms</span></div>
+<pre id="out">{}</pre>
+<script>
+let timer=null;
+const urlEl=document.getElementById('url'),pathEl=document.getElementById('path'),ivEl=document.getElementById('iv'),st=document.getElementById('st'),lat=document.getElementById('lat'),out=document.getElementById('out');
+function pick(obj,p){if(!p)return obj;return p.split('.').reduce((a,k)=>a&&a[k],obj);}
+async function run(){
+  const u=urlEl.value.trim();if(!u)return;
+  const t0=performance.now();st.textContent='GET…';st.className='';
+  try{
+    const r=await fetch(u);
+    const ms=Math.round(performance.now()-t0);
+    lat.textContent=ms+' ms';
+    st.textContent='HTTP '+r.status;
+    st.className=r.ok?'ok':'err';
+    const data=await r.json();
+    const val=pick(data,pathEl.value.trim());
+    const compact=val&&typeof val==='object'&&!Array.isArray(val)&&!pathEl.value.trim()
+      ? Object.fromEntries(Object.entries(val).filter(([,v])=>typeof v!=='object'||v===null).slice(0,14))
+      : val;
+    out.textContent=JSON.stringify(compact,null,2);
+  }catch(e){
+    st.textContent='Erreur';st.className='err';out.textContent=String(e.message||e);
+  }
+}
+function resetTimer(){if(timer)clearInterval(timer);const ms=Number(ivEl.value);if(ms>0)timer=setInterval(run,ms);}
+document.getElementById('go').onclick=run;
+urlEl.onkeydown=e=>{if(e.key==='Enter')run();};
+pathEl.onkeydown=e=>{if(e.key==='Enter')run();};
+ivEl.onchange=resetTimer;
+run();resetTimer();
+</script></body></html>`,
+  },
+  {
+    id: "widget-server-health",
+    title: "Server Healthcheck & Heartbeat",
+    emoji: "💓",
+    description: "Surveillance continue multi-serveurs avec historique heartbeat 18 barres, latence ms, uptime % et ajout d'URL live.",
+    x: 350,
+    y: 292,
+    width: 312,
+    height: 236,
+    enabled: false,
+    transparent: false,
+    builtin: true,
+    html: `<!doctype html><html><head><style>
+*{box-sizing:border-box;margin:0}html,body{width:100%;height:100%;padding:12px;background:transparent;color:#f8fafc;font-family:ui-monospace,SFMono-Regular,monospace;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.hdr{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#34d399;letter-spacing:.08em}
+.add{display:flex;gap:5px}
+input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:4px 7px;color:#fff;font-size:10px;outline:none}
+button{background:rgba(16,185,129,.25);border:1px solid rgba(52,211,153,.45);color:#d1fae5;border-radius:8px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer}
+.list{display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto}
+.srv{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:7px 9px;display:flex;flex-direction:column;gap:5px}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:10px}
+.dot{width:7px;height:7px;border-radius:99px;display:inline-block;margin-right:6px}
+.bars{display:flex;gap:2px;height:12px;align-items:flex-end}
+.b{flex:1;border-radius:2px;height:100%;background:rgba(255,255,255,.1)}
+.b.ok{background:#10b981}.b.slow{background:#f59e0b}.b.err{background:#f43f5e}
+</style></head><body>
+<div class="hdr"><span>💓 HEARTBEAT MONITOR</span><button id="ping">Ping</button></div>
+<div class="add"><input id="nu" placeholder="https://mon-serveur.com/health"/><button id="addBtn">+</button></div>
+<div class="list" id="list"></div>
+<script>
+const servers=[
+  {name:'unkernelOS Pages',url:'https://thesamlepirate.github.io/unkernelos/',hist:[]},
+  {name:'GitHub API',url:'https://api.github.com',hist:[]},
+  {name:'Cloudflare Edge',url:'https://1.1.1.1',hist:[]},
+];
+function render(){
+  document.getElementById('list').innerHTML=servers.map((s,idx)=>{
+    const last=s.hist[s.hist.length-1];
+    const upCount=s.hist.filter(x=>x.ok).length;
+    const pct=s.hist.length?Math.round((upCount/s.hist.length)*100):100;
+    const col=!last?'#94a3b8':last.ok?(last.ms>650?'#f59e0b':'#10b981'):'#f43f5e';
+    const slots=Array.from({length:18},(_,i)=>{
+      const h=s.hist[s.hist.length-18+i];
+      if(!h) return '<span class="b"></span>';
+      return '<span class="b '+(h.ok?(h.ms>650?'slow':'ok'):'err')+'" title="'+h.ms+'ms"></span>';
+    }).join('');
+    return '<div class="srv"><div class="top"><span><i class="dot" style="background:'+col+';box-shadow:0 0 8px '+col+'"></i><b>'+s.name+'</b></span><span style="color:#94a3b8">'+(last?last.ms+'ms':'…')+' · '+pct+'% <a href="#" data-del="'+idx+'" style="color:#fb7185;text-decoration:none;margin-left:4px">×</a></span></div><div class="bars">'+slots+'</div></div>';
+  }).join('');
+  document.querySelectorAll('[data-del]').forEach(a=>a.onclick=e=>{e.preventDefault();servers.splice(Number(a.dataset.del),1);render();});
+}
+async function checkAll(){
+  await Promise.all(servers.map(async s=>{
+    const t0=performance.now();
+    try{
+      await fetch(s.url,{mode:'no-cors',cache:'no-store'});
+      s.hist.push({ok:true,ms:Math.max(1,Math.round(performance.now()-t0))});
+    }catch{
+      s.hist.push({ok:false,ms:Math.round(performance.now()-t0)});
+    }
+    if(s.hist.length>24) s.hist.shift();
+  }));
+  render();
+}
+document.getElementById('addBtn').onclick=()=>{
+  const v=document.getElementById('nu').value.trim();if(!v)return;
+  const u=/^https?:\/\//i.test(v)?v:'https://'+v;
+  let name=u;try{name=new URL(u).hostname;}catch{}
+  servers.unshift({name,url:u,hist:[]});
+  document.getElementById('nu').value='';
+  checkAll();
+};
+document.getElementById('ping').onclick=checkAll;
+render();checkAll();setInterval(checkAll,12000);
+</script></body></html>`,
+  },
+  {
+    id: "widget-bookmarks-cards",
+    title: "Portail Sites & Aperçus Visuels",
+    emoji: "🌐",
+    description: "Raccourcis visuels vers vos sites favoris avec miniature aperçu du site, favicon HD et ajout rapide en un clic.",
+    x: 640,
+    y: 54,
+    width: 318,
+    height: 256,
+    enabled: false,
+    transparent: false,
+    builtin: true,
+    html: `<!doctype html><html><head><style>
+*{box-sizing:border-box;margin:0}html,body{width:100%;height:100%;padding:12px;background:transparent;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.add{display:flex;gap:5px}
+input{flex:1;min-width:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:4px 8px;color:#fff;font-size:10px;outline:none}
+button{background:rgba(56,189,248,.24);border:1px solid rgba(56,189,248,.45);color:#e0f2fe;border-radius:8px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;flex:1;overflow-y:auto}
+.card{position:relative;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;background:rgba(15,23,42,.7);border:1px solid rgba(255,255,255,.12);text-decoration:none;color:#fff;transition:transform .16s ease,border-color .16s ease}
+.card:hover{transform:translateY(-2px);border-color:rgba(56,189,248,.6)}
+.thumb{height:64px;width:100%;background:linear-gradient(135deg,#1e1b4b,#0f172a);position:relative;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.foot{display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:11px;font-weight:600}
+.foot img{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+.foot span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.del{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:99px;background:rgba(0,0,0,.65);color:#fda4af;border:0;font-size:11px;line-height:1;display:none;align-items:center;justify-content:center;cursor:pointer}
+.card:hover .del{display:flex}
+</style></head><body>
+<div class="add"><input id="nu" placeholder="Ajouter un site (ex: github.com)"/><button id="ab">+ Site</button></div>
+<div class="grid" id="g"></div>
+<script>
+const sites=[
+  {title:'GitHub',url:'https://github.com'},
+  {title:'Hacker News',url:'https://news.ycombinator.com'},
+  {title:'MDN Docs',url:'https://developer.mozilla.org'},
+  {title:'Three.js',url:'https://threejs.org'},
+];
+function host(u){try{return new URL(u).hostname;}catch{return u;}}
+function render(){
+  document.getElementById('g').innerHTML=sites.map((s,i)=>{
+    const h=host(s.url);
+    const shot='https://image.thum.io/get/width/320/crop/180/noanimate/'+s.url;
+    const fav='https://icons.duckduckgo.com/ip3/'+h+'.ico';
+    return '<a class="card" href="'+s.url+'" target="_blank" rel="noopener noreferrer">'+
+      '<button class="del" data-i="'+i+'" title="Retirer">×</button>'+
+      '<div class="thumb"><img src="'+shot+'" crossorigin="anonymous" loading="lazy" onerror="this.style.display=\\'none\\'"/></div>'+
+      '<div class="foot"><img src="'+fav+'" crossorigin="anonymous" onerror="this.style.display=\\'none\\'"/><span>'+s.title+'</span></div></a>';
+  }).join('');
+  document.querySelectorAll('.del').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();sites.splice(Number(b.dataset.i),1);render();});
+}
+document.getElementById('ab').onclick=()=>{
+  const v=document.getElementById('nu').value.trim();if(!v)return;
+  const u=/^https?:\/\//i.test(v)?v:'https://'+v;
+  sites.unshift({title:host(u).replace(/^www\./,''),url:u});
+  document.getElementById('nu').value='';
+  render();
+};
+document.getElementById('nu').onkeydown=e=>{if(e.key==='Enter')document.getElementById('ab').click();};
+render();
 </script></body></html>`,
   },
 ];
@@ -1767,6 +2239,7 @@ function createDefaultState(): ModState {
     decorator: { ...DEFAULT_DECORATOR },
     shell: { ...DEFAULT_SHELL },
     desktop3d: { ...DEFAULT_DESKTOP_3D },
+    fx: { ...DEFAULT_WINDOW_FX },
     activeShaderModId: null,
     shaderCompileError: null,
     mods: BUILTIN_MODS.map((m) => ({ ...m })),
@@ -1803,6 +2276,7 @@ function loadModState(): ModState {
       decorator: { ...def.decorator, ...(p.decorator ?? {}) },
       shell: { ...def.shell, ...(p.shell ?? {}) },
       desktop3d: { ...def.desktop3d, ...(p.desktop3d ?? {}) },
+      fx: { ...def.fx, ...(p.fx ?? {}) },
       activeShaderModId: typeof p.activeShaderModId === "string" ? p.activeShaderModId : null,
       shaderCompileError: null,
       mods: mergeById(BUILTIN_MODS, p.mods),
@@ -1910,6 +2384,10 @@ class ModEngineStore {
 
   public setDesktop3d(patch: Partial<Desktop3dModConfig>): void {
     this.setState((s) => ({ ...s, desktop3d: { ...s.desktop3d, ...patch } }));
+  }
+
+  public setFx(patch: Partial<WindowFxConfig>): void {
+    this.setState((s) => ({ ...s, fx: { ...s.fx, ...patch } }));
   }
 
   public setUserCss(css: string): void {
@@ -2036,6 +2514,14 @@ class ModEngineStore {
       desktop3d: v.desktop3d
         ? { ...DEFAULT_DESKTOP_3D, ...v.desktop3d }
         : { ...DEFAULT_DESKTOP_3D, enabled: false },
+      fx: v.fx
+        ? { ...DEFAULT_WINDOW_FX, ...v.fx }
+        : {
+            ...DEFAULT_WINDOW_FX,
+            wobblyDrag: v.shell.compizWobbly,
+            burnClose: v.shell.compizWobbly,
+            chromaBorder: v.enabledModIds.includes("mod-rgb-chroma-borders"),
+          },
       activeShaderModId: v.activeShaderModId,
       shaderCompileError: null,
       mods: s.mods.map((m) => ({ ...m, enabled: modSet.has(m.id) })),
@@ -2083,6 +2569,7 @@ class ModEngineStore {
         decorator: this.state.decorator,
         shell: this.state.shell,
         desktop3d: this.state.desktop3d,
+        fx: this.state.fx,
         activeShaderModId: this.state.activeShaderModId,
         userCss: this.state.userCss,
         mods: this.state.mods,
@@ -2105,6 +2592,7 @@ class ModEngineStore {
         decorator: data.decorator ? { ...s.decorator, ...data.decorator } : s.decorator,
         shell: data.shell ? { ...s.shell, ...data.shell } : s.shell,
         desktop3d: data.desktop3d ? { ...s.desktop3d, ...data.desktop3d } : s.desktop3d,
+        fx: data.fx ? { ...s.fx, ...data.fx } : s.fx,
         activeShaderModId:
           data.activeShaderModId !== undefined ? data.activeShaderModId : s.activeShaderModId,
         userCss: typeof data.userCss === "string" ? data.userCss : s.userCss,

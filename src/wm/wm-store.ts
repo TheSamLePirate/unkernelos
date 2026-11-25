@@ -49,6 +49,13 @@ export type SnapZone =
   | "bottom-right"
   | "maximize";
 
+export type GridLayoutMode =
+  | "grid"
+  | "split-2"
+  | "master-stack"
+  | "columns-3"
+  | "cascade";
+
 export interface AppDefinition {
   readonly id: AppId;
   readonly title: string;
@@ -941,6 +948,123 @@ class WindowManagerStore {
         w.id === id ? { ...w, ...rect, maximized: false, snap: "none" } : w
       ),
     }));
+  }
+
+  /**
+   * Instant 2D Grid & Tiling Layout Engine for the active workspace!
+   * Supports: grid (NxM auto), split-2 (50/50), master-stack (i3/Hyprland), columns-3, and cascade.
+   */
+  public tileWorkspace(mode: GridLayoutMode): number {
+    const wsWins = this.state.windows
+      .filter((w) => w.workspace === this.state.activeWorkspace && !w.minimized)
+      .sort((a, b) => {
+        if (a.id === this.state.activeWindowId) return -1;
+        if (b.id === this.state.activeWindowId) return 1;
+        return b.zIndex - a.zIndex;
+      });
+    if (wsWins.length === 0) return 0;
+
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1440;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 900;
+    const gap = 10;
+    const padX = 12;
+    const padTop = TOP_BAR_H + 10;
+    const padBottom = DOCK_RESERVE + 10;
+    const availW = Math.max(480, vw - padX * 2);
+    const availH = Math.max(360, vh - padTop - padBottom);
+
+    const rects = new Map<string, { x: number; y: number; width: number; height: number }>();
+    const n = wsWins.length;
+
+    if (mode === "cascade") {
+      const w = Math.min(980, Math.round(availW * 0.72));
+      const h = Math.min(640, Math.round(availH * 0.78));
+      wsWins.forEach((win, i) => {
+        const step = i * 34;
+        rects.set(win.id, {
+          x: padX + Math.min(step, Math.max(0, availW - w)),
+          y: padTop + Math.min(step, Math.max(0, availH - h)),
+          width: w,
+          height: h,
+        });
+      });
+    } else if (mode === "split-2") {
+      const cols = Math.min(2, n);
+      const cellW = Math.floor((availW - gap * (cols - 1)) / cols);
+      wsWins.forEach((win, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const rowsInCol = Math.ceil((n - col) / cols);
+        const cellH = Math.floor((availH - gap * (rowsInCol - 1)) / rowsInCol);
+        rects.set(win.id, {
+          x: padX + col * (cellW + gap),
+          y: padTop + row * (cellH + gap),
+          width: cellW,
+          height: cellH,
+        });
+      });
+    } else if (mode === "master-stack") {
+      if (n === 1) {
+        rects.set(wsWins[0]!.id, { x: padX, y: padTop, width: availW, height: availH });
+      } else {
+        const masterW = Math.floor((availW - gap) * 0.58);
+        const stackW = availW - gap - masterW;
+        rects.set(wsWins[0]!.id, { x: padX, y: padTop, width: masterW, height: availH });
+        const stackCount = n - 1;
+        const stackH = Math.floor((availH - gap * (stackCount - 1)) / stackCount);
+        for (let i = 1; i < n; i++) {
+          rects.set(wsWins[i]!.id, {
+            x: padX + masterW + gap,
+            y: padTop + (i - 1) * (stackH + gap),
+            width: stackW,
+            height: stackH,
+          });
+        }
+      }
+    } else if (mode === "columns-3") {
+      const cols = Math.min(3, n);
+      const cellW = Math.floor((availW - gap * (cols - 1)) / cols);
+      wsWins.forEach((win, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const rowsInCol = Math.ceil((n - col) / cols);
+        const cellH = Math.floor((availH - gap * (rowsInCol - 1)) / rowsInCol);
+        rects.set(win.id, {
+          x: padX + col * (cellW + gap),
+          y: padTop + row * (cellH + gap),
+          width: cellW,
+          height: cellH,
+        });
+      });
+    } else {
+      // Auto optimal NxM grid
+      const cols = Math.ceil(Math.sqrt(n));
+      const rows = Math.ceil(n / cols);
+      const cellH = Math.floor((availH - gap * (rows - 1)) / rows);
+      wsWins.forEach((win, i) => {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        const colsInRow = row === rows - 1 ? n - row * cols : cols;
+        const cellW = Math.floor((availW - gap * (colsInRow - 1)) / colsInRow);
+        rects.set(win.id, {
+          x: padX + col * (cellW + gap),
+          y: padTop + row * (cellH + gap),
+          width: cellW,
+          height: cellH,
+        });
+      });
+    }
+
+    uiSounds.playSnap();
+    this.setState((s) => ({
+      ...s,
+      dragSnapPreview: null,
+      windows: s.windows.map((w) => {
+        const r = rects.get(w.id);
+        return r ? { ...w, ...r, maximized: false, snap: "none" } : w;
+      }),
+    }));
+    return wsWins.length;
   }
 
   public switchWorkspace(ws: WorkspaceId): void {

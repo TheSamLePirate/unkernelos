@@ -44,13 +44,38 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
   const wm = useWm();
   const mods = useMods();
   const dec = mods.decorator;
+  const fx = mods.fx;
   const { isMobile, isTouch, keyboardInset } = useViewport();
   const is3dSpace = mods.desktop3d.enabled && !isMobile;
-  const wobblyEnabled = mods.shell.compizWobbly && !is3dSpace;
+  const wobblyEnabled = (mods.shell.compizWobbly || fx.wobblyDrag) && !is3dSpace;
   const visionOrnament = mods.shell.visionOrnaments || dec.style === "visionos-glass";
   const [interacting, setInteracting] = useState(false);
+  const [closingFx, setClosingFx] = useState(false);
+  const [minimizingFx, setMinimizingFx] = useState(false);
   const [wobble, setWobble] = useState({ skewX: 0, skewY: 0, rot: 0 });
+  const [hoverTilt, setHoverTilt] = useState({ rx: 0, ry: 0 });
   const frameElRef = useRef<HTMLDivElement>(null);
+
+  const handleCloseWindow = () => {
+    if (fx.burnClose && !is3dSpace && !isMobile) {
+      setClosingFx(true);
+      setTimeout(() => wmStore.closeWindow(win.id), 245);
+    } else {
+      wmStore.closeWindow(win.id);
+    }
+  };
+
+  const handleMinimizeWindow = () => {
+    if (fx.genieMinimize && !is3dSpace && !isMobile) {
+      setMinimizingFx(true);
+      setTimeout(() => {
+        setMinimizingFx(false);
+        wmStore.minimizeWindow(win.id);
+      }, 225);
+    } else {
+      wmStore.minimizeWindow(win.id);
+    }
+  };
 
   useEffect(() => {
     spatial3dBridge.registerWindowEl(win.id, frameElRef.current);
@@ -122,10 +147,18 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
     let lastY = e.clientY;
     let prevX = e.clientX;
     let prevY = e.clientY;
+    let shiftHeld = e.shiftKey;
+    const origDepth = spatial3dBridge.getWindowDepth(win.id);
 
     const flush = () => {
       rafId = 0;
       if (!dragRef.current) return;
+      if (is3dSpace && shiftHeld) {
+        // Shift + Drag in 3D space pushes/pulls the window smoothly along the Z depth axis!
+        const dz = (dragRef.current.startY - lastY) * 2.2;
+        spatial3dBridge.setWindowDepth(win.id, origDepth + dz);
+        return;
+      }
       const nx = dragRef.current.origX + (lastX - dragRef.current.startX);
       const ny = Math.max(TOP_BAR_H, dragRef.current.origY + (lastY - dragRef.current.startY));
       wmStore.moveResize(win.id, { x: nx, y: ny });
@@ -140,14 +173,17 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       }
       prevX = lastX;
       prevY = lastY;
-      activePreview = detectSnapZone(lastX, lastY);
-      wmStore.setDragSnapPreview(activePreview);
+      if (!is3dSpace) {
+        activePreview = detectSnapZone(lastX, lastY);
+        wmStore.setDragSnapPreview(activePreview);
+      }
     };
 
     const onMove = (ev: PointerEvent) => {
       if (!dragRef.current || ev.pointerId !== dragRef.current.pointerId) return;
       lastX = ev.clientX;
       lastY = ev.clientY;
+      shiftHeld = ev.shiftKey;
       if (!rafId) rafId = requestAnimationFrame(flush);
     };
 
@@ -279,7 +315,22 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
   const wobbleTransform =
     wobblyEnabled && (wobble.skewX !== 0 || wobble.skewY !== 0 || wobble.rot !== 0)
       ? `skew(${wobble.skewX}deg, ${wobble.skewY}deg) rotate(${wobble.rot}deg)`
+      : fx.hoverTilt3d && !is3dSpace && !interacting && (hoverTilt.rx !== 0 || hoverTilt.ry !== 0)
+      ? `perspective(1200px) rotateX(${hoverTilt.rx}deg) rotateY(${hoverTilt.ry}deg)`
       : undefined;
+
+  const dragOpacityFactor = interacting && fx.dragGhostOpacity ? 0.86 : 1;
+  const inactiveFilter = !focused && fx.dimInactive && !is3dSpace ? "brightness(0.82) saturate(0.75)" : undefined;
+  const openAnimClass =
+    fx.openAnimation === "genie"
+      ? "fx-open-genie"
+      : fx.openAnimation === "zoom"
+      ? "fx-open-zoom"
+      : fx.openAnimation === "flip3d"
+      ? "fx-open-flip3d"
+      : fx.openAnimation === "fade"
+      ? "fx-open-fade"
+      : "fx-open-spring";
 
   const style: React.CSSProperties = is3dSpace
     ? {
@@ -290,9 +341,9 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         height: win.height,
         borderRadius: `${dec.radiusPx}px`,
         borderWidth: `${dec.borderWidthPx}px`,
-        opacity: focused ? 1 : Math.max(0.86, dec.unfocusedOpacity),
-        backfaceVisibility: "hidden",
-        WebkitBackfaceVisibility: "hidden",
+        opacity: (focused ? 1 : Math.max(0.86, dec.unfocusedOpacity)) * dragOpacityFactor,
+        backfaceVisibility: mods.desktop3d.doubleSidedWindows ? "visible" : "hidden",
+        WebkitBackfaceVisibility: mods.desktop3d.doubleSidedWindows ? "visible" : "hidden",
         pointerEvents: "auto",
       }
     : {
@@ -308,7 +359,8 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         display: !visible || win.minimized ? "none" : "flex",
         borderRadius: isMobile ? undefined : `${dec.radiusPx}px`,
         borderWidth: isMobile ? undefined : `${dec.borderWidthPx}px`,
-        opacity: focused ? 1 : dec.unfocusedOpacity,
+        opacity: (focused ? 1 : dec.unfocusedOpacity) * dragOpacityFactor,
+        filter: inactiveFilter,
         boxShadow:
           focused && !isMobile && dec.activeGlowPx > 0
             ? `0 32px 86px -12px rgba(0,0,0,0.86), 0 0 ${dec.activeGlowPx}px -10px var(--window-glow), 0 1px 0 0 rgba(255,255,255,0.22) inset`
@@ -316,11 +368,11 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         transform: wobbleTransform,
         transition: interacting
           ? wobblyEnabled
-            ? "transform 95ms ease-out"
-            : "none"
+            ? "transform 95ms ease-out, opacity 120ms ease"
+            : "opacity 120ms ease"
           : wobblyEnabled
-          ? "transform 460ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease, box-shadow 220ms ease"
-          : "opacity 200ms ease, box-shadow 220ms ease",
+          ? "transform 460ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease, filter 220ms ease, box-shadow 220ms ease"
+          : "transform 220ms ease-out, opacity 200ms ease, filter 220ms ease, box-shadow 220ms ease",
         willChange: interacting ? "left, top, width, height, transform" : undefined,
       };
 
@@ -346,7 +398,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         <div className="flex items-center gap-0.5">
           <button
             type="button"
-            onClick={() => wmStore.minimizeWindow(win.id)}
+            onClick={handleMinimizeWindow}
             title="Réduire"
             className="w-5 h-5 flex items-center justify-center bg-[#c0c0c0] border-2 border-white border-r-[#404040] border-b-[#404040] text-[11px] font-bold text-black active:border-[#404040] active:border-r-white active:border-b-white cursor-pointer"
           >
@@ -362,7 +414,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           </button>
           <button
             type="button"
-            onClick={() => wmStore.closeWindow(win.id)}
+            onClick={handleCloseWindow}
             title="Fermer"
             className="w-5 h-5 flex items-center justify-center bg-[#c0c0c0] border-2 border-white border-r-[#404040] border-b-[#404040] text-black hover:bg-[#d8d8d8] cursor-pointer"
           >
@@ -377,7 +429,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => wmStore.minimizeWindow(win.id)}
+            onClick={handleMinimizeWindow}
             title="Réduire"
             className="w-5 h-5 rounded-[4px] flex items-center justify-center bg-gradient-to-b from-[#4993ff] to-[#1a5cd8] border border-white/75 text-white hover:brightness-110 shadow cursor-pointer"
           >
@@ -393,7 +445,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           </button>
           <button
             type="button"
-            onClick={() => wmStore.closeWindow(win.id)}
+            onClick={handleCloseWindow}
             title="Fermer"
             className="w-5 h-5 rounded-[4px] flex items-center justify-center bg-gradient-to-b from-[#f06e58] to-[#c92a14] border border-white/80 text-white hover:brightness-110 shadow cursor-pointer"
           >
@@ -416,7 +468,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           </button>
           <button
             type="button"
-            onClick={() => wmStore.closeWindow(win.id)}
+            onClick={handleCloseWindow}
             title="Fermer"
             className="w-6 h-6 rounded-full bg-white/10 hover:bg-rose-500/80 flex items-center justify-center text-white transition cursor-pointer"
           >
@@ -431,7 +483,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => wmStore.minimizeWindow(win.id)}
+            onClick={handleMinimizeWindow}
             title="Réduire"
             className="w-6 h-6 rounded-full hover:bg-white/14 flex items-center justify-center text-zinc-200 transition cursor-pointer"
           >
@@ -447,7 +499,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           </button>
           <button
             type="button"
-            onClick={() => wmStore.closeWindow(win.id)}
+            onClick={handleCloseWindow}
             title="Fermer"
             className={`w-6 h-6 rounded-full flex items-center justify-center text-white transition cursor-pointer ${
               isCompiz ? "bg-emerald-500/25 hover:bg-rose-500 border border-emerald-300/40" : "hover:bg-rose-500"
@@ -464,7 +516,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         <div className="flex items-center gap-0.5">
           <button
             type="button"
-            onClick={() => wmStore.minimizeWindow(win.id)}
+            onClick={handleMinimizeWindow}
             title="Minimize"
             className={`px-2.5 py-1.5 text-zinc-300 hover:text-white transition cursor-pointer ${
               isCyber
@@ -492,7 +544,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           </button>
           <button
             type="button"
-            onClick={() => wmStore.closeWindow(win.id)}
+            onClick={handleCloseWindow}
             title="Close"
             className={`px-2.5 py-1.5 transition cursor-pointer ${
               isCyber
@@ -513,13 +565,13 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => wmStore.closeWindow(win.id)}
+            onClick={handleCloseWindow}
             title="Close"
             className="w-3 h-3 rounded-full bg-white/30 hover:bg-rose-400 transition cursor-pointer"
           />
           <button
             type="button"
-            onClick={() => wmStore.minimizeWindow(win.id)}
+            onClick={handleMinimizeWindow}
             title="Minimize"
             className="w-3 h-3 rounded-full bg-white/20 hover:bg-amber-300 transition cursor-pointer"
           />
@@ -538,7 +590,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
       <div className={`flex items-center group ${isTabletTouch ? "gap-1.5" : "gap-2"}`}>
         <button
           type="button"
-          onClick={() => wmStore.closeWindow(win.id)}
+          onClick={handleCloseWindow}
           title="Close"
           className={`flex items-center justify-center rounded-full transition cursor-pointer ${
             isTabletTouch ? "w-7 h-7 active:scale-90" : "w-3 h-3"
@@ -558,7 +610,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         </button>
         <button
           type="button"
-          onClick={() => wmStore.minimizeWindow(win.id)}
+          onClick={handleMinimizeWindow}
           title="Minimize"
           className={`flex items-center justify-center rounded-full transition cursor-pointer ${
             isTabletTouch ? "w-7 h-7 active:scale-90" : "w-3 h-3"
@@ -637,12 +689,23 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         }
         wmStore.focusWindow(win.id);
       }}
+      onPointerMove={(e) => {
+        if (!fx.hoverTilt3d || is3dSpace || interacting || isMobile || win.maximized) return;
+        const rect = frameElRef.current?.getBoundingClientRect();
+        if (!rect || rect.width <= 0 || rect.height <= 0) return;
+        const nx = (e.clientX - rect.left) / rect.width - 0.5;
+        const ny = (e.clientY - rect.top) / rect.height - 0.5;
+        setHoverTilt({ rx: Number((-ny * 3.4).toFixed(2)), ry: Number((nx * 3.8).toFixed(2)) });
+      }}
+      onPointerLeave={() => {
+        if (hoverTilt.rx !== 0 || hoverTilt.ry !== 0) setHoverTilt({ rx: 0, ry: 0 });
+      }}
       data-window-decorator={dec.style}
-      className={`${is3dSpace ? "absolute" : "fixed animate-window-in"} pointer-events-auto flex-col ${
+      className={`${is3dSpace ? "absolute" : `fixed ${openAnimClass}`} pointer-events-auto flex-col ${
         visionOrnament ? "overflow-visible" : "overflow-hidden"
       } ${isMobile ? "rounded-t-[20px] border-x-0" : ""} ${
-        focused ? "glass-surface-focused" : "glass-surface"
-      }`}
+        focused ? `glass-surface-focused ${fx.chromaBorder ? "fx-chroma-active" : ""}` : "glass-surface"
+      } ${closingFx ? "fx-closing-burn" : ""} ${minimizingFx ? "fx-minimizing-genie" : ""}`}
     >
       {/* Optional Laser Accent Bar (Cyber HUD / Swiss / Spatial Mod) */}
       {dec.titlebarAccentBar && focused && !isMobile && (
@@ -691,7 +754,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
               </button>
               <button
                 type="button"
-                onClick={() => wmStore.minimizeWindow(win.id)}
+                onClick={handleMinimizeWindow}
                 className="p-2 rounded-xl bg-white/6 active:bg-white/16 active:scale-95 text-zinc-400 transition"
                 title="Show Desktop"
               >
@@ -704,7 +767,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
             </div>
             <button
               type="button"
-              onClick={() => wmStore.closeWindow(win.id)}
+              onClick={handleCloseWindow}
               className="p-2 rounded-xl bg-rose-500/20 active:bg-rose-500/35 active:scale-95 text-rose-200 transition"
               title="Close App"
             >

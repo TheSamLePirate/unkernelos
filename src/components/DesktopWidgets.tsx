@@ -94,6 +94,57 @@ const DraggableCustomWidget: React.FC<{
     window.addEventListener("pointercancel", onUp);
   };
 
+  const resizeRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    origW: number;
+    origH: number;
+  } | null>(null);
+
+  const onResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget;
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    resizeRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      origW: widget.width,
+      origH: widget.height,
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      if (!resizeRef.current || ev.pointerId !== resizeRef.current.pointerId) return;
+      const nw = Math.max(160, Math.min(720, resizeRef.current.origW + (ev.clientX - resizeRef.current.startX)));
+      const nh = Math.max(96, Math.min(560, resizeRef.current.origH + (ev.clientY - resizeRef.current.startY)));
+      modStore.updateWidget(widget.id, { width: Math.round(nw), height: Math.round(nh) });
+    };
+
+    const onUp = (ev: PointerEvent) => {
+      if (!resizeRef.current || ev.pointerId !== resizeRef.current.pointerId) return;
+      resizeRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      try {
+        el.releasePointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
   return (
     <div
       style={{
@@ -109,7 +160,7 @@ const DraggableCustomWidget: React.FC<{
       {/* Subtle hover drag handle */}
       <div
         onPointerDown={onPointerDown}
-        className="absolute top-0 inset-x-0 h-6 px-2 flex items-center justify-between bg-gradient-to-b from-black/65 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-20 cursor-grab active:cursor-grabbing touch-none"
+        className="absolute top-0 inset-x-0 h-6 px-2 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-20 cursor-grab active:cursor-grabbing touch-none"
       >
         <div className="flex items-center gap-1 text-[10px] font-medium text-zinc-200 truncate">
           <GripHorizontal className="w-3 h-3 text-zinc-400 shrink-0" />
@@ -131,12 +182,21 @@ const DraggableCustomWidget: React.FC<{
         ref={iframeRef}
         srcDoc={widget.html}
         title={widget.title}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
         onLoad={() => {
           iframeRef.current?.contentWindow?.postMessage(telemetry, "*");
         }}
         className="w-full h-full border-0 bg-transparent"
       />
+
+      {/* Bottom-right corner resize handle */}
+      <div
+        onPointerDown={onResizeDown}
+        title="Redimensionner le widget"
+        className="absolute bottom-0 right-0 w-4 h-4 z-20 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-0.5 touch-none"
+      >
+        <span className="block w-2 h-2 border-r-2 border-b-2 border-white/45 rounded-br-sm" />
+      </div>
     </div>
   );
 };

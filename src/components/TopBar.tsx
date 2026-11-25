@@ -7,6 +7,7 @@ import {
   Download,
   GitBranch,
   Globe,
+  Grid2x2,
   Layers,
   Mic,
   Search,
@@ -22,7 +23,7 @@ import { modStore, useMods } from "../core/mod-store.ts";
 import { pwaStore, usePwa } from "../core/pwa-service.ts";
 import { appRuntime, GithubAuthService, useSubscriptionRef, VmService } from "../core/runtime.ts";
 import { voiceOsEngine } from "../core/voice-os.ts";
-import { APP_CATALOG, useWm, wmStore, type WorkspaceId } from "../wm/wm-store.ts";
+import { APP_CATALOG, useWm, wmStore, type GridLayoutMode, type WorkspaceId } from "../wm/wm-store.ts";
 import { DynamicIsland } from "./DynamicIsland.tsx";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher.tsx";
 
@@ -62,6 +63,7 @@ export const TopBar: React.FC = () => {
     }
   );
 
+  const [gridMenuOpen, setGridMenuOpen] = useState(false);
   const [clock, setClock] = useState(() =>
     new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   );
@@ -189,8 +191,82 @@ export const TopBar: React.FC = () => {
       {/* Center: Futuristic Dynamic Island Live Hub */}
       <DynamicIsland />
 
-      {/* Right: Live VM Telemetry Pills + Quick 3D/Mods + Control Center */}
+      {/* Right: Live VM Telemetry Pills + Quick Grid/3D/Mods + Control Center */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* 2D & 3D Grid Placement Quick Menu */}
+        <div className="relative hidden sm:block">
+          <button
+            type="button"
+            onClick={() => setGridMenuOpen((v) => !v)}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-semibold transition cursor-pointer ${
+              gridMenuOpen
+                ? "bg-violet-500/28 border-violet-300/60 text-white"
+                : "bg-white/[0.05] hover:bg-white/12 border-white/12 text-zinc-300 hover:text-white"
+            }`}
+            title="Organiser les fenêtres en Grille 2D ou Grille 3D"
+          >
+            <Grid2x2 className="w-3 h-3" />
+            Grid
+          </button>
+          {gridMenuOpen && (
+            <div
+              onMouseLeave={() => setGridMenuOpen(false)}
+              className="absolute right-0 top-8 w-48 p-1.5 rounded-2xl glass-surface-focused border border-white/15 shadow-2xl z-[90] space-y-0.5"
+            >
+              <div className="px-2 py-1 text-[9px] font-mono uppercase tracking-wider text-zinc-400">
+                Placement Grille 2D
+              </div>
+              {(
+                [
+                  ["grid", "⊞ Grille Auto (N×M)"],
+                  ["split-2", "◫ Split 50 / 50"],
+                  ["master-stack", "▤ Master + Stack (i3)"],
+                  ["columns-3", "▥ 3 Colonnes"],
+                  ["cascade", "❐ Cascade"],
+                ] as readonly [GridLayoutMode, string][]
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    modStore.setDesktop3d({ enabled: false });
+                    const n = wmStore.tileWorkspace(mode);
+                    setGridMenuOpen(false);
+                    if (n > 0) wmStore.pushToast("Grille 2D appliquée", `${n} fenêtres organisées (${mode}).`, "info");
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-xl text-[11px] text-zinc-200 hover:bg-white/12 hover:text-white transition cursor-pointer"
+                >
+                  {label}
+                </button>
+              ))}
+              <div className="my-1 border-t border-white/10" />
+              <div className="px-2 py-1 text-[9px] font-mono uppercase tracking-wider text-cyan-300">
+                Placement Spatial 3D
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  modStore.setDesktop3d({ enabled: true, layout: "spatial-grid" });
+                  setGridMenuOpen(false);
+                }}
+                className="w-full text-left px-2.5 py-1.5 rounded-xl text-[11px] text-cyan-200 hover:bg-cyan-500/20 transition cursor-pointer"
+              >
+                ⊞ Mur Grille 3D Courbe
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  modStore.setDesktop3d({ enabled: true, layout: "compiz-cube" });
+                  setGridMenuOpen(false);
+                }}
+                className="w-full text-left px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-200 hover:bg-emerald-500/20 transition cursor-pointer"
+              >
+                🧊 Cube 4 Bureaux 3D
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* 1-Click 3D WebGPU Spatial Desktop Toggle */}
         <button
           type="button"
