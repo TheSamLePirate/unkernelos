@@ -212,6 +212,7 @@ export interface Desktop3dModConfig {
   readonly shadowsEnabled: boolean;
   readonly doubleSidedWindows: boolean;
   readonly spatialChrome3d: boolean; // Full 3D Super Dock / Taskbar / Global Menu inside the 3D scene!
+  readonly showControlsHud: boolean; // Optional floating 3D controls bar (hidden by default, toggled from OS TopBar!)
   readonly moveSpeed: number; // 0.3..3
   readonly spatialWindows: boolean;
   readonly interactiveOrbit: boolean;
@@ -377,6 +378,7 @@ export const DEFAULT_DESKTOP_3D: Desktop3dModConfig = {
   shadowsEnabled: true,
   doubleSidedWindows: true,
   spatialChrome3d: true,
+  showControlsHud: false,
   moveSpeed: 1.0,
   spatialWindows: true,
   interactiveOrbit: true,

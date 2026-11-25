@@ -1,9 +1,7 @@
 import {
   Box,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   Compass,
   Crosshair,
   Eye,
@@ -19,7 +17,20 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
-import { WebGPURenderer } from "three/webgpu";
+import {
+  color as tslColor,
+  dot,
+  float,
+  max,
+  mix,
+  normalView,
+  normalWorld,
+  positionViewDirection,
+  pow,
+  smoothstep,
+  vec3,
+} from "three/tsl";
+import { MeshBasicNodeMaterial, WebGPURenderer } from "three/webgpu";
 import {
   HDRI_PRESETS,
   modStore,
@@ -196,45 +207,114 @@ function createAuroraTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function createStarfield(count: number, radiusMin: number, radiusMax: number, starTex: THREE.Texture): THREE.Points {
-  const pos = new Float32Array(count * 3);
-  const col = new Float32Array(count * 3);
+function createStarfield(count: number, radiusMin: number, radiusMax: number, starTex: THREE.Texture): THREE.Group {
+  const grp = new THREE.Group();
   const palette = [
     new THREE.Color("#ffffff"),
+    new THREE.Color("#dbeafe"),
     new THREE.Color("#bae6fd"),
-    new THREE.Color("#fde68a"),
-    new THREE.Color("#fbcfe8"),
-    new THREE.Color("#c4b5fd"),
+    new THREE.Color("#fef3c7"),
+    new THREE.Color("#e0e7ff"),
   ];
-  for (let i = 0; i < count; i++) {
-    const u = Math.random();
-    const v = Math.random();
-    const theta = u * 2 * Math.PI;
-    const phi = Math.acos(2 * v - 1);
-    const r = radiusMin + Math.random() * (radiusMax - radiusMin);
-    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-    pos[i * 3 + 1] = r * Math.cos(phi);
-    pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-    const c = palette[i % palette.length]!;
-    col[i * 3] = c.r;
-    col[i * 3 + 1] = c.g;
-    col[i * 3 + 2] = c.b;
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-  return new THREE.Points(
-    g,
-    new THREE.PointsMaterial({
-      size: 62,
-      map: starTex,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.92,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    })
+  const makeLayer = (n: number, size: number, opacity: number) => {
+    const pos = new Float32Array(n * 3);
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2 * Math.PI;
+      const phi = Math.acos(2 * v - 1);
+      const r = radiusMin + Math.random() * (radiusMax - radiusMin);
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.cos(phi);
+      pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+      const c = palette[i % palette.length]!;
+      col[i * 3] = c.r;
+      col[i * 3 + 1] = c.g;
+      col[i * 3 + 2] = c.b;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    return new THREE.Points(
+      g,
+      new THREE.PointsMaterial({
+        size,
+        map: starTex,
+        vertexColors: true,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        fog: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+  };
+  grp.add(makeLayer(Math.round(count * 0.8), 44, 0.85));
+  grp.add(makeLayer(Math.round(count * 0.2), 110, 0.96));
+  return grp;
+}
+
+/**
+ * Cinema-Grade Volumetric Rayleigh + Mie Planetary Atmosphere (Three.js WebGPU TSL Node Material):
+ * - Layer 1 (FrontSide): Smooth Fresnel horizon haze + warm golden-orange terminator scatter on the sunlit hemisphere.
+ * - Layer 2 (BackSide): Exponentially decaying outer atmospheric glow fading seamlessly to 0 into black space (ZERO hard bands!).
+ */
+function createVolumetricAtmosphere(
+  planetRadius: number,
+  dayColorHex: string,
+  twilightColorHex: string,
+  sunDirection: THREE.Vector3,
+  intensity = 1.25
+): { group: THREE.Group; disposables: Array<{ dispose: () => void }> } {
+  const grp = new THREE.Group();
+  const disposables: Array<{ dispose: () => void }> = [];
+
+  const sd = sunDirection.clone().normalize();
+  const sunDirNode = vec3(sd.x, sd.y, sd.z);
+  const cDay = tslColor(dayColorHex);
+  const cTwilight = tslColor(twilightColorHex);
+
+  // Layer 1: Inner Rayleigh Fresnel surface scatter + twilight terminator band
+  const innerGeo = new THREE.SphereGeometry(planetRadius * 1.012, 112, 80);
+  const innerMat = new MeshBasicNodeMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.FrontSide,
+    fog: false,
+  });
+  const ndotvInner = max(dot(normalView, positionViewDirection), float(0.0));
+  const fresnelInner = pow(float(1.0).sub(ndotvInner), float(3.2));
+  const sunDot = dot(normalWorld, sunDirNode);
+  const dayMask = smoothstep(float(-0.28), float(0.45), sunDot);
+  const twilightMask = smoothstep(float(-0.34), float(0.02), sunDot).mul(
+    float(1.0).sub(smoothstep(float(0.02), float(0.38), sunDot))
   );
+  const scatterCol = mix(cDay, cTwilight, twilightMask.mul(0.55));
+  innerMat.colorNode = scatterCol.mul(fresnelInner).mul(dayMask).mul(float(intensity * 1.15));
+  innerMat.opacityNode = fresnelInner.mul(dayMask).mul(float(0.95));
+  disposables.push(innerGeo, innerMat);
+  grp.add(new THREE.Mesh(innerGeo, innerMat));
+
+  // Layer 2: Outer exponential soft atmospheric limb scatter halo (fades seamlessly to 0 at edge!)
+  const outerGeo = new THREE.SphereGeometry(planetRadius * 1.095, 112, 80);
+  const outerMat = new MeshBasicNodeMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.BackSide,
+    fog: false,
+  });
+  const ndotvOuter = max(dot(normalView.negate(), positionViewDirection), float(0.0));
+  const softLimb = pow(ndotvOuter, float(5.2));
+  const outerDay = smoothstep(float(-0.35), float(0.35), sunDot);
+  outerMat.colorNode = cDay.mul(softLimb).mul(outerDay).mul(float(intensity * 1.65));
+  outerMat.opacityNode = softLimb.mul(outerDay).mul(float(0.9));
+  disposables.push(outerGeo, outerMat);
+  grp.add(new THREE.Mesh(outerGeo, outerMat));
+
+  return { group: grp, disposables };
 }
 
 /** Resolves the sharpest 4K HDRI URL for a given preset & active cinematic world! */
@@ -297,27 +377,12 @@ function buildCinematicWorld(
   };
   const updaters: Array<(t: number, speed: number) => void> = [];
 
-  // Optional subtle Compiz Cube glass wireframe core ONLY when layout === "compiz-cube"
+  // Ultra-subtle Compiz Cube wireframe ONLY when layout === "compiz-cube" (never blocks cinematic vistas!)
   if (layout === "compiz-cube") {
     const coreGeo = geo(new THREE.BoxGeometry(CUBE_HALF_SIZE * 2, 920, CUBE_HALF_SIZE * 2));
-    const coreMesh = new THREE.Mesh(
-      coreGeo,
-      mat(
-        new THREE.MeshPhysicalMaterial({
-          color: "#091b26",
-          transparent: true,
-          opacity: 0.22,
-          metalness: 0.25,
-          roughness: 0.08,
-          clearcoat: 1.0,
-        })
-      )
-    );
-    coreMesh.position.y = 45;
-    group.add(coreMesh);
     const cubeEdges = new THREE.LineSegments(
       geo(new THREE.EdgesGeometry(coreGeo)),
-      mat(new THREE.LineBasicMaterial({ color: "#38bdf8", transparent: true, opacity: 0.75 }))
+      mat(new THREE.LineBasicMaterial({ color: "#38bdf8", transparent: true, opacity: 0.24 }))
     );
     cubeEdges.position.y = 45;
     group.add(cubeEdges);
@@ -589,111 +654,114 @@ function buildCinematicWorld(
     };
   }
 
-  // ─── 3. EARTH ORBIT — NASA 4K BLUE MARBLE + 4K CLOUDS + RAYLEIGH ATMOSPHERE + 4K MOON ───
+  // ─── 3. EARTH ORBIT — AAA CINEMATIC NASA 4K EARTH + VOLUMETRIC RAYLEIGH ATMOSPHERE + 4K MOON ───
   if (world === "earth-orbit") {
-    const stars = createStarfield(Math.round(3800 * particleDensity), 14000, 36000, starTex);
-    disposables.push(stars.geometry, stars.material as THREE.Material);
+    const stars = createStarfield(Math.round(4500 * particleDensity), 16000, 38000, starTex);
+    stars.traverse((obj) => {
+      if (obj instanceof THREE.Points) disposables.push(obj.geometry, obj.material as THREE.Material);
+    });
     group.add(stars);
 
+    const sunPosVec = new THREE.Vector3(-9200, 5200, -11000);
     const earthGroup = new THREE.Group();
-    earthGroup.position.set(0, -6150, -1800);
-    earthGroup.rotation.z = 0.24;
+    earthGroup.position.set(0, -6120, -1900);
+    earthGroup.rotation.z = 0.22;
     group.add(earthGroup);
 
-    const earthSurf = loadCachedTexture(PLANET_TEX.earthSurface, true);
-    const earthNorm = loadCachedTexture(PLANET_TEX.earthNormal, false);
-    const earthSpec = loadCachedTexture(PLANET_TEX.earthSpecular, false);
-    const earthCloudsTex = loadCachedTexture(PLANET_TEX.earthClouds, true);
+    const earthSurf = loadCachedTexture(PLANET_TEX.earthSurface, true, 16);
+    const earthNorm = loadCachedTexture(PLANET_TEX.earthNormal, false, 16);
+    const earthSpec = loadCachedTexture(PLANET_TEX.earthSpecular, false, 16);
+    const earthCloudsTex = loadCachedTexture(PLANET_TEX.earthClouds, true, 16);
 
+    // 128x96 ultra-smooth sphere, ZERO shadow-acne (receiveShadow = false!)
     const earth = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(5600, 96, 64)),
+      geo(new THREE.SphereGeometry(5600, 128, 96)),
       mat(
         new THREE.MeshStandardMaterial({
           map: earthSurf,
           normalMap: earthNorm,
-          normalScale: new THREE.Vector2(1.4, 1.4),
+          normalScale: new THREE.Vector2(1.2, 1.2),
           roughnessMap: earthSpec,
-          roughness: 0.62,
-          metalness: 0.12,
+          roughness: 0.68,
+          metalness: 0.08,
+          fog: false,
         })
       )
     );
-    earth.receiveShadow = true;
+    earth.receiveShadow = false;
+    earth.castShadow = false;
     earthGroup.add(earth);
 
-    // Drifting 4K Volumetric Cloud Sphere
+    // Drifting 4K Volumetric Cloud Layer (+88 altitude clearance — ZERO z-fighting!)
     const clouds = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(5655, 84, 56)),
+      geo(new THREE.SphereGeometry(5688, 112, 80)),
       mat(
         new THREE.MeshStandardMaterial({
           map: earthCloudsTex,
           transparent: true,
-          opacity: 0.88,
+          opacity: 0.9,
           depthWrite: false,
-          roughness: 0.9,
+          roughness: 0.92,
+          metalness: 0.0,
+          fog: false,
         })
       )
     );
+    clouds.receiveShadow = false;
+    clouds.castShadow = false;
     earthGroup.add(clouds);
 
-    // Electric Rayleigh Blue Atmospheric Fresnel Rim Halo!
-    const atmo = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(5880, 64, 48)),
-      mat(
-        new THREE.MeshBasicMaterial({
-          color: "#38bdf8",
-          transparent: true,
-          opacity: 0.22,
-          side: THREE.BackSide,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        })
-      )
-    );
-    earthGroup.add(atmo);
+    // TRUE AAA Volumetric Rayleigh + Twilight Atmosphere (NO flat cyan band!)
+    const atmo = createVolumetricAtmosphere(5600, "#38bdf8", "#fb923c", sunPosVec, 1.35);
+    disposables.push(...atmo.disposables);
+    earthGroup.add(atmo.group);
 
-    // Crisp 4K NASA Moon suspended in upper distant orbit
-    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true);
-    const moonNorm = loadCachedTexture(PLANET_TEX.moonNormal, false);
+    // Crisp 4K NASA Moon suspended in upper distant orbit (ZERO shadow-acne!)
+    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true, 16);
+    const moonNorm = loadCachedTexture(PLANET_TEX.moonNormal, false, 16);
     const moon = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(780, 64, 48)),
+      geo(new THREE.SphereGeometry(820, 96, 64)),
       mat(
         new THREE.MeshStandardMaterial({
           map: moonSurf,
           normalMap: moonNorm,
-          roughness: 0.92,
+          normalScale: new THREE.Vector2(1.3, 1.3),
+          roughness: 0.94,
           metalness: 0.02,
+          fog: false,
         })
       )
     );
-    moon.position.set(5200, 2900, -11200);
+    moon.receiveShadow = false;
+    moon.castShadow = false;
+    moon.position.set(5200, 2950, -11200);
     group.add(moon);
 
     // Blazing Orbital Sun with NASA Lens Flare!
     const flareTex = loadCachedTexture(PLANET_TEX.lensFlare, true);
     const sunFlare = new THREE.Sprite(
-      mat(new THREE.SpriteMaterial({ map: flareTex, blending: THREE.AdditiveBlending, depthWrite: false }))
+      mat(new THREE.SpriteMaterial({ map: flareTex, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }))
     );
-    sunFlare.position.set(-9800, 5600, -16500);
-    sunFlare.scale.set(9200, 9200, 1);
+    sunFlare.position.set(-10500, 5800, -17200);
+    sunFlare.scale.set(9600, 9600, 1);
     group.add(sunFlare);
 
     updaters.push((t, sp) => {
-      earth.rotation.y = 1.65 + t * 0.014 * sp;
-      clouds.rotation.y = 1.65 + t * 0.02 * sp;
-      moon.rotation.y = t * 0.025 * sp;
-      stars.rotation.y = t * 0.002 * sp;
+      earth.rotation.y = 1.65 + t * 0.012 * sp;
+      clouds.rotation.y = 1.65 + t * 0.017 * sp;
+      moon.rotation.y = t * 0.022 * sp;
+      stars.rotation.y = t * 0.0018 * sp;
     });
 
     return {
       group,
       fogColor: "#01030a",
-      fogDensity: 0.000004,
-      sunPos: [-9200, 5200, -12000],
-      sunColor: "#fffbeb",
-      sunIntensity: 3.1,
-      hemiSky: "#38bdf8",
-      hemiGround: "#020617",
+      fogDensity: 0.0,
+      sunPos: [sunPosVec.x, sunPosVec.y, sunPosVec.z],
+      sunColor: "#fffaf0",
+      sunIntensity: 3.2,
+      hemiSky: "#60a5fa",
+      hemiGround: "#030712",
       update: (t, s) => {
         for (const u of updaters) u(t, s);
       },
@@ -703,52 +771,47 @@ function buildCinematicWorld(
     };
   }
 
-  // ─── 4. JUPITER ORBIT — COLOSSAL 4K NASA JUPITER + IO & EUROPA MOONS ───
+  // ─── 4. JUPITER ORBIT — AAA COLOSSAL 4K NASA JUPITER + VOLUMETRIC AMBER ATMOSPHERE + MOONS ───
   if (world === "jupiter-orbit") {
-    const stars = createStarfield(Math.round(4000 * particleDensity), 15000, 38000, starTex);
-    disposables.push(stars.geometry, stars.material as THREE.Material);
+    const stars = createStarfield(Math.round(4600 * particleDensity), 16000, 38000, starTex);
+    stars.traverse((obj) => {
+      if (obj instanceof THREE.Points) disposables.push(obj.geometry, obj.material as THREE.Material);
+    });
     group.add(stars);
 
-    const jupSurf = loadCachedTexture(PLANET_TEX.jupiterSurface, true);
-    const jupBump = loadCachedTexture(PLANET_TEX.jupiterBump, false);
+    const sunPosVec = new THREE.Vector3(9800, 4800, -11000);
+    const jupSurf = loadCachedTexture(PLANET_TEX.jupiterSurface, true, 16);
+    const jupBump = loadCachedTexture(PLANET_TEX.jupiterBump, false, 16);
     const jupiterGroup = new THREE.Group();
-    jupiterGroup.position.set(-600, -5400, -4800);
+    jupiterGroup.position.set(-600, -5450, -4800);
     jupiterGroup.rotation.z = -0.14;
     group.add(jupiterGroup);
 
     const jupiter = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(6400, 96, 64)),
+      geo(new THREE.SphereGeometry(6400, 128, 96)),
       mat(
         new THREE.MeshStandardMaterial({
           map: jupSurf,
           bumpMap: jupBump,
-          bumpScale: 38,
-          roughness: 0.72,
-          metalness: 0.05,
+          bumpScale: 24,
+          roughness: 0.78,
+          metalness: 0.02,
+          fog: false,
         })
       )
     );
+    jupiter.receiveShadow = false;
+    jupiter.castShadow = false;
     jupiterGroup.add(jupiter);
 
-    // Warm Amber-Gold Atmospheric Limb Halo
-    const halo = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(6660, 64, 48)),
-      mat(
-        new THREE.MeshBasicMaterial({
-          color: "#f59e0b",
-          transparent: true,
-          opacity: 0.18,
-          side: THREE.BackSide,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        })
-      )
-    );
-    jupiterGroup.add(halo);
+    // Volumetric Warm Amber-Terracotta Gas Giant Atmosphere (ZERO hard edge!)
+    const jupAtmo = createVolumetricAtmosphere(6400, "#fbbf24", "#ea580c", sunPosVec, 1.15);
+    disposables.push(...jupAtmo.disposables);
+    jupiterGroup.add(jupAtmo.group);
 
-    // Subtle Jovian Gossamer Dust Ring
+    // Delicate Jovian Gossamer Dust Ring
     const ring = new THREE.Mesh(
-      geo(new THREE.RingGeometry(7400, 9400, 128)),
+      geo(new THREE.RingGeometry(7400, 9600, 144)),
       mat(
         new THREE.MeshBasicMaterial({
           color: "#d6b48c",
@@ -756,6 +819,7 @@ function buildCinematicWorld(
           opacity: 0.14,
           side: THREE.DoubleSide,
           depthWrite: false,
+          fog: false,
         })
       )
     );
@@ -763,41 +827,42 @@ function buildCinematicWorld(
     jupiterGroup.add(ring);
 
     // Orbiting Galilean Moons: Io (volcanic amber) & Europa (icy blue)
-    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true);
+    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true, 16);
+    const moonNorm = loadCachedTexture(PLANET_TEX.moonNormal, false, 16);
     const europa = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(420, 48, 32)),
-      mat(new THREE.MeshStandardMaterial({ map: moonSurf, color: "#bae6fd", roughness: 0.45, metalness: 0.15 }))
+      geo(new THREE.SphereGeometry(440, 64, 48)),
+      mat(new THREE.MeshStandardMaterial({ map: moonSurf, normalMap: moonNorm, color: "#bae6fd", roughness: 0.45, metalness: 0.1, fog: false }))
     );
     const io = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(360, 48, 32)),
-      mat(new THREE.MeshStandardMaterial({ map: moonSurf, color: "#fbbf24", roughness: 0.82 }))
+      geo(new THREE.SphereGeometry(380, 64, 48)),
+      mat(new THREE.MeshStandardMaterial({ map: moonSurf, normalMap: moonNorm, color: "#fbbf24", roughness: 0.82, fog: false }))
     );
     group.add(europa, io);
 
     const flareTex = loadCachedTexture(PLANET_TEX.lensFlare, true);
     const sunFlare = new THREE.Sprite(
-      mat(new THREE.SpriteMaterial({ map: flareTex, blending: THREE.AdditiveBlending, depthWrite: false }))
+      mat(new THREE.SpriteMaterial({ map: flareTex, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }))
     );
-    sunFlare.position.set(11000, 5200, -16000);
-    sunFlare.scale.set(7800, 7800, 1);
+    sunFlare.position.set(11200, 5200, -16200);
+    sunFlare.scale.set(8200, 8200, 1);
     group.add(sunFlare);
 
     updaters.push((t, sp) => {
-      jupiter.rotation.y = 0.8 + t * 0.022 * sp;
+      jupiter.rotation.y = 0.8 + t * 0.02 * sp;
       const a1 = 0.7 + t * 0.045 * sp;
       europa.position.set(Math.cos(a1) * 5800 + 1800, 1500 + Math.sin(a1) * 520, -7600 + Math.sin(a1) * 2800);
       const a2 = -1.2 + t * 0.068 * sp;
       io.position.set(Math.cos(a2) * 4200 - 2200, 2200, -9200 + Math.sin(a2) * 2400);
-      stars.rotation.y = t * 0.002 * sp;
+      stars.rotation.y = t * 0.0018 * sp;
     });
 
     return {
       group,
       fogColor: "#040308",
-      fogDensity: 0.000004,
-      sunPos: [9800, 4800, -11000],
+      fogDensity: 0.0,
+      sunPos: [sunPosVec.x, sunPosVec.y, sunPosVec.z],
       sunColor: "#ffedd5",
-      sunIntensity: 3.0,
+      sunIntensity: 3.1,
       hemiSky: "#fbbf24",
       hemiGround: "#1c1208",
       update: (t, s) => {
@@ -809,14 +874,17 @@ function buildCinematicWorld(
     };
   }
 
-  // ─── 5. LUNAR HORIZON & 4K EARTHRISE (NASA 4K Cratered Moon Terrain + Giant Earthrise!) ───
+  // ─── 5. LUNAR HORIZON & AAA 4K EARTHRISE (NASA 4K Cratered Moon Terrain + Volumetric Earthrise!) ───
   if (world === "lunar-horizon") {
-    const stars = createStarfield(Math.round(4200 * particleDensity), 14000, 36000, starTex);
-    disposables.push(stars.geometry, stars.material as THREE.Material);
+    const stars = createStarfield(Math.round(4600 * particleDensity), 16000, 38000, starTex);
+    stars.traverse((obj) => {
+      if (obj instanceof THREE.Points) disposables.push(obj.geometry, obj.material as THREE.Material);
+    });
     group.add(stars);
 
-    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true);
-    const moonNorm = loadCachedTexture(PLANET_TEX.moonNormal, false);
+    const sunPosVec = new THREE.Vector3(-8500, 3200, 4200);
+    const moonSurf = loadCachedTexture(PLANET_TEX.moonSurface, true, 16);
+    const moonNorm = loadCachedTexture(PLANET_TEX.moonNormal, false, 16);
     moonSurf.wrapS = moonSurf.wrapT = THREE.RepeatWrapping;
     moonNorm.wrapS = moonNorm.wrapT = THREE.RepeatWrapping;
     moonSurf.repeat.set(3, 3);
@@ -836,7 +904,6 @@ function buildCinematicWorld(
       const x = lp.getX(i);
       const z = lp.getZ(i);
       const dist = Math.hypot(x, z);
-      // Natural curved lunar horizon drop-off + rolling ridges + craters!
       let y = -620 - dist * dist * 0.0000045 + fbm2(x * 0.00032, z * 0.00032, 5) * 620;
       for (const c of craters) {
         const cd = Math.hypot(x - c.x, z - c.z) / c.r;
@@ -858,56 +925,46 @@ function buildCinematicWorld(
           normalScale: new THREE.Vector2(1.8, 1.8),
           roughness: 0.94,
           metalness: 0.04,
+          fog: false,
         })
       )
     );
-    lunarGround.receiveShadow = true;
-    lunarGround.castShadow = true;
+    lunarGround.receiveShadow = false;
+    lunarGround.castShadow = false;
     group.add(lunarGround);
 
-    // Colossal Glowing 4K Earthrise hanging dramatically over the lunar horizon!
-    const earthSurf = loadCachedTexture(PLANET_TEX.earthSurface, true);
-    const earthCloudsTex = loadCachedTexture(PLANET_TEX.earthClouds, true);
+    // Colossal AAA Volumetric 4K Earthrise hanging over the lunar horizon!
+    const earthSurf = loadCachedTexture(PLANET_TEX.earthSurface, true, 16);
+    const earthCloudsTex = loadCachedTexture(PLANET_TEX.earthClouds, true, 16);
     const earthRise = new THREE.Group();
     earthRise.position.set(1600, 2650, -13800);
     group.add(earthRise);
 
     const earthSphere = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(2650, 84, 56)),
-      mat(new THREE.MeshStandardMaterial({ map: earthSurf, roughness: 0.65, metalness: 0.1 }))
+      geo(new THREE.SphereGeometry(2650, 112, 80)),
+      mat(new THREE.MeshStandardMaterial({ map: earthSurf, roughness: 0.65, metalness: 0.08, fog: false }))
     );
     earthRise.add(earthSphere);
     const earthCloudSphere = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(2685, 64, 48)),
-      mat(new THREE.MeshStandardMaterial({ map: earthCloudsTex, transparent: true, opacity: 0.88, depthWrite: false }))
+      geo(new THREE.SphereGeometry(2700, 96, 64)),
+      mat(new THREE.MeshStandardMaterial({ map: earthCloudsTex, transparent: true, opacity: 0.88, depthWrite: false, fog: false }))
     );
     earthRise.add(earthCloudSphere);
-    const earthHalo = new THREE.Mesh(
-      geo(new THREE.SphereGeometry(2820, 48, 36)),
-      mat(
-        new THREE.MeshBasicMaterial({
-          color: "#38bdf8",
-          transparent: true,
-          opacity: 0.28,
-          side: THREE.BackSide,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        })
-      )
-    );
-    earthRise.add(earthHalo);
+    const riseAtmo = createVolumetricAtmosphere(2650, "#38bdf8", "#fb923c", sunPosVec, 1.35);
+    disposables.push(...riseAtmo.disposables);
+    earthRise.add(riseAtmo.group);
 
     updaters.push((t, sp) => {
-      earthSphere.rotation.y = 2.1 + t * 0.018 * sp;
-      earthCloudSphere.rotation.y = 2.1 + t * 0.025 * sp;
+      earthSphere.rotation.y = 2.1 + t * 0.016 * sp;
+      earthCloudSphere.rotation.y = 2.1 + t * 0.022 * sp;
       stars.rotation.y = t * 0.0015 * sp;
     });
 
     return {
       group,
       fogColor: "#010206",
-      fogDensity: 0.000005,
-      sunPos: [-8500, 3200, 4200],
+      fogDensity: 0.0,
+      sunPos: [sunPosVec.x, sunPosVec.y, sunPosVec.z],
       sunColor: "#ffffff",
       sunIntensity: 3.1,
       hemiSky: "#93c5fd",
@@ -922,8 +979,10 @@ function buildCinematicWorld(
   }
 
   // ─── 6. AURORA BOREALIS & ARCTIC ICEBERG SEA (Animated 3D Volumetric Aurora Ribbons!) ───
-  const stars = createStarfield(Math.round(3200 * particleDensity), 12000, 32000, starTex);
-  disposables.push(stars.geometry, stars.material as THREE.Material);
+  const stars = createStarfield(Math.round(3600 * particleDensity), 14000, 34000, starTex);
+  stars.traverse((obj) => {
+    if (obj instanceof THREE.Points) disposables.push(obj.geometry, obj.material as THREE.Material);
+  });
   group.add(stars);
 
   // Dark Reflective Arctic Sea
@@ -1177,7 +1236,6 @@ export const ThreeDesktop3d: React.FC = () => {
   const [backendLabel, setBackendLabel] = useState<"WebGPU" | "WebGL2" | "Init…">("Init…");
   const [fps, setFps] = useState(60);
   const [hdriLoading, setHdriLoading] = useState(false);
-  const [hudCollapsed, setHudCollapsed] = useState(false);
   const overviewToggleRef = useRef(false);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1234,7 +1292,8 @@ export const ThreeDesktop3d: React.FC = () => {
     keyLight.shadow.camera.right = 4500;
     keyLight.shadow.camera.top = 4500;
     keyLight.shadow.camera.bottom = -4500;
-    keyLight.shadow.bias = -0.0005;
+    keyLight.shadow.bias = -0.0008;
+    keyLight.shadow.normalBias = 24;
     scene.add(keyLight);
     keyLightRef.current = keyLight;
 
@@ -1638,16 +1697,16 @@ export const ThreeDesktop3d: React.FC = () => {
           if (dockEl && curCfg.spatialChrome3d) {
             const dx = dockDist * sinF;
             const dz = dockDist * cosF;
-            tmpObj.position.set(dx, -405, dz);
-            tmpObj.rotation.set(-0.22, faceAngle, 0);
+            tmpObj.position.set(dx, -345, dz);
+            tmpObj.rotation.set(-0.2, faceAngle, 0);
             tmpObj.scale.set(1, 1, 1);
             tmpObj.updateMatrixWorld();
             dockEl.style.display = "flex";
             dockEl.style.transform = toObjectCSSMatrix(tmpObj.matrixWorld);
 
             dockGlowBar.visible = true;
-            dockGlowBar.position.set(dx, -445, dz - 8 * cosF);
-            dockGlowBar.rotation.set(-0.22, faceAngle, 0);
+            dockGlowBar.position.set(dx, -384, dz - 8 * cosF);
+            dockGlowBar.rotation.set(-0.2, faceAngle, 0);
           } else {
             dockGlowBar.visible = false;
             if (dockEl) dockEl.style.transform = "";
@@ -1841,23 +1900,12 @@ export const ThreeDesktop3d: React.FC = () => {
         className="fixed inset-0 w-full h-full z-0 pointer-events-auto cursor-grab active:cursor-grabbing touch-none"
       />
 
-      {/* Coherent, Compact, Collapsible Top-Center 3D Control Pill — NEVER overlaps the Dock or Taskbar! */}
-      <div
-        style={{ top: mods.shell.topBarStyle === "hidden" ? "10px" : "44px" }}
-        className="fixed left-1/2 -translate-x-1/2 z-[55] hidden md:flex items-center select-none pointer-events-none"
-      >
-        {hudCollapsed ? (
-          <button
-            type="button"
-            onClick={() => setHudCollapsed(false)}
-            className="pointer-events-auto flex items-center gap-1.5 px-3 py-1 rounded-full glass-dock border border-cyan-400/35 text-[10px] font-mono text-cyan-200 hover:text-white shadow-xl cursor-pointer"
-            title="Afficher la barre de contrôle 3D"
-          >
-            <Box className="w-3 h-3" />
-            3D {backendLabel} · {fps} FPS
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        ) : (
+      {/* Optional 3D Control Pill — HIDDEN by default, toggled cleanly from the OS TopBar! */}
+      {cfg3d.showControlsHud && (
+        <div
+          style={{ top: mods.shell.topBarStyle === "hidden" ? "10px" : "44px" }}
+          className="fixed left-1/2 -translate-x-1/2 z-[55] hidden md:flex items-center select-none pointer-events-none animate-window-in"
+        >
           <div className="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full glass-dock border border-white/18 text-[10px] shadow-2xl max-w-[96vw]">
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/35 text-cyan-200 font-mono shrink-0">
               <Box className="w-3 h-3" />
@@ -2020,26 +2068,25 @@ export const ThreeDesktop3d: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setHudCollapsed(true)}
-              title="Réduire la barre 3D"
-              className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/15 cursor-pointer"
-            >
-              <ChevronUp className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              type="button"
               onClick={() => modStore.setDesktop3d({ enabled: false })}
               title="Revenir au bureau 2D"
               className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/22 hover:bg-rose-500/38 text-rose-200 font-semibold cursor-pointer"
             >
               <Monitor className="w-3 h-3" />
               2D
-              <X className="w-3 h-3" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => modStore.setDesktop3d({ showControlsHud: false })}
+              title="Masquer la barre de contrôle 3D"
+              className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/15 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 };
