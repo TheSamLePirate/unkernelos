@@ -210,7 +210,7 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
 
   const [agent, setAgent] = useState<AgentKind>(creds.defaultAgent);
   const [workspaceDir, setWorkspaceDirState] = useState<string>(
-    wm.activeWorkspaceDir || "/home/user/workspace/my-ai-app"
+    wm.activeWorkspaceDir || "/home/user/workspace"
   );
   const [knownProjects, setKnownProjects] = useState<readonly string[]>([]);
   const [prompt, setPrompt] = useState("");
@@ -237,7 +237,7 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
   const termHandleRef = useRef<KittyTerminalHandle | null>(null);
   const lastCdDirRef = useRef<string>(workspaceDir);
 
-  const projectName = workspaceDir.split("/").filter(Boolean).pop() || "my-ai-app";
+  const projectName = workspaceDir.split("/").filter(Boolean).pop() || "workspace";
 
   const updateCreds = (patch: Partial<CredentialsConfig>) => {
     appRuntime.runFork(Effect.flatMap(SettingsService, (s) => s.updateCredentials(patch)));
@@ -267,7 +267,7 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
   }, [wm.activeWorkspaceDir]);
 
   const switchProjectDir = (dir: string) => {
-    const clean = dir.trim().replace(/\/+/g, "/") || "/home/user/workspace/my-ai-app";
+    const clean = dir.trim().replace(/\/+/g, "/") || "/home/user/workspace";
     setWorkspaceDirState(clean);
     wmStore.setWorkspaceDir(clean);
     if (termHandleRef.current && lastCdDirRef.current !== clean) {

@@ -7,6 +7,7 @@ import { applyOsThemeToDocument } from "../core/os-themes.ts";
 import {
   appRuntime,
   GithubAuthService,
+  GuestFsService,
   SettingsService,
   useOsEvents,
   useSubscriptionRef,
@@ -226,13 +227,26 @@ export const Desktop: React.FC = () => {
     backdropInstanceRef.current?.setShader(cfg.wallpaperShader);
   }, [cfg.wallpaperShader]);
 
-  // Boot unkernel automatically on first mount & open requested PWA shortcut app (or Agent Studio)
+  // Boot unkernel automatically on first mount, reconcile startup workspace, & open requested app (or Agent Studio)
   useEffect(() => {
     appRuntime.runFork(
       Effect.gen(function* () {
         const vm = yield* VmService;
+        const fs = yield* GuestFsService;
         yield* vm.boot();
+
+        // Ensure ~/workspace exists and check whether any projects exist before opening the initial app
+        const curWs = wmStore.getSnapshot().activeWorkspaceDir;
+        const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+        const checkRes = yield* vm
+          .execShell(`mkdir -p /home/user/workspace && [ -d ${sq(curWs)} ] && echo "EXISTS" || echo "MISSING"`)
+          .pipe(Effect.either);
+        const activeExists = checkRes._tag === "Right" && checkRes.right.stdout.trim() === "EXISTS";
+        const projectsRes = yield* fs.listProjects("/home/user/workspace").pipe(Effect.either);
+        const projects = projectsRes._tag === "Right" ? projectsRes.right : [];
+
         yield* Effect.sync(() => {
+          wmStore.reconcileStartupWorkspace(projects, activeExists);
           const requestedApp = new URLSearchParams(window.location.search).get("app") as AppId | null;
           wmStore.openApp(requestedApp && requestedApp in APP_CATALOG ? requestedApp : "agent-studio");
         });

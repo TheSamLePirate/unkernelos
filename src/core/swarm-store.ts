@@ -39,7 +39,7 @@ const DEFAULT_SWARM: SwarmState = {
       name: "Frontend",
       role: "UI / WebGPU / CSS",
       harness: "claude",
-      cwd: "/home/user/workspace/my-ai-app",
+      cwd: "/home/user/workspace",
       status: "idle",
     },
     {
@@ -47,7 +47,7 @@ const DEFAULT_SWARM: SwarmState = {
       name: "Backend",
       role: "Bun API / Tests / CLI",
       harness: "pi",
-      cwd: "/home/user/workspace/my-ai-app",
+      cwd: "/home/user/workspace",
       status: "idle",
     },
   ],

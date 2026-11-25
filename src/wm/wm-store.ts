@@ -504,8 +504,10 @@ function normalizeWorkspacePath(dir: string): string {
   return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }
 
-function loadStoredWorkspace(): { active: string; recent: string[] } {
-  const fallback = { active: "/home/user/workspace/my-ai-app", recent: ["/home/user/workspace/my-ai-app", "/home/user/workspace"] };
+const DEFAULT_WORKSPACE_DIR = "/home/user/workspace";
+
+function loadStoredWorkspace(): { active: string; recent: string[]; hadStored: boolean } {
+  const fallback = { active: DEFAULT_WORKSPACE_DIR, recent: [DEFAULT_WORKSPACE_DIR], hadStored: false };
   if (typeof localStorage === "undefined") return fallback;
   try {
     const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
@@ -513,9 +515,9 @@ function loadStoredWorkspace(): { active: string; recent: string[] } {
     const parsed = JSON.parse(raw) as { active?: string; recent?: string[] };
     const active = parsed.active ? normalizeWorkspacePath(parsed.active) : fallback.active;
     const recent = Array.isArray(parsed.recent) && parsed.recent.length > 0
-      ? Array.from(new Set([active, ...parsed.recent.map(normalizeWorkspacePath)])).slice(0, 8)
-      : [active, "/home/user/workspace"];
-    return { active, recent };
+      ? Array.from(new Set([active, ...parsed.recent.map(normalizeWorkspacePath), DEFAULT_WORKSPACE_DIR])).slice(0, 8)
+      : Array.from(new Set([active, DEFAULT_WORKSPACE_DIR]));
+    return { active, recent, hadStored: Boolean(parsed.active) };
   } catch {
     return fallback;
   }
@@ -1178,6 +1180,40 @@ class WindowManagerStore {
       activeWorkspaceDir: clean,
       recentWorkspaces: nextRecent,
     }));
+  }
+
+  /**
+   * Reconciles the initial workspace on session boot:
+   * - If no saved/created projects exist, start cleanly in /home/user/workspace.
+   * - If the saved workspace no longer exists on disk, fall back to the first created project or /home/user/workspace.
+   */
+  public reconcileStartupWorkspace(existingProjects: readonly string[], activeExists: boolean): void {
+    const cur = this.state.activeWorkspaceDir;
+    const normalizedProjects = existingProjects.map(normalizeWorkspacePath);
+    const projectSet = new Set(normalizedProjects);
+
+    let nextActive = cur;
+    if (cur !== DEFAULT_WORKSPACE_DIR && !activeExists) {
+      nextActive = normalizedProjects[0] ?? DEFAULT_WORKSPACE_DIR;
+    } else if (cur === DEFAULT_WORKSPACE_DIR && !initialWorkspace.hadStored && normalizedProjects.length > 0) {
+      nextActive = normalizedProjects[0]!;
+    }
+
+    const prunedRecent = this.state.recentWorkspaces.filter(
+      (p) => p === DEFAULT_WORKSPACE_DIR || !p.startsWith(`${DEFAULT_WORKSPACE_DIR}/`) || projectSet.has(p) || (p === cur && activeExists)
+    );
+    const nextRecent = Array.from(new Set([nextActive, ...normalizedProjects, ...prunedRecent, DEFAULT_WORKSPACE_DIR])).slice(0, 8);
+
+    if (nextActive !== cur || nextRecent.join("|") !== this.state.recentWorkspaces.join("|")) {
+      if (nextActive !== DEFAULT_WORKSPACE_DIR || initialWorkspace.hadStored) {
+        saveStoredWorkspace(nextActive, nextRecent);
+      }
+      this.setState((s) => ({
+        ...s,
+        activeWorkspaceDir: nextActive,
+        recentWorkspaces: nextRecent,
+      }));
+    }
   }
 
   public pushToast(
