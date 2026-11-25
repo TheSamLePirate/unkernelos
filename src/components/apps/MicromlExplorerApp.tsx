@@ -33,6 +33,7 @@ import { appRuntime, useSubscriptionRef } from "../../core/runtime.ts";
 import { ToolchainService, type ToolchainSnapshot } from "../../core/toolchain-service.ts";
 import { VmService, type VmState } from "../../core/vm-service.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
+import { CodeEditor, type EditorMarker } from "./shared/CodeEditor.tsx";
 
 type StageId = PassId | "c";
 
@@ -69,8 +70,6 @@ const save = (src: string) => {
     // storage unavailable (private mode) — editing still works
   }
 };
-
-const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** Character offsets of a microML location inside `src` (1-based line, 0-based col). */
 function locToRange(src: string, loc: MicromlLocation): [number, number] | null {
@@ -110,10 +109,6 @@ export const MicromlExplorerApp: React.FC = () => {
 
   const { micromlDraft } = useWm();
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const preRef = useRef<HTMLPreElement>(null);
-  const errPreRef = useRef<HTMLPreElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
   const runSeq = useRef(0);
 
   const run = useCallback(async (src: string) => {
@@ -181,36 +176,6 @@ export const MicromlExplorerApp: React.FC = () => {
     appRuntime.runFork(Effect.flatMap(ToolchainService, (t) => t.installTool("microml")).pipe(Effect.ignore));
   };
 
-  const syncScroll = () => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    for (const el of [preRef.current, errPreRef.current]) {
-      if (el) {
-        el.scrollTop = ta.scrollTop;
-        el.scrollLeft = ta.scrollLeft;
-      }
-    }
-    if (gutterRef.current) gutterRef.current.scrollTop = ta.scrollTop;
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      void run(source);
-      return;
-    }
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const ta = e.currentTarget;
-      const { selectionStart: a, selectionEnd: b } = ta;
-      const next = `${source.slice(0, a)}  ${source.slice(b)}`;
-      updateSource(next);
-      requestAnimationFrame(() => {
-        ta.selectionStart = ta.selectionEnd = a + 2;
-      });
-    }
-  };
-
   const stale = result !== null && ranSource !== source;
   const error = result?.error ?? null;
   const errorRange = useMemo(
@@ -218,13 +183,11 @@ export const MicromlExplorerApp: React.FC = () => {
     [error, source, stale]
   );
   const errorLine = error?.loc && !stale ? error.loc.line : null;
-
-  const sourceHtml = useMemo(() => `${highlight(source, "ml")}\n`, [source]);
-  const errorHtml = useMemo(() => {
-    if (!errorRange) return "";
-    const [a, b] = errorRange;
-    return `${escapeHtml(source.slice(0, a))}<span class="underline decoration-wavy decoration-rose-400 decoration-2 underline-offset-4 bg-rose-500/15 rounded-sm">${escapeHtml(source.slice(a, b))}</span>${escapeHtml(source.slice(b))}\n`;
-  }, [source, errorRange]);
+  const markers = useMemo<EditorMarker[]>(
+    () => (errorRange ? [{ start: errorRange[0], end: errorRange[1], kind: "error" }] : []),
+    [errorRange]
+  );
+  const errorLines = useMemo(() => (errorLine ? [errorLine] : []), [errorLine]);
   const lineCount = source.split("\n").length;
 
   // ---- stage status --------------------------------------------------------
@@ -405,46 +368,14 @@ export const MicromlExplorerApp: React.FC = () => {
             {stale && <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">edited · ⌘↵ to recompile</span>}
             <span className="ml-auto">{lineCount} lines</span>
           </div>
-          <div className="relative flex-1 min-h-0 flex">
-            <div
-              ref={gutterRef}
-              className="w-10 shrink-0 py-3 pr-2 text-right font-mono text-[12.5px] leading-[1.6] text-zinc-600 bg-black/25 border-r border-white/6 overflow-hidden select-none"
-            >
-              {Array.from({ length: lineCount }, (_, i) => (
-                <div key={i} className={errorLine === i + 1 ? "text-rose-400 font-semibold" : undefined}>
-                  {i + 1}
-                </div>
-              ))}
-            </div>
-            <div className="relative flex-1 min-w-0">
-              <pre
-                ref={preRef}
-                aria-hidden="true"
-                className="absolute inset-0 m-0 p-3 font-mono text-[12.5px] leading-[1.6] whitespace-pre overflow-hidden pointer-events-none text-zinc-100"
-                dangerouslySetInnerHTML={{ __html: sourceHtml }}
-              />
-              {errorHtml && (
-                <pre
-                  ref={errPreRef}
-                  aria-hidden="true"
-                  className="absolute inset-0 m-0 p-3 font-mono text-[12.5px] leading-[1.6] whitespace-pre overflow-hidden pointer-events-none text-transparent"
-                  dangerouslySetInnerHTML={{ __html: errorHtml }}
-                />
-              )}
-              <textarea
-                ref={textareaRef}
-                value={source}
-                onChange={(e) => updateSource(e.target.value)}
-                onScroll={syncScroll}
-                onKeyDown={onKeyDown}
-                spellCheck={false}
-                wrap="off"
-                autoCapitalize="off"
-                autoCorrect="off"
-                className="absolute inset-0 w-full h-full m-0 p-3 font-mono text-[12.5px] leading-[1.6] whitespace-pre bg-transparent text-transparent caret-amber-300 resize-none outline-none selection:bg-amber-400/25"
-              />
-            </div>
-          </div>
+          <CodeEditor
+            value={source}
+            onChange={updateSource}
+            lang="ml"
+            onRun={() => void run(source)}
+            markers={markers}
+            errorLines={errorLines}
+          />
           {error && !stale && (
             <div className="shrink-0 m-2 rounded-xl border border-rose-400/35 bg-rose-500/10 px-3 py-2">
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-200">

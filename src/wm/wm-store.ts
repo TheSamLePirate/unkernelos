@@ -10,6 +10,7 @@ export type AppId =
   | "ide"
   | "notebook"
   | "microml"
+  | "proof-studio"
   | "terminal"
   | "explorer"
   | "api-client"
@@ -127,6 +128,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minWidth: 680,
     minHeight: 460,
     accent: "from-amber-400 via-orange-500 to-violet-600",
+  },
+  "proof-studio": {
+    id: "proof-studio",
+    title: "Proof Studio",
+    shortTitle: "Proofs",
+    description: "Natural-deduction proofs in Poule: live checking, goal view, proof trees, replay & LaTeX export",
+    defaultWidth: 1280,
+    defaultHeight: 780,
+    minWidth: 720,
+    minHeight: 480,
+    accent: "from-violet-500 via-fuchsia-500 to-emerald-500",
   },
   terminal: {
     id: "terminal",
@@ -474,6 +486,7 @@ interface WmState {
   readonly notebookOpenFilePath: string | null;
   readonly apiClientDraft: ApiClientDraft | null;
   readonly micromlDraft: MicromlDraft | null;
+  readonly pouleDraft: MicromlDraft | null;
   readonly explorerTargetDir: string | null;
   readonly terminalLaunchRequest: TerminalLaunchRequest | null;
   readonly toasts: readonly ToastItem[];
@@ -543,6 +556,7 @@ class WindowManagerStore {
     notebookOpenFilePath: null,
     apiClientDraft: null,
     micromlDraft: null,
+    pouleDraft: null,
     explorerTargetDir: null,
     terminalLaunchRequest: null,
     toasts: [],
@@ -1071,6 +1085,16 @@ class WindowManagerStore {
   public openInMicroml(source: string): void {
     this.setState((s) => ({ ...s, micromlDraft: { id: ++this.terminalReqCounter, source } }));
     this.openApp("microml");
+  }
+
+  public openInProofStudio(source: string): void {
+    this.setState((s) => ({ ...s, pouleDraft: { id: ++this.terminalReqCounter, source } }));
+    this.openApp("proof-studio");
+  }
+
+  public clearPouleDraft(id: number): void {
+    if (this.state.pouleDraft?.id !== id) return;
+    this.setState((s) => ({ ...s, pouleDraft: null }));
   }
 
   public clearMicromlDraft(id: number): void {

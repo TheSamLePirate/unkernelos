@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Image as ImageIcon,
   Layers,
+  Sigma,
   Loader2,
   Play,
   PlayCircle,
@@ -24,6 +25,8 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { executeOsAction } from "../../core/agent-os-api.ts";
 import { runMicroml } from "../../core/microml-runner.ts";
+import { prettyFormula } from "../../core/poule.ts";
+import { runPoule } from "../../core/poule-runner.ts";
 import { appRuntime, GuestFsService, VmService } from "../../core/runtime.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
 
@@ -32,6 +35,7 @@ export type CellLang =
   | "rust"
   | "ocaml"
   | "microml"
+  | "poule"
   | "bun"
   | "sql"
   | "bash"
@@ -92,6 +96,12 @@ const LANG_META: Record<
     short: "μML",
     badge: "bg-orange-500/20 text-orange-200 border-orange-400/40",
     dot: "bg-orange-400",
+  },
+  poule: {
+    label: "Poule proofs",
+    short: "⊢",
+    badge: "bg-violet-500/20 text-violet-200 border-violet-400/40",
+    dot: "bg-violet-400",
   },
   bun: {
     label: "Bun / TypeScript",
@@ -367,6 +377,24 @@ let out = match pair with (n, _) -> print_int n`,
         source: `let rejected =
   let use_twice = fun f -> (f 0, f true) in
   use_twice`,
+      },
+      {
+        lang: "markdown",
+        source:
+          "## Poule: proofs as programs\nThe same repository ships **Poule**, a proof checker for typed first-order logic in natural deduction. A proof is a term: `fun` proves an implication, a pair proves a conjunction, `gen` a universal. Click **Prove** to open the cell in the Proof Studio (goal view, proof tree, replay, LaTeX).",
+      },
+      {
+        lang: "poule",
+        source: `type Nat = Zero | Succ of Nat
+pred even : (Nat)
+
+axiom even_zero : even(Zero)
+axiom even_ss : forall (n : Nat). even(n) -> even(Succ(Succ(n)))
+
+theorem even_four : even(Succ(Succ(Succ(Succ(Zero))))) =
+  even_ss [Succ(Succ(Zero))] (even_ss [Zero] even_zero)
+
+theorem some_even : exists (n : Nat). even(n) = pack [Nat, Zero, even_zero]`,
       },
       {
         lang: "bash",
@@ -671,6 +699,53 @@ export const NotebookApp: React.FC = () => {
           return;
         }
 
+        if (cell.lang === "poule") {
+          const res = await appRuntime.runPromise(Effect.either(runPoule(cell.source)));
+          const durationMs = Math.round(performance.now() - t0);
+          const blank = { stdout: "", stderr: "", exitCode: 0, durationMs, images: [], tables: [] };
+          let output: CellOutput;
+          if (res._tag === "Left") {
+            const e = res.left as { _tag?: string; stderr?: string; message?: string };
+            output = { ...blank, stderr: e.stderr || e.message || String(e._tag), exitCode: 1 };
+          } else if (!res.right.installed || res.right.outdated) {
+            output = {
+              ...blank,
+              stderr: res.right.outdated
+                ? "This microML predates the Poule proof checker. Update it from App Store → Linux Toolchains."
+                : "Poule is not installed in this VM. Install microML from App Store → Linux Toolchains (Debian).",
+              exitCode: 127,
+            };
+          } else {
+            const r = res.right;
+            const lines = r.theorems.map((t) =>
+              t.ok
+                ? `✓ ${t.label}  (${t.size} steps)`
+                : `✗ ${t.label}${t.errorLoc ? ` — line ${t.errorLoc.line}` : ""}\n    ${(t.message ?? "").split("\n").join("\n    ")}`
+            );
+            const failed = r.theorems.filter((t) => !t.ok).length;
+            output = {
+              ...blank,
+              stdout: lines.join("\n"),
+              stderr: r.fatal ? `${r.fatal.loc ? `line ${r.fatal.loc.line}: ` : ""}${r.fatal.message}` : "",
+              exitCode: r.fatal || failed > 0 ? 1 : 0,
+              tables: r.theorems.length
+                ? [
+                    r.theorems.map((t) => ({
+                      theorem: t.name ?? "check",
+                      status: t.ok ? "proved" : "rejected",
+                      statement: t.formula ? prettyFormula(t.formula) : "—",
+                      steps: t.ok ? t.size : "—",
+                    })),
+                  ]
+                : [],
+            };
+          }
+          setCells((prev) =>
+            prev.map((c) => (c.id === cell.id ? { ...c, running: false, execCount: execNo, output } : c))
+          );
+          return;
+        }
+
         if (cell.lang === "microml") {
           const res = await appRuntime.runPromise(Effect.either(runMicroml(cell.source, "cell")));
           const durationMs = Math.round(performance.now() - t0);
@@ -844,6 +919,7 @@ export const NotebookApp: React.FC = () => {
       python: "import math\nprint('π =', round(math.pi, 6))",
       rust: 'println!("Hello from native aarch64 Rust!");',
       ocaml: 'Printf.printf "Hello from OCaml! 6 * 7 = %d\\n" (6 * 7);;',
+      poule: "pred p : ()\npred q : ()\n\ntheorem and_comm : p() /\\ q() -> q() /\\ p() =\n  fun (h : p() /\\ q()) => (snd h, fst h)",
       microml: 'external print_int : int -> unit = "prim_print_int_clot"\n\nlet square x = x * x\nlet out = print_int (square 7)',
       bun: 'console.log("Bun", Bun.version, new Date().toISOString());',
       sql: "SELECT sqlite_version() AS version, datetime('now') AS utc_now;",
@@ -1123,6 +1199,17 @@ export const NotebookApp: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {cell.lang === "poule" && (
+                      <button
+                        type="button"
+                        onClick={() => wmStore.openInProofStudio(cell.source)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-violet-500/15 hover:bg-violet-500/25 border border-violet-400/35 text-violet-200 transition"
+                        title="Open in Proof Studio (goal view, proof tree, replay, LaTeX)"
+                      >
+                        <Sigma className="w-3 h-3" />
+                        Prove
+                      </button>
+                    )}
                     {cell.lang === "microml" && (
                       <button
                         type="button"
@@ -1338,7 +1425,7 @@ export const NotebookApp: React.FC = () => {
 
           {/* Bottom Quick-Add Bar */}
           <div className="flex items-center justify-center gap-1.5 flex-wrap pt-2 pb-6">
-            {(["python", "rust", "ocaml", "microml", "bun", "sql", "bash", "osctl", "markdown"] as CellLang[]).map(
+            {(["python", "rust", "ocaml", "microml", "poule", "bun", "sql", "bash", "osctl", "markdown"] as CellLang[]).map(
               (lang) => (
                 <button
                   key={lang}

@@ -143,7 +143,7 @@ export const TOOLCHAIN_SPECS: readonly ToolSpec[] = [
     id: "microml",
     name: "microML Compiler (coucou747)",
     category: "runtime",
-    description: "Mini-OCaml compiler: typer, pattern matching, closures, C backend + Poule proof language",
+    description: "Mini-OCaml compiler (typer, closures, C backend) + Poule natural-deduction proof checker",
     approxSize: "~14 MB",
     debianOnly: true,
     checkCmd: "[ -x /opt/microml/bin/microml.exe ] && [ -x /usr/local/bin/microml ]",

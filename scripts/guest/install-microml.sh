@@ -1,6 +1,11 @@
 #!/bin/sh
 # Installs microML (https://github.com/coucou747/microML, by coucou747) into /opt/microml.
 #
+# Pinned to the `unkernelos` branch of the TheSamLePirate/microML fork: upstream main plus
+# the fixes proposed upstream (coucou747/microML PRs #1-#6: typer, runtime comparisons,
+# --debug dumps, heap allocation, Poule proof checker + --trace). Switch REPO/REF back to
+# upstream once they are merged.
+#
 # Used both by the Debian image build (scripts/build-debian-dev.sh, inside the chroot)
 # and by the in-OS Toolchain Installer (src/core/toolchain-service.ts, via `?raw` import).
 # Requires (Debian): ocaml ocaml-dune menhir libmenhir-ocaml-dev gcc libc6-dev git ca-certificates
@@ -19,8 +24,8 @@
 set -eu
 
 PREFIX="${MICROML_PREFIX:-/opt/microml}"
-REPO="${MICROML_REPO:-https://github.com/coucou747/microML.git}"
-REF="${MICROML_REF:-4acf022250a6f3fa1a1d72e71408145d5a8534ce}"
+REPO="${MICROML_REPO:-https://github.com/TheSamLePirate/microML.git}"
+REF="${MICROML_REF:-23493c4791cd1953f01e8c655bbdbb77f7a37703}"
 
 for bin in dune menhir gcc git; do
   if ! command -v "$bin" >/dev/null 2>&1; then
@@ -57,40 +62,6 @@ git init -q "$PREFIX/src"
 git -C "$PREFIX/src" remote add origin "$REPO"
 git -C "$PREFIX/src" fetch -q --depth 1 origin "$REF"
 git -C "$PREFIX/src" checkout -q FETCH_HEAD
-
-# Upstream reserves 128M runtime cells (~4 GiB) in a single malloc, which Linux
-# refuses on a 2 GiB guest. 4M cells (~128 MiB) is ample for the bump allocator here.
-if grep -q '^#define INIT_SIZE STEP_SIZE \* 128' "$PREFIX/src/runtime/rt.c"; then
-  sed -i 's/^#define INIT_SIZE STEP_SIZE \* 128/#define INIT_SIZE (STEP_SIZE * 4)/' "$PREFIX/src/runtime/rt.c"
-else
-  echo "install-microml: note: runtime INIT_SIZE layout changed upstream, leaving it as-is" >&2
-fi
-
-# Upstream `handle_option` (lib/passes.ml) prefixes each --debug item with the pass name,
-# leaves a Format box open and shrinks the margin on every item; with several top-level
-# items whole items silently vanish from the dump. Replace it with a plain flush so the
-# Explorer sees every item. (Only affects --debug printing.)
-if grep -q 'Format.pp_set_margin Format.std_formatter (Format.pp_get_margin Format.std_formatter () - len);' "$PREFIX/src/lib/passes.ml"; then
-  cat > "$PREFIX/handle_option.ml" <<'ML'
-let handle_option name access pass =
-  if access name then
-    { init = pass.init; final = pass.final;
-      process = fun acc v ->
-                let out = pass.process acc v in
-                Format.printf "@?";
-                out}
-  else no_pass
-ML
-  awk -v repl="$PREFIX/handle_option.ml" '
-    /^let handle_option/ { while ((getline l < repl) > 0) print l; skip = 1; next }
-    skip && /else no_pass/ { skip = 0; next }
-    !skip { print }
-  ' "$PREFIX/src/lib/passes.ml" > "$PREFIX/passes.ml.new"
-  mv "$PREFIX/passes.ml.new" "$PREFIX/src/lib/passes.ml"
-  rm -f "$PREFIX/handle_option.ml"
-else
-  echo "install-microml: note: lib/passes.ml handle_option changed upstream, leaving it as-is" >&2
-fi
 
 echo "install-microml: building with dune"
 (
@@ -130,4 +101,14 @@ if [ "$EVAL_OUT" != "42" ] || [ "$NATIVE_OUT" != "42" ]; then
   echo "install-microml: smoke test failed (eval='$EVAL_OUT' native='$NATIVE_OUT')" >&2
   exit 1
 fi
-echo "install-microml: OK microML $(cat "$PREFIX/VERSION") (eval=42 native=42)"
+# Poule must accept a valid proof and reject a false one.
+T="$(mktemp -d)"
+printf 'pred p : ()\naxiom a : p()\ntheorem ok : p() = a\n' > "$T/ok.poule"
+printf 'pred p : ()\npred q : ()\naxiom a : p()\ntheorem bad : q() = a\n' > "$T/bad.poule"
+if ! poule "$T/ok.poule" >/dev/null 2>&1 || poule "$T/bad.poule" >/dev/null 2>&1; then
+  rm -rf "$T"
+  echo "install-microml: Poule smoke test failed" >&2
+  exit 1
+fi
+rm -rf "$T"
+echo "install-microml: OK microML $(cat "$PREFIX/VERSION") (eval=42 native=42, poule checks proofs)"

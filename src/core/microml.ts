@@ -172,15 +172,17 @@ let xs = Cons (1, Cons (2, Cons (3, Cons (4, Cons (5, Nil)))))
 
 let out =
   let squares = map (fun x -> x * x) xs in
-  let big = filter (fun x -> (x = 9) || (x = 16) || (x = 25)) squares in
+  let big = filter (fun x -> x > 5) squares in
   print_int (fold_left (fun acc x -> acc + x) 0 big)
 `,
   },
   {
     id: "fib",
-    title: "Fibonacci with tuples",
-    blurb: "Linear recursion returning pairs, destructured by match",
+    title: "Fibonacci",
+    blurb: "Naive double recursion vs tuples — interpreter vs native timing",
     source: `${PRINT_INT}
+
+let rec fib n = if n < 2 then n else fib (n - 1) + fib (n - 2)
 
 let rec fib_pair n =
   if n = 0 then (0, 1)
@@ -188,9 +190,10 @@ let rec fib_pair n =
     match fib_pair (n - 1) with
     | (a, b) -> (b, a + b)
 
-let fib n = match fib_pair n with (a, _) -> a
-
-let out = print_int (fib 30)
+let out =
+  let _ = print_int (fib 22) in
+  match fib_pair 30 with
+  | (a, _) -> print_int a
 `,
   },
   {
@@ -715,7 +718,7 @@ export function parseMicromlOutput(raw: string, token: string): MicromlExploreRe
     const raw = s.get("check-out") ?? "";
     const message =
       checkExit === 124
-        ? "microML did not finish within 20 s (the compiler itself loops on some programs, e.g. f (n - 1) + f (n - 2))."
+        ? "microML did not finish within 20 s."
         : cleanError(raw) || `microML exited with code ${checkExit}`;
     error = { stage: classifyError(message), message, loc: parseLoc(raw) };
   }
@@ -799,15 +802,17 @@ const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;"
 const ML_KEYWORDS = new Set([
   "let", "rec", "in", "fun", "function", "match", "with", "type", "of", "if", "then", "else",
   "external", "val", "and", "begin", "end", "when", "as", "true", "false", "not",
-  // poule
-  "pred", "fundecl", "axiom", "theorem", "check", "forall", "gen",
+]);
+const POULE_KEYWORDS = new Set([
+  "type", "of", "fundecl", "pred", "axiom", "theorem", "check", "forall", "exists", "fun", "gen",
+  "match", "with", "left", "right", "fst", "snd", "triv", "abort", "pack", "unpack",
 ]);
 const IR_KEYWORDS = new Set(["function", "return", "let", "in", "if", "then", "else", "native"]);
 const C_KEYWORDS = new Set([
   "int", "return", "if", "else", "for", "while", "struct", "void", "typedef", "static", "extern", "const",
 ]);
 
-export type HighlightLang = "ml" | "ir" | "c";
+export type HighlightLang = "ml" | "ir" | "c" | "poule";
 
 export interface HighlightOptions {
   /** vN -> source name; when `showNames` is set, vN renders as the source name. */
@@ -816,7 +821,7 @@ export interface HighlightOptions {
 }
 
 export function highlight(code: string, lang: HighlightLang, opts: HighlightOptions = {}): string {
-  const kw = lang === "c" ? C_KEYWORDS : lang === "ir" ? IR_KEYWORDS : ML_KEYWORDS;
+  const kw = lang === "c" ? C_KEYWORDS : lang === "ir" ? IR_KEYWORDS : lang === "poule" ? POULE_KEYWORDS : ML_KEYWORDS;
   const nameMap = opts.nameMap ?? {};
   let out = "";
   let i = 0;
@@ -825,7 +830,7 @@ export function highlight(code: string, lang: HighlightLang, opts: HighlightOpti
   while (i < n) {
     const ch = code[i]!;
     // comments
-    if (inComment || (lang === "ml" && ch === "(" && code[i + 1] === "*") || (lang === "c" && ch === "/" && code[i + 1] === "*")) {
+    if (inComment || ((lang === "ml" || lang === "poule") && ch === "(" && code[i + 1] === "*") || (lang === "c" && ch === "/" && code[i + 1] === "*")) {
       const close = lang === "c" ? "*/" : "*)";
       const startSkip = inComment ? 0 : 2;
       const endIdx = code.indexOf(close, i + startSkip);
@@ -910,6 +915,14 @@ export function highlight(code: string, lang: HighlightLang, opts: HighlightOpti
       }
       i = j;
       continue;
+    }
+    if (lang === "poule") {
+      const op = ["/\\", "\\/", "->", "=>"].find((o) => code.startsWith(o, i));
+      if (op) {
+        out += `<span class="text-fuchsia-300">${esc(op)}</span>`;
+        i += op.length;
+        continue;
+      }
     }
     if ("→∀∧∨⇒λ".includes(ch)) {
       out += `<span class="text-fuchsia-300">${esc(ch)}</span>`;
