@@ -32,6 +32,7 @@ interface SpeechRecognitionLike {
 }
 
 const APP_KEYWORDS: readonly [RegExp, AppId, string][] = [
+  [/\b(rune|liquid metal|métal liquide|metal liquide)\b/i, "rune-settings", "Liquid Metal Réglages (Rune)"],
   [/\b(preuve|preuves|proof|poule|théorème|theoreme)\b/i, "proof-studio", "Studio de preuves"],
   [/\b(notebook|jupyter|science|python|rust|ocaml)\b/i, "notebook", "Polyglot Notebook"],
   [/\b(microml|micro ml|compilateur)\b/i, "microml", "microML Explorer"],

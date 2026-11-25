@@ -61,6 +61,7 @@ const NotebookApp = lazy(() => import("./apps/NotebookApp.tsx").then((m) => ({ d
 const NotesStudioApp = lazy(() => import("./apps/NotesStudioApp.tsx").then((m) => ({ default: m.NotesStudioApp })));
 const PreviewBrowserApp = lazy(() => import("./apps/PreviewBrowserApp.tsx").then((m) => ({ default: m.PreviewBrowserApp })));
 const ProcessManagerApp = lazy(() => import("./apps/ProcessManagerApp.tsx").then((m) => ({ default: m.ProcessManagerApp })));
+const RuneLiquidSettingsApp = lazy(() => import("./apps/RuneLiquidSettingsApp.tsx").then((m) => ({ default: m.RuneLiquidSettingsApp })));
 const ScreenDisplayApp = lazy(() => import("./apps/ScreenDisplayApp.tsx").then((m) => ({ default: m.ScreenDisplayApp })));
 const ServiceRunnerApp = lazy(() => import("./apps/ServiceRunnerApp.tsx").then((m) => ({ default: m.ServiceRunnerApp })));
 const SettingsApp = lazy(() => import("./apps/SettingsApp.tsx").then((m) => ({ default: m.SettingsApp })));
@@ -144,6 +145,8 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
       return <ToolchainInstallerApp />;
     case "monitor":
       return <SystemMonitorApp />;
+    case "rune-settings":
+      return <RuneLiquidSettingsApp />;
     case "settings":
       return (
         <SettingsApp

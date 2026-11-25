@@ -11,6 +11,7 @@ import {
   FileText,
   Film,
   FolderOpen,
+  Gem,
   GitBranch,
   Globe,
   Monitor,
@@ -69,6 +70,7 @@ const APP_META: Record<
   git: { icon: GitBranch, category: "dev" },
   toolchain: { icon: Package, category: "system" },
   monitor: { icon: Activity, category: "system" },
+  "rune-settings": { icon: Gem, category: "system" },
   settings: { icon: Settings, category: "system" },
 };
 

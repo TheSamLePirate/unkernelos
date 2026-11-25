@@ -1,0 +1,49 @@
+[package]
+name = "unkernel-liquid-settings"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Liquid Metal unkernelOS Réglages — native GPU Rust UI app built with anomalyco/rune & rune-fx"
+
+[lib]
+name = "unkernel_liquid_settings"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "unkernel-liquid-settings"
+path = "src/main.rs"
+
+[dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f", default-features = false, features = ["embedded-fonts", "webgl"] }
+rune-fx = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "wgsl"] }
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+wgpu = { version = "~30.0.1", default-features = false, features = ["metal"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+wgpu = { version = "~30.0.1", default-features = false, features = ["dx12"] }
+
+[target.'cfg(all(not(target_vendor = "apple"), not(target_arch = "wasm32"), not(target_os = "windows")))'.dependencies]
+wgpu = { version = "~30.0.1", default-features = false, features = ["vulkan", "gles"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.130"
+wgpu = { version = "~30.0.1", default-features = false, features = ["webgpu", "webgl"] }
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+sctk-adwaita = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+naga = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+accesskit_atspi_common = { git = "https://github.com/anomalyco/rune", rev = "ce1caa8ac79a15d0ea405fdc800a49d1e3351d4f" }
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+debug = 0
+strip = "debuginfo"

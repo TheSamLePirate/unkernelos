@@ -26,6 +26,11 @@ import {
   type ToolchainSnapshot,
 } from "../../core/toolchain-service.ts";
 import { wmStore } from "../../wm/wm-store.ts";
+import runeCargoToml from "../../../rune-apps/liquid-metal-settings/Cargo.toml?raw";
+import runeToolchainToml from "../../../rune-apps/liquid-metal-settings/rust-toolchain.toml?raw";
+import runeGfxRs from "../../../rune-apps/liquid-metal-settings/src/gfx.rs?raw";
+import runeLibRs from "../../../rune-apps/liquid-metal-settings/src/lib.rs?raw";
+import runeMainRs from "../../../rune-apps/liquid-metal-settings/src/main.rs?raw";
 
 interface StoreWebApp {
   readonly id: string;
@@ -206,6 +211,23 @@ pat.oninput=flg.oninput=txt.oninput=run;run();
 ];
 
 const PROJECT_STARTERS: readonly ProjectStarter[] = [
+  {
+    id: "starter-rust-rune-liquid",
+    slug: "rune-liquid-settings",
+    title: "Rust Rune — Liquid Metal GPU App",
+    lang: "Rust",
+    badgeClass: "bg-cyan-500/20 text-cyan-200 border-cyan-400/35",
+    description: "App GUI Rust native propulsée par anomalyco/rune + rune-fx (Liquid Metal shaders, WebGPU/WebGL2 & Wayland).",
+    runCmd: "rune-web-build . ./dist",
+    entryFile: "src/lib.rs",
+    files: {
+      "Cargo.toml": runeCargoToml,
+      "rust-toolchain.toml": runeToolchainToml,
+      "src/gfx.rs": runeGfxRs,
+      "src/lib.rs": runeLibRs,
+      "src/main.rs": runeMainRs,
+    },
+  },
   {
     id: "starter-rust-cli",
     slug: "rust-systems-lab",

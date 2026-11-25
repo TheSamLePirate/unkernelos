@@ -11,6 +11,7 @@ import {
   FileText,
   Film,
   FolderOpen,
+  Gem,
   GitBranch,
   Globe,
   Grid2x2,
@@ -67,6 +68,7 @@ const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string }>> = {
   git: GitBranch,
   toolchain: Package,
   monitor: Activity,
+  "rune-settings": Gem,
   settings: Settings,
 };
 
@@ -83,6 +85,7 @@ const PINNED_DOCK_IDS: readonly AppId[] = [
   "preview",
   "git",
   "agent-api",
+  "rune-settings",
   "settings",
 ];
 

@@ -33,6 +33,7 @@ export type AppId =
   | "git"
   | "toolchain"
   | "monitor"
+  | "rune-settings"
   | "settings";
 
 export type WorkspaceId = 1 | 2 | 3 | 4;
@@ -388,6 +389,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minHeight: 360,
     accent: "from-sky-400 to-cyan-500",
     shortcut: "⌘8",
+  },
+  "rune-settings": {
+    id: "rune-settings",
+    title: "Liquid Metal Réglages (Rust Rune)",
+    shortTitle: "Rune Metal",
+    description: "App native Rust Rune + rune-fx Liquid Metal GPU contrôlant en direct les réglages d'unkernelOS",
+    defaultWidth: 980,
+    defaultHeight: 660,
+    minWidth: 560,
+    minHeight: 440,
+    accent: "from-slate-300 via-cyan-400 to-violet-500",
   },
   settings: {
     id: "settings",

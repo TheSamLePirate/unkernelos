@@ -58,6 +58,31 @@ jobs:
       - name: Verify pre-installed Debian image boots & runs all tools in unkernel.wasm
         run: node scripts/verify-debian-image.ts .cache/custom-distros/debian-full.erofs
 
+      - name: Setup Rust 1.99.1 + wasm32-unknown-unknown (for Rust Rune GPU demo)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.99.1"
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust Rune Liquid Metal WASM bundle
+        id: cache-rune-demo
+        uses: actions/cache@v4
+        with:
+          path: |
+            public/rune-apps/liquid-metal-settings
+            rune-apps/liquid-metal-settings/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rune-liquid-settings-v1-${{ hashFiles('rune-apps/liquid-metal-settings/Cargo.toml', 'rune-apps/liquid-metal-settings/Cargo.lock', 'rune-apps/liquid-metal-settings/rust-toolchain.toml', 'rune-apps/liquid-metal-settings/src/**', 'scripts/build-rune-demo.sh') }}
+          restore-keys: |
+            rune-liquid-settings-v1-
+
+      - name: Build Rust Rune "Liquid Metal Réglages" WASM app
+        if: steps.cache-rune-demo.outputs.cache-hit != 'true'
+        run: |
+          chmod +x scripts/build-rune-demo.sh
+          ./scripts/build-rune-demo.sh public/rune-apps/liquid-metal-settings
+
       - name: Build static bundle for GitHub Pages
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/

@@ -2,6 +2,7 @@ import { Context, Effect, Layer, SubscriptionRef } from "effect";
 import { ToolchainError } from "./errors.ts";
 import { VmService } from "./vm-service.ts";
 import installMicromlScript from "../../scripts/guest/install-microml.sh?raw";
+import installRuneScript from "../../scripts/guest/install-rune.sh?raw";
 
 /** Base64 (UTF-8 safe) so a multi-line script survives a single `sh -c` line. */
 const toB64 = (txt: string): string => {
@@ -20,6 +21,7 @@ export type ToolId =
   | "node"
   | "bun"
   | "rust"
+  | "rune"
   | "ocaml"
   | "microml"
   | "sqlite"
@@ -127,6 +129,18 @@ export const TOOLCHAIN_SPECS: readonly ToolSpec[] = [
     versionCmd: 'PATH="$HOME/.cargo/bin:/usr/bin:/usr/local/bin:$PATH" rustc --version',
     installDebian: "sudo apt-get update && sudo apt-get install -y rustc cargo gcc libc6-dev pkg-config",
     installAlpine: "sudo apk add --no-cache rust cargo build-base",
+  },
+  {
+    id: "rune",
+    name: "Rust Rune GPU UI Toolkit (anomalyco/rune)",
+    category: "graphics",
+    description: "Native Rust GPU UI framework (rune + rune-fx Liquid Metal shaders, Wayland & WASM WebGPU/WebGL2 + rune-new / rune-web-build)",
+    approxSize: "~480 MB",
+    debianOnly: true,
+    checkCmd: "[ -d /opt/rune ] && [ -x /usr/local/bin/rune-new ] && [ -x /usr/local/bin/rune-web-build ]",
+    versionCmd: 'echo "rune $(cat /opt/rune/VERSION 2>/dev/null || echo dev)"',
+    installDebian: `printf '%s' '${toB64(installRuneScript)}' | base64 -d | sh`,
+    installAlpine: "echo 'Rust Rune requires the Debian distro (rustup 1.99.1 + wasm-bindgen + Wayland libs)' >&2; exit 1",
   },
   {
     id: "ocaml",
