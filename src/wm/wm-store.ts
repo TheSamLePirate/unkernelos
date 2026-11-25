@@ -131,9 +131,9 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
   },
   "proof-studio": {
     id: "proof-studio",
-    title: "Proof Studio",
-    shortTitle: "Proofs",
-    description: "Natural-deduction proofs in Poule: live checking, goal view, proof trees, replay & LaTeX export",
+    title: "Studio de preuves",
+    shortTitle: "Preuves",
+    description: "Preuves en déduction naturelle avec Poule : vérification en direct, but, arbre de preuve, guide pas à pas",
     defaultWidth: 1280,
     defaultHeight: 780,
     minWidth: 720,

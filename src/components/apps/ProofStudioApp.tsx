@@ -10,6 +10,7 @@ import {
   ExternalLink,
   GitBranch,
   GraduationCap,
+  HelpCircle,
   Lightbulb,
   ListTree,
   Loader2,
@@ -34,6 +35,7 @@ import {
   explainError,
   globalFacts,
   nodeAtOffset,
+  POULE_SYMBOLS,
   POULE_EXAMPLES,
   POULE_LEVELS,
   POULE_RULES,
@@ -42,9 +44,11 @@ import {
   prettyFormula,
   rangeToOffsets,
   ruleHelp,
+  ruleName,
   ruleView,
   suggestSteps,
   toBussproofs,
+  translateError,
   type DerivNode,
   type PouleLevel,
   type PouleResult,
@@ -60,6 +64,14 @@ import { CodeEditor, type CodeEditorHandle, type EditorMarker } from "./shared/C
 
 const STORAGE_KEY = "unkernelos.poule.source.v1";
 const GUIDE_KEY = "unkernelos.poule.guide.v1";
+const WELCOME_KEY = "unkernelos.poule.welcome.v1";
+const loadWelcome = (): boolean => {
+  try {
+    return window.localStorage.getItem(WELCOME_KEY) !== "seen";
+  } catch {
+    return true;
+  }
+};
 const loadGuide = (): boolean => {
   try {
     return window.localStorage.getItem(GUIDE_KEY) !== "off";
@@ -112,6 +124,17 @@ export const ProofStudioApp: React.FC = () => {
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [guide, setGuideState] = useState<boolean>(loadGuide);
+  const [helpOpen, setHelpOpenState] = useState<boolean>(loadWelcome);
+  const setHelpOpen = (open: boolean) => {
+    setHelpOpenState(open);
+    if (!open) {
+      try {
+        window.localStorage.setItem(WELCOME_KEY, "seen");
+      } catch {
+        // per-viewer preference only
+      }
+    }
+  };
   const setGuide = (on: boolean) => {
     setGuideState(on);
     try {
@@ -144,7 +167,7 @@ export const ProofStudioApp: React.FC = () => {
     setRunning(false);
     if (res._tag === "Left") {
       const e = res.left as { _tag?: string; message?: string; stderr?: string };
-      setVmError(e._tag === "KernelNotRunningError" ? "Linux is not running yet — boot the VM first." : e.stderr || e.message || String(e._tag));
+      setVmError(e._tag === "KernelNotRunningError" ? "Linux n'est pas encore démarré — lance la machine virtuelle d'abord." : e.stderr || e.message || String(e._tag));
       return;
     }
     setResult(res.right);
@@ -319,7 +342,7 @@ export const ProofStudioApp: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     } catch {
-      wmStore.pushToast("Clipboard unavailable", "Could not copy the LaTeX source.", "error");
+      wmStore.pushToast("Presse-papiers indisponible", "Impossible de copier le code LaTeX.", "error");
     }
   };
 
@@ -363,9 +386,9 @@ export const ProofStudioApp: React.FC = () => {
             <Sigma className="w-4 h-4 text-white" />
           </div>
           <div className="min-w-0">
-            <div className="text-[13px] font-semibold text-white leading-tight">Proof Studio</div>
+            <div className="text-[13px] font-semibold text-white leading-tight">Studio de preuves</div>
             <div className="text-[10.5px] text-zinc-400 truncate">
-              Natural deduction in Poule ·{" "}
+              Déduction naturelle avec Poule ·{" "}
               <button type="button" onClick={() => window.open(MICROML_REPO_URL, "_blank", "noopener")} className="text-violet-300 hover:underline">
                 coucou747/microML
               </button>
@@ -389,8 +412,8 @@ export const ProofStudioApp: React.FC = () => {
             ) : (
               <Check className="w-3.5 h-3.5" />
             )}
-            {result.fatal ? "File rejected" : `${proved}/${theorems.length} proved`}
-            {stale && !running && <span className="font-normal text-zinc-400">· edited</span>}
+            {result.fatal ? "Fichier refusé" : `${proved}/${theorems.length} prouvé${proved > 1 ? "s" : ""}`}
+            {stale && !running && <span className="font-normal text-zinc-400">· modifié</span>}
           </div>
         )}
 
@@ -400,11 +423,11 @@ export const ProofStudioApp: React.FC = () => {
             onClick={() => setExamplesOpen((v) => !v)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/6 border border-white/10 text-[11.5px] hover:bg-white/10"
           >
-            <BookOpen className="w-3.5 h-3.5 text-zinc-400" /> Examples <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+            <BookOpen className="w-3.5 h-3.5 text-zinc-400" /> Exemples <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
           </button>
           {examplesOpen && (
             <>
-              <button type="button" aria-label="Close" onClick={() => setExamplesOpen(false)} className="fixed inset-0 z-20 cursor-default" />
+              <button type="button" aria-label="Fermer" onClick={() => setExamplesOpen(false)} className="fixed inset-0 z-20 cursor-default" />
               <div className="absolute right-0 top-full mt-1.5 w-80 max-h-[70vh] overflow-auto z-30 rounded-xl bg-[#10121b] border border-white/12 shadow-2xl p-1.5">
                 {(Object.keys(POULE_LEVELS) as PouleLevel[]).map((lvl) => (
                   <div key={lvl} className="mb-1">
@@ -421,9 +444,10 @@ export const ProofStudioApp: React.FC = () => {
             </>
           )}
         </div>
-        <ToggleButton on={guide} onClick={() => setGuide(!guide)} icon={<GraduationCap className="w-3.5 h-3.5" />} label="Guide" title="Beginner guide: plain-English readings, next-step hints, error explanations" />
-        <ToggleButton on={unicode} onClick={() => setUnicode((v) => !v)} icon={<Type className="w-3.5 h-3.5" />} label={unicode ? "∀∧→" : "ASCII"} title="Mathematical notation" />
-        <ToggleButton on={live} onClick={() => setLive((v) => !v)} icon={<Radio className="w-3.5 h-3.5" />} label="Live" title="Re-check as you type" />
+        <ToggleButton on={guide} onClick={() => setGuide(!guide)} icon={<GraduationCap className="w-3.5 h-3.5" />} label="Guide" title="Mode Guide : formules lues en français, suggestions d'étapes, erreurs expliquées" />
+        <ToggleButton on={unicode} onClick={() => setUnicode((v) => !v)} icon={<Type className="w-3.5 h-3.5" />} label={unicode ? "∀∧→" : "ASCII"} title="Notation mathématique ou texte brut" />
+        <ToggleButton on={live} onClick={() => setLive((v) => !v)} icon={<Radio className="w-3.5 h-3.5" />} label="Direct" title="Revérifier automatiquement pendant la frappe" />
+        <IconBtn onClick={() => setHelpOpen(!helpOpen)} title="Comment ça marche ?"><HelpCircle className="w-4 h-4" /></IconBtn>
         <button
           type="button"
           disabled={running || !vmReady}
@@ -431,7 +455,7 @@ export const ProofStudioApp: React.FC = () => {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-500 to-emerald-500 text-white text-[12px] font-semibold shadow-lg shadow-violet-600/25 disabled:opacity-50"
         >
           {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-          Check
+          Vérifier
           <kbd className="hidden sm:inline ml-1 px-1 rounded bg-black/25 text-[10px] font-mono">⌘↵</kbd>
         </button>
       </div>
@@ -440,8 +464,8 @@ export const ProofStudioApp: React.FC = () => {
         {/* Editor */}
         <div className="lg:w-[40%] h-[40%] lg:h-auto min-h-0 flex flex-col border-b lg:border-b-0 lg:border-r border-white/8">
           <div className="flex items-center gap-2 px-3 py-1.5 text-[10.5px] text-zinc-500 border-b border-white/6 bg-black/20 shrink-0">
-            <span className="font-mono">proofs.poule</span>
-            <span className="ml-auto">move the caret into a proof to see its goal</span>
+            <span className="font-mono">preuves.poule</span>
+            <span className="ml-auto truncate">place le curseur dans une preuve pour voir son but</span>
           </div>
           <CodeEditor
             ref={editorRef}
@@ -456,16 +480,23 @@ export const ProofStudioApp: React.FC = () => {
           {result?.fatal && !stale && (
             <div className="shrink-0 m-2 rounded-xl border border-rose-400/35 bg-rose-500/10 px-3 py-2">
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-200">
-                <AlertTriangle className="w-3.5 h-3.5" /> The file cannot be checked
-                {result.fatal.loc && <span className="font-mono font-normal text-rose-300/80">line {result.fatal.loc.line}</span>}
+                <AlertTriangle className="w-3.5 h-3.5" /> Le fichier ne peut pas être vérifié
+                {result.fatal.loc && <span className="font-mono font-normal text-rose-300/80">ligne {result.fatal.loc.line}</span>}
               </div>
-              <pre className="mt-1 text-[11px] font-mono text-rose-100/90 whitespace-pre-wrap">{result.fatal.message}</pre>
+              <pre className="mt-1 text-[11px] font-mono text-rose-100/90 whitespace-pre-wrap">{translateError(result.fatal.message)}</pre>
+              {guide && explainError(result.fatal.message) && (
+                <div className="mt-1.5 flex gap-1.5 text-[11.5px] text-zinc-200 leading-relaxed">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
+                  {explainError(result.fatal.message)}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Proof side */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          {helpOpen && <HelpCard onClose={() => setHelpOpen(false)} />}
           {/* theorem chips + view tabs */}
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-white/8 bg-black/25 shrink-0">
             <div className="flex-1 min-w-0 flex items-center gap-1 overflow-x-auto">
@@ -476,6 +507,7 @@ export const ProofStudioApp: React.FC = () => {
                     key={t.label}
                     type="button"
                     onClick={() => selectTheorem(t)}
+                    title={`${t.ok ? "Prouvé" : "Refusé"}${t.formula ? ` — ${readable(t.formula)}` : ""}`}
                     className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-mono shrink-0 transition ${
                       active
                         ? t.ok
@@ -493,9 +525,9 @@ export const ProofStudioApp: React.FC = () => {
             <div className="flex items-center rounded-lg border border-white/10 overflow-hidden shrink-0">
               {(
                 [
-                  ["tree", <GitBranch key="t" className="w-3.5 h-3.5" />, "Tree"],
-                  ["outline", <ListTree key="o" className="w-3.5 h-3.5" />, "Outline"],
-                  ["rules", <Sigma key="r" className="w-3.5 h-3.5" />, "Rules"],
+                  ["tree", <GitBranch key="t" className="w-3.5 h-3.5" />, "Arbre"],
+                  ["outline", <ListTree key="o" className="w-3.5 h-3.5" />, "Plan"],
+                  ["rules", <Sigma key="r" className="w-3.5 h-3.5" />, "Règles"],
                 ] as const
               ).map(([id, icon, label]) => (
                 <button
@@ -520,29 +552,29 @@ export const ProofStudioApp: React.FC = () => {
                 onKeyDown={onTreeKey}
                 className="flex-1 min-h-0 overflow-auto outline-none focus-visible:ring-1 focus-visible:ring-violet-400/40 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.05)_1px,transparent_0)] [background-size:22px_22px]">
                 {!vmReady ? (
-                  <Empty icon={<Cpu className="w-6 h-6 text-zinc-500" />} title="Linux is not running" body="Poule runs natively inside the Debian VM. Boot it, and proofs are checked as you type." />
+                  <Empty icon={<Cpu className="w-6 h-6 text-zinc-500" />} title="Linux n'est pas démarré" body="Poule tourne dans la machine virtuelle Debian. Démarre-la, et tes preuves seront vérifiées pendant que tu tapes." />
                 ) : result && !result.installed ? (
                   <Empty
                     icon={<Download className="w-6 h-6 text-violet-300" />}
-                    title="Poule is not installed in this VM"
-                    body="It ships with microML in the pre-built Debian image. Install it here (Debian only)."
-                    action={<InstallButton installing={installing} onClick={install} label="Install microML + Poule" />}
+                    title="Poule n'est pas installé dans cette machine"
+                    body="Il est fourni avec microML dans l'image Debian préinstallée. Tu peux l'installer ici (Debian uniquement)."
+                    action={<InstallButton installing={installing} onClick={install} label="Installer microML + Poule" />}
                   />
                 ) : result?.outdated ? (
                   <Empty
                     icon={<Download className="w-6 h-6 text-amber-300" />}
-                    title="This Poule cannot check proofs yet"
-                    body="The installed microML predates the proof checker and --trace. Update it to the version bundled with unkernelOS."
-                    action={<InstallButton installing={installing} onClick={install} label="Update microML" />}
+                    title="Ce Poule ne sait pas encore vérifier les preuves"
+                    body="Le microML installé est antérieur au vérificateur de preuves. Mets-le à jour vers la version fournie avec unkernelOS."
+                    action={<InstallButton installing={installing} onClick={install} label="Mettre à jour microML" />}
                   />
                 ) : vmError ? (
-                  <Empty icon={<X className="w-6 h-6 text-rose-400" />} title="Could not run Poule" body={vmError} />
+                  <Empty icon={<X className="w-6 h-6 text-rose-400" />} title="Impossible de lancer Poule" body={vmError} />
                 ) : !result ? (
-                  <Empty icon={<Loader2 className="w-6 h-6 text-violet-300 animate-spin" />} title="Checking…" body="Running the proof checker inside Linux." />
+                  <Empty icon={<Loader2 className="w-6 h-6 text-violet-300 animate-spin" />} title="Vérification…" body="Le vérificateur de preuves tourne dans Linux." />
                 ) : view === "rules" ? (
                   <RulesPanel onInsert={(s) => editorRef.current?.insert(s)} />
                 ) : !theorem ? (
-                  <Empty icon={<Sigma className="w-6 h-6 text-zinc-500" />} title="No theorem yet" body="Write `theorem name : formula = proof` or load an example." />
+                  <Empty icon={<Sigma className="w-6 h-6 text-zinc-500" />} title="Aucun théorème pour l'instant" body="Écris « theorem nom : formule = preuve » ou charge un exemple (menu Exemples)." />
                 ) : !theorem.ok ? (
                   <RejectedCard
                     theorem={theorem}
@@ -562,7 +594,21 @@ export const ProofStudioApp: React.FC = () => {
                     <OutlineNode node={theorem.tree!} depth={0} fmt={fmt} selectedId={selectedNode?.id ?? null} onSelect={selectNode} onHover={setHoverNodeId} />
                   </div>
                 ) : (
-                  <div className="min-w-full w-max px-8 py-10 flex justify-center">
+                  <div className="min-w-full w-max">
+                  {guide && (
+                    <div className="sticky left-0 max-w-[min(100%,720px)] mx-4 mt-3 rounded-xl border border-white/10 bg-[#0c0e16]/90 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-500">Théorème {theorem.name ?? ""} — prouvé</div>
+                      <div className="font-mono text-[13px] text-white">{fmt(theorem.formula ?? theorem.tree!.concl)}</div>
+                      <div className="text-[11.5px] text-zinc-400 italic">{readable(theorem.formula ?? theorem.tree!.concl)}</div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-zinc-400">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" /> construire (introduction)</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-400" /> utiliser (élimination)</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-400" /> hypothèse [h]</span>
+                        <span className="text-zinc-500">On lit de haut en bas : chaque trait est une étape, la conclusion est tout en bas. Clique une formule.</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="px-8 py-10 flex justify-center">
                     <div ref={treeRef} style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }} className="transition-transform">
                       <GentzenNode
                         node={theorem.tree!}
@@ -574,6 +620,7 @@ export const ProofStudioApp: React.FC = () => {
                         onHover={setHoverNodeId}
                       />
                     </div>
+                  </div>
                   </div>
                 )}
               </div>
@@ -590,9 +637,9 @@ export const ProofStudioApp: React.FC = () => {
                       }
                     }}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-500/18 border border-violet-400/35 text-violet-100"
-                    title="Replay the derivation step by step"
+                    title="Rejouer la preuve étape par étape"
                   >
-                    {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />} Replay
+                    {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />} Rejouer
                   </button>
                   <input
                     type="range"
@@ -607,24 +654,24 @@ export const ProofStudioApp: React.FC = () => {
                     className="w-28 sm:w-40 accent-violet-400"
                   />
                   <span className="font-mono text-zinc-500">
-                    {replayStep === null ? nodes.length : Math.max(0, replayStep + 1)}/{nodes.length} steps · depth {theorem.depth}
+                    {replayStep === null ? nodes.length : Math.max(0, replayStep + 1)}/{nodes.length} étapes · profondeur {theorem.depth}
                   </span>
                   {replayStep !== null && (
-                    <button type="button" onClick={() => { setPlaying(false); setReplayStep(null); }} className="p-1 rounded hover:bg-white/8" title="Show the whole proof">
+                    <button type="button" onClick={() => { setPlaying(false); setReplayStep(null); }} className="p-1 rounded hover:bg-white/8" title="Montrer toute la preuve">
                       <SkipBack className="w-3.5 h-3.5 text-zinc-400" />
                     </button>
                   )}
-                  <span className="hidden 2xl:inline text-[10px] text-zinc-600">click the tree, then ↑↓←→ · [ ] theorems</span>
+                  <span className="hidden 2xl:inline text-[10px] text-zinc-600">clic sur l'arbre puis ↑↓←→ · [ ] théorèmes</span>
                   <div className="ml-auto flex items-center gap-1">
-                    <IconBtn onClick={() => setZoom((z) => Math.max(0.35, +(z - 0.1).toFixed(2)))} title="Zoom out"><Minus className="w-3.5 h-3.5" /></IconBtn>
+                    <IconBtn onClick={() => setZoom((z) => Math.max(0.35, +(z - 0.1).toFixed(2)))} title="Dézoomer"><Minus className="w-3.5 h-3.5" /></IconBtn>
                     <span className="font-mono w-10 text-center text-zinc-400">{Math.round(zoom * 100)}%</span>
-                    <IconBtn onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(2)))} title="Zoom in"><Plus className="w-3.5 h-3.5" /></IconBtn>
-                    <IconBtn onClick={fit} title="Fit to width"><Maximize2 className="w-3.5 h-3.5" /></IconBtn>
+                    <IconBtn onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(2)))} title="Zoomer"><Plus className="w-3.5 h-3.5" /></IconBtn>
+                    <IconBtn onClick={fit} title="Ajuster à la largeur"><Maximize2 className="w-3.5 h-3.5" /></IconBtn>
                     <button
                       type="button"
                       onClick={() => void copyLatex()}
                       className="ml-1 flex items-center gap-1 px-2 py-1 rounded-lg bg-white/6 border border-white/10 hover:bg-white/10"
-                      title="Copy as LaTeX (bussproofs)"
+                      title="Copier en LaTeX (bussproofs)"
                     >
                       {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <ClipboardCopy className="w-3.5 h-3.5" />}
                       LaTeX
@@ -796,79 +843,147 @@ const GoalPanel: React.FC<{
   const split = (s: string) => [s.slice(0, s.indexOf(" : ")), s.slice(s.indexOf(" : ") + 3)] as const;
 
   return (
-    <div className="xl:w-[300px] h-56 xl:h-auto shrink-0 border-t xl:border-t-0 xl:border-l border-white/8 bg-[#090b12] overflow-auto">
-      <div className="px-3 py-2 border-b border-white/6 flex items-center gap-2">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500">Goal</span>
-        <span className={`ml-auto px-1.5 py-0.5 rounded border text-[10px] font-semibold ${FAMILY_STYLE[rv.family].chip}`}>
-          {rv.family === "hyp" ? `hyp ${rv.label}` : rv.label}
-          {rv.arg ? ` [${rv.arg}]` : ""}
-        </span>
+    <div className="xl:w-[320px] h-60 xl:h-auto shrink-0 border-t xl:border-t-0 xl:border-l border-white/8 bg-[#090b12] overflow-auto">
+      <div className="px-3 py-2 border-b border-white/6">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500">Étape sélectionnée</span>
+          <span className={`ml-auto px-1.5 py-0.5 rounded border text-[10px] font-semibold ${FAMILY_STYLE[rv.family].chip}`}>
+            {rv.label}
+            {rv.arg ? ` [${rv.arg}]` : ""}
+          </span>
+        </div>
+        <div className="mt-0.5 text-[11.5px] text-zinc-300">{ruleName(node.rule)}</div>
       </div>
-      <div className="px-3 py-2 space-y-1.5 font-mono text-[12px]">
-        {vars.length === 0 && hyps.length === 0 && <div className="text-zinc-600 text-[11px] font-sans">No local hypotheses.</div>}
+
+      <Section title="Ce que tu sais">
+        {vars.length === 0 && hyps.length === 0 && <div className="text-zinc-600 text-[11px]">Aucune hypothèse locale ici.</div>}
         {vars.map((v) => {
           const [n, t] = split(v);
           return (
-            <div key={v} className="flex gap-2">
+            <div key={v} className="flex gap-2 font-mono text-[12px]" title={`${n} est un objet quelconque de type ${t}`}>
               <span className="text-cyan-300">{n}</span>
               <span className="text-zinc-500">:</span>
               <span className="text-cyan-100/80">{t}</span>
+              {guide && <span className="ml-auto font-sans text-[10px] text-zinc-600">objet</span>}
             </div>
           );
         })}
         {hyps.map((h) => {
           const [n, f] = split(h);
           return (
-            <div key={h} className="flex gap-2">
+            <div key={h} className="flex gap-2 font-mono text-[12px]" title={readable(f)}>
               <span className="text-violet-300 shrink-0">{n}</span>
               <span className="text-zinc-500">:</span>
               <span className="text-zinc-100 break-words min-w-0">{fmt(f)}</span>
+              {guide && <span className="ml-auto font-sans text-[10px] text-zinc-600 shrink-0">supposé</span>}
             </div>
           );
         })}
         {globals.length > 0 && (
-          <button type="button" onClick={() => setShowGlobals((v) => !v)} className="text-[10.5px] font-sans text-zinc-500 hover:text-zinc-300">
-            {showGlobals ? "▾" : "▸"} {globals.length} axiom{globals.length > 1 ? "s" : ""} & theorem{globals.length > 1 ? "s" : ""} in scope
+          <button type="button" onClick={() => setShowGlobals((v) => !v)} className="text-[10.5px] text-zinc-500 hover:text-zinc-300">
+            {showGlobals ? "▾" : "▸"} {globals.length} axiome{globals.length > 1 ? "s" : ""} et théorème{globals.length > 1 ? "s" : ""} disponible{globals.length > 1 ? "s" : ""}
           </button>
         )}
         {showGlobals &&
           globals.map((g) => (
-            <div key={g.name} className="flex gap-2 opacity-80">
+            <div key={g.name} className="flex gap-2 opacity-85 font-mono text-[11.5px]" title={readable(g.statement)}>
               <span className={g.kind === "axiom" ? "text-amber-300 shrink-0" : "text-emerald-300 shrink-0"}>{g.name}</span>
               <span className="text-zinc-500">:</span>
               <span className="text-zinc-300 break-words min-w-0">{fmt(g.statement)}</span>
             </div>
           ))}
-      </div>
+      </Section>
+
       <div className="mx-3 h-px bg-gradient-to-r from-violet-400/60 via-white/25 to-transparent" />
-      <div className="px-3 py-2.5 flex gap-2 font-mono text-[13px]">
-        <span className="text-violet-300">⊢</span>
-        <span className="text-white break-words min-w-0">{fmt(node.concl)}</span>
-      </div>
-      {guide && <GuideBox formula={node.concl} rule={node.rule} />}
-      {node.children.length > 0 && (
-        <div className="px-3 pb-3">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">from</div>
-          <div className="space-y-1">
-            {node.children.map((c) => (
-              <button key={c.id} type="button" onClick={() => onSelect(c)} className="w-full text-left flex items-center gap-2 px-2 py-1 rounded-md bg-white/[0.03] hover:bg-white/8">
-                <span className={`text-[10px] font-semibold ${FAMILY_STYLE[ruleView(c.rule).family].text}`}>{ruleView(c.rule).label}</span>
-                <span className="font-mono text-[11.5px] text-zinc-200 truncate">{fmt(c.concl)}</span>
-              </button>
-            ))}
-          </div>
+      <Section title="À prouver à cette étape">
+        <div className="flex gap-2 font-mono text-[13px]">
+          <span className="text-violet-300">⊢</span>
+          <span className="text-white break-words min-w-0">{fmt(node.concl)}</span>
         </div>
+        {guide && readable(node.concl) && <div className="text-[11.5px] text-zinc-400 italic leading-relaxed">« {readable(node.concl)} »</div>}
+      </Section>
+
+      {guide && (
+        <div className="mx-3 mb-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2 text-[11.5px] text-zinc-300 leading-relaxed">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-amber-200/80 mb-0.5">
+            <GraduationCap className="w-3.5 h-3.5" /> Comment c'est justifié
+          </div>
+          {ruleHelp(node.rule)}
+        </div>
+      )}
+
+      {node.children.length > 0 && (
+        <Section title="Obtenu à partir de">
+          {node.children.map((c) => (
+            <button key={c.id} type="button" onClick={() => onSelect(c)} title={ruleName(c.rule)} className="w-full text-left flex items-center gap-2 px-2 py-1 rounded-md bg-white/[0.03] hover:bg-white/8">
+              <span className={`text-[10px] font-semibold shrink-0 ${FAMILY_STYLE[ruleView(c.rule).family].text}`}>{ruleView(c.rule).label}</span>
+              <span className="font-mono text-[11.5px] text-zinc-200 truncate">{fmt(c.concl)}</span>
+            </button>
+          ))}
+        </Section>
       )}
       {node.parent && (
         <div className="px-3 pb-3">
           <button type="button" onClick={() => onSelect(node.parent!)} className="text-[11px] text-zinc-400 hover:text-white">
-            ↓ used by {ruleView(node.parent.rule).label}
+            ↓ sert ensuite à : {ruleName(node.parent.rule)}
           </button>
         </div>
       )}
     </div>
   );
 };
+
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div className="px-3 py-2 space-y-1.5">
+    <div className="text-[10px] uppercase tracking-wider text-zinc-500">{title}</div>
+    {children}
+  </div>
+);
+
+const readable = (f: string) => {
+  const ast = parseFormula(f);
+  return ast ? describeFormula(ast) : "";
+};
+
+const HelpCard: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+  <div className="shrink-0 m-2 rounded-2xl border border-violet-400/25 bg-gradient-to-br from-violet-500/[0.08] to-emerald-500/[0.05] p-3">
+    <div className="flex items-start gap-2">
+      <HelpCircle className="w-4 h-4 text-violet-300 mt-0.5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-semibold text-white">Comment ça marche ?</div>
+        <ol className="mt-1.5 grid grid-cols-1 md:grid-cols-3 gap-2 text-[11.5px] text-zinc-300 leading-relaxed">
+          <li className="rounded-xl bg-black/25 px-2.5 py-2">
+            <span className="text-violet-300 font-semibold">1. Énonce.</span> À gauche, écris ce que tu veux prouver :{" "}
+            <code className="font-mono text-emerald-200">theorem nom : formule = preuve</code>
+          </li>
+          <li className="rounded-xl bg-black/25 px-2.5 py-2">
+            <span className="text-violet-300 font-semibold">2. Prouve.</span> Une preuve se construit avec des règles (onglet Règles).
+            Le mode <b>Guide</b> propose la prochaine étape.
+          </li>
+          <li className="rounded-xl bg-black/25 px-2.5 py-2">
+            <span className="text-violet-300 font-semibold">3. Vérifie.</span> Le vérificateur répond aussitôt : ✓ prouvé, ou ✗ avec l'erreur
+            soulignée et expliquée. L'arbre montre chaque étape.
+          </li>
+        </ol>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {POULE_SYMBOLS.map((sy) => (
+            <span key={sy.sym} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/25 border border-white/8 text-[11px]" title={`s'écrit ${sy.ascii}`}>
+              <span className="font-mono text-[13px] text-white">{sy.sym}</span>
+              <span className="text-zinc-400">{sy.reading}</span>
+              <code className="font-mono text-[10px] text-zinc-500">{sy.ascii}</code>
+            </span>
+          ))}
+        </div>
+        <div className="mt-2 text-[11px] text-zinc-500">
+          Pas d'idée ? Ouvre <b className="text-zinc-300">Exemples → Pour commencer</b>. Experts : désactive le Guide pour un affichage compact.
+        </div>
+      </div>
+      <button type="button" onClick={onClose} title="Fermer" className="p-1 rounded-md hover:bg-white/8 text-zinc-400">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  </div>
+);
 
 // ---------------------------------------------------------------------------
 // Rules palette
@@ -886,12 +1001,12 @@ const RulesPanel: React.FC<{ onInsert: (snippet: string) => void }> = ({ onInser
             onClick={() => onInsert(r.snippet)}
             className="ml-auto px-2 py-0.5 rounded-md bg-violet-500/18 border border-violet-400/35 text-[10.5px] text-violet-100 hover:bg-violet-500/28"
           >
-            Insert
+            Insérer
           </button>
         </div>
         <code className="text-[11.5px] font-mono text-emerald-200 bg-black/30 rounded-md px-2 py-1 whitespace-pre-wrap">{r.syntax}</code>
         <div className="text-[11px] text-zinc-400">
-          proves <span className="font-mono text-zinc-200">{r.proves}</span> · from <span className="font-mono text-zinc-300">{r.from}</span>
+          prouve <span className="font-mono text-zinc-200">{r.proves}</span> · à partir de <span className="text-zinc-300">{r.from}</span>
         </div>
       </div>
     ))}
@@ -918,29 +1033,38 @@ const RejectedCard: React.FC<{
       <div className="max-w-xl w-full space-y-3">
         <div className="rounded-2xl border border-rose-400/35 bg-rose-500/[0.07] p-4 shadow-xl">
           <div className="flex items-center gap-2 text-rose-200 text-[13px] font-semibold">
-            <X className="w-4 h-4" /> {theorem.label} is rejected
+            <X className="w-4 h-4" /> {theorem.name ? `Le théorème « ${theorem.name} » est refusé` : "Ce check est refusé"}
           </div>
-          <pre className="mt-2 text-[12px] font-mono text-rose-50/90 whitespace-pre-wrap leading-relaxed">{theorem.message}</pre>
+          <pre className="mt-2 text-[12px] font-mono text-rose-50/90 whitespace-pre-wrap leading-relaxed">{translateError(theorem.message ?? "")}</pre>
           {hint && (
             <div className="mt-3 flex gap-2 rounded-xl bg-black/25 border border-white/8 px-3 py-2 text-[12px] text-zinc-200 leading-relaxed">
               <Lightbulb className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
-              <span>{hint}</span>
+              <span>
+                <b className="text-amber-200">Pourquoi ? </b>
+                {hint}
+              </span>
             </div>
           )}
           {theorem.errorLoc && (
             <button type="button" onClick={onJump} className="mt-3 flex items-center gap-1.5 text-[11.5px] text-rose-200 hover:text-white">
-              <ExternalLink className="w-3.5 h-3.5" /> Go to line {theorem.errorLoc.line}, column {theorem.errorLoc.col}
+              <ExternalLink className="w-3.5 h-3.5" /> Aller à la ligne {theorem.errorLoc.line}, colonne {theorem.errorLoc.col}
             </button>
+          )}
+          {translateError(theorem.message ?? "") !== theorem.message && (
+            <details className="mt-2 text-[10.5px] text-zinc-500">
+              <summary className="cursor-pointer">Message original du vérificateur</summary>
+              <pre className="mt-1 font-mono whitespace-pre-wrap">{theorem.message}</pre>
+            </details>
           )}
         </div>
         {guide && goal && (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">The statement</div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">L'énoncé à prouver</div>
             <div className="mt-1 font-mono text-[13px] text-white">{fmt(goal)}</div>
             <div className="mt-1 text-[12px] text-zinc-400 italic">{describeFormula(parseFormula(goal)!)}</div>
             {steps.length > 0 && (
               <>
-                <div className="mt-3 text-[10px] uppercase tracking-wider text-zinc-500">How to start</div>
+                <div className="mt-3 text-[10px] uppercase tracking-wider text-zinc-500">Par où commencer</div>
                 <Suggestions steps={steps} onInsert={onInsert} />
               </>
             )}
@@ -966,29 +1090,13 @@ const Suggestions: React.FC<{ steps: ReturnType<typeof suggestSteps>; onInsert?:
             onClick={() => onInsert(st.snippet!)}
             className="shrink-0 px-1.5 py-0.5 rounded-md bg-violet-500/18 border border-violet-400/35 text-[10px] text-violet-100 hover:bg-violet-500/28"
           >
-            Insert
+            Insérer
           </button>
         )}
       </div>
     ))}
   </div>
 );
-
-const GuideBox: React.FC<{ formula: string; rule: string }> = ({ formula, rule }) => {
-  const f = parseFormula(formula);
-  return (
-    <div className="mx-3 mb-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2 space-y-1.5">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-amber-200/80">
-        <GraduationCap className="w-3.5 h-3.5" /> Guide
-      </div>
-      {f && <div className="text-[11.5px] text-zinc-200 italic leading-relaxed">{describeFormula(f)}</div>}
-      <div className="text-[11.5px] text-zinc-300 leading-relaxed">
-        <span className="text-zinc-500">This step — </span>
-        {ruleHelp(rule)}
-      </div>
-    </div>
-  );
-};
 
 const Empty: React.FC<{ icon: React.ReactNode; title: string; body: string; action?: React.ReactNode }> = ({ icon, title, body, action }) => (
   <div className="h-full flex flex-col items-center justify-center text-center px-6 py-10">
@@ -1007,7 +1115,7 @@ const InstallButton: React.FC<{ installing: boolean; onClick: () => void; label:
     className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500 text-white text-[12px] font-semibold disabled:opacity-60"
   >
     {installing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-    {installing ? "Installing…" : label}
+    {installing ? "Installation…" : label}
   </button>
 );
 
