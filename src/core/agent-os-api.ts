@@ -32,6 +32,7 @@ import {
   type SurfaceSlot,
 } from "./reactive-mod-engine.ts";
 import { swarmStore } from "./swarm-store.ts";
+import { t3CodeStore } from "./t3code-store.ts";
 import { workflowsStore } from "./workflows-store.ts";
 import {
   appRuntime,
@@ -1283,6 +1284,37 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
     summary: "Remove a custom Reactive Surface by ID.",
     paramsSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
     example: { id: "surf-agent-pill" },
+  },
+  {
+    method: "t3.status",
+    category: "services",
+    summary: "Inspect T3 Code Agent Harness status, connection mode (vm/remote), active threads, subagents, token usage, cost USD & provider limits.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "t3.start",
+    category: "services",
+    summary: "Start the T3 Code server inside the unkernel Linux VM and open the T3 Code OS window.",
+    paramsSchema: {
+      type: "object",
+      properties: { cwd: { type: "string" }, openWindow: { type: "boolean" } },
+    },
+    example: { cwd: "/home/user/workspace", openWindow: true },
+  },
+  {
+    method: "t3.stop",
+    category: "services",
+    summary: "Stop the T3 Code daemon inside the Linux VM.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "t3.project.add",
+    category: "services",
+    summary: "Register a workspace folder as a T3 Code project.",
+    paramsSchema: { type: "object", required: ["dir"], properties: { dir: { type: "string" } } },
+    example: { dir: "/home/user/workspace" },
   },
   {
     method: "mod.reset",
@@ -2643,6 +2675,37 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
 
     case "mod.surface.remove": {
       return { removed: reactiveEngine.removeSurface(String(p.id || "")) };
+    }
+
+    case "t3.status": {
+      await t3CodeStore.refreshProbe();
+      const s = t3CodeStore.getSnapshot();
+      return {
+        mode: s.mode,
+        status: s.status,
+        port: s.port,
+        version: s.version,
+        pid: s.pid,
+        embedUrl: s.embedUrl,
+        metrics: s.metrics,
+      };
+    }
+
+    case "t3.start": {
+      const cwd = typeof p.cwd === "string" && p.cwd.trim() ? p.cwd.trim() : undefined;
+      const res = await t3CodeStore.startVmDaemon(cwd);
+      if (p.openWindow !== false) wmStore.openApp("t3-code");
+      return res;
+    }
+
+    case "t3.stop": {
+      await t3CodeStore.stopVmDaemon();
+      return { stopped: true };
+    }
+
+    case "t3.project.add": {
+      const dir = String(p.dir || wmStore.getSnapshot().activeWorkspaceDir);
+      return await t3CodeStore.addProject(dir);
     }
 
     case "mod.reset": {

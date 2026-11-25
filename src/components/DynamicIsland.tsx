@@ -14,6 +14,7 @@ import {
 import React, { useEffect, useState } from "react";
 import { executeOsAction, useAgentApi } from "../core/agent-os-api.ts";
 import { useSubscriptionRef, VmService } from "../core/runtime.ts";
+import { useT3Code } from "../core/t3code-store.ts";
 import { useVoiceOs, voiceOsEngine } from "../core/voice-os.ts";
 import { wmStore } from "../wm/wm-store.ts";
 
@@ -24,6 +25,7 @@ import { wmStore } from "../wm/wm-store.ts";
 export const DynamicIsland: React.FC = () => {
   const voice = useVoiceOs();
   const api = useAgentApi();
+  const t3 = useT3Code();
   const vm = useSubscriptionRef(
     Effect.map(VmService, (v) => v.stateRef),
     {
@@ -100,6 +102,22 @@ export const DynamicIsland: React.FC = () => {
             <Workflow className="w-3 h-3 text-emerald-300 animate-pulse" />
             <span className="text-[10px] font-mono truncate max-w-[180px]">{recentApiFlash}</span>
           </>
+        ) : t3.status === "running" && (t3.metrics.threadsActive > 0 || t3.metrics.threadsWaiting > 0) ? (
+          <>
+            <span
+              className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                t3.metrics.threadsWaiting > 0 ? "bg-amber-400" : "bg-violet-400"
+              }`}
+            />
+            <span className="text-[10px] font-mono text-violet-200">
+              T3 · {t3.metrics.threadsActive} act
+              {t3.metrics.threadsWaiting > 0 ? ` · ${t3.metrics.threadsWaiting} wait` : ""}
+            </span>
+            <span className="text-white/20">·</span>
+            <span className="text-[10px] font-mono text-emerald-300">
+              ${t3.metrics.costTodayUsd.toFixed(2)}
+            </span>
+          </>
         ) : activePort ? (
           <>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -147,6 +165,30 @@ export const DynamicIsland: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setExpanded(false);
+                  wmStore.openApp("t3-code");
+                }}
+                className="flex items-center gap-2 p-2.5 rounded-2xl bg-gradient-to-r from-violet-500/20 to-cyan-500/18 hover:from-violet-500/30 hover:to-cyan-500/28 border border-violet-400/35 text-left text-zinc-100 transition col-span-2"
+              >
+                <Sparkles className="w-4 h-4 text-cyan-300 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-semibold flex items-center justify-between">
+                    <span>T3 Code Harness</span>
+                    <span className="text-[9.5px] font-mono text-emerald-300">
+                      ${t3.metrics.costTodayUsd.toFixed(3)} · {t3.metrics.tokensTotal.toLocaleString()} tok
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-zinc-300">
+                    {t3.status === "running"
+                      ? `${t3.metrics.threadsActive} threads actifs · ${t3.metrics.subagentsActive} sous-agents`
+                      : "Claude, Pi, Codex & Antigravity · Cliquer pour ouvrir"}
+                  </div>
+                </div>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {

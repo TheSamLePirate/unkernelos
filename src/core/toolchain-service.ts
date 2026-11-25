@@ -3,6 +3,7 @@ import { ToolchainError } from "./errors.ts";
 import { VmService } from "./vm-service.ts";
 import installMicromlScript from "../../scripts/guest/install-microml.sh?raw";
 import installRuneScript from "../../scripts/guest/install-rune.sh?raw";
+import installT3CodeScript from "../../scripts/guest/install-t3code.sh?raw";
 
 /** Base64 (UTF-8 safe) so a multi-line script survives a single `sh -c` line. */
 const toB64 = (txt: string): string => {
@@ -27,6 +28,7 @@ export type ToolId =
   | "sqlite"
   | "claude"
   | "pi"
+  | "t3code"
   | "mesa"
   | "wayland-apps";
 
@@ -210,6 +212,18 @@ export const TOOLCHAIN_SPECS: readonly ToolSpec[] = [
       'PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH" bun --version && PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH" bun add -g --ignore-scripts @earendil-works/pi-coding-agent',
     installAlpine:
       'PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH" bun --version && PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH" bun add -g --ignore-scripts @earendil-works/pi-coding-agent',
+  },
+  {
+    id: "t3code",
+    name: "T3 Code Agent Harness (pingdotgg/t3code)",
+    category: "agent",
+    description: "Unified multi-agent control plane (Claude, Pi, Codex, Antigravity) with threads, subagents, diffs & cost/limits metrics",
+    approxSize: "~170 MB",
+    debianOnly: true,
+    checkCmd: "command -v t3 || [ -x /opt/t3code/t3 ]",
+    versionCmd: "t3 --version 2>&1 | head -n1",
+    installDebian: `printf '%s' '${toB64(installT3CodeScript)}' | base64 -d | sudo bash`,
+    installAlpine: "echo 'T3 Code requires the Debian distro (glibc linux-arm64 binary)' >&2; exit 1",
   },
   {
     id: "mesa",

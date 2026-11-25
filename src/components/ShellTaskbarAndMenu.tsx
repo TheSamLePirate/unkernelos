@@ -31,6 +31,7 @@ import { modStore, useMods } from "../core/mod-store.ts";
 import { APP_CATALOG, useWm, wmStore, type AppId, type WorkspaceId } from "../wm/wm-store.ts";
 
 const ICON_MAP: Partial<Record<AppId, React.ComponentType<{ className?: string }>>> = {
+  "t3-code": Sparkles,
   "agent-studio": Bot,
   "agent-swarm": Network,
   "agent-api": Workflow,
@@ -51,6 +52,7 @@ const ICON_MAP: Partial<Record<AppId, React.ComponentType<{ className?: string }
 };
 
 const DESKTOP_ICON_APPS: readonly AppId[] = [
+  "t3-code",
   "agent-studio",
   "explorer",
   "terminal",

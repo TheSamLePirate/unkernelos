@@ -174,6 +174,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 sudo install -m 755 "$SCRIPT_DIR/guest/install-microml.sh" "$ROOTFS/tmp/install-microml.sh"
 sudo chroot "$ROOTFS" /bin/sh -c 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; sh /tmp/install-microml.sh && rm -f /tmp/install-microml.sh'
 
+echo "=== [5c/7] Installing T3 Code Agent Harness (pingdotgg/t3code linux-arm64) into /opt/t3code ==="
+sudo install -m 755 "$SCRIPT_DIR/guest/install-t3code.sh" "$ROOTFS/tmp/install-t3code.sh"
+sudo chroot "$ROOTFS" /bin/bash -c 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; bash /tmp/install-t3code.sh && rm -f /tmp/install-t3code.sh'
+
 echo "=== [6/7] Updating image metadata & unmounting chroot ==="
 NEW_ID="debian-unkernelos-$(date -u +%Y%m%d%H%M)"
 echo "$NEW_ID" | sudo tee "$ROOTFS/usr/lib/kw-image" >/dev/null

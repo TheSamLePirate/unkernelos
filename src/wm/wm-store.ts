@@ -4,6 +4,7 @@ import { uiSounds } from "../core/ui-sounds.ts";
 import { waylandDesktopManager } from "../core/wayland-host.ts";
 
 export type AppId =
+  | "t3-code"
   | "agent-studio"
   | "agent-swarm"
   | "agent-api"
@@ -70,6 +71,18 @@ export interface AppDefinition {
 }
 
 export const APP_CATALOG: Record<AppId, AppDefinition> = {
+  "t3-code": {
+    id: "t3-code",
+    title: "T3 Code — Multi-Agent Harness",
+    shortTitle: "T3 Code",
+    description: "Unified pingdotgg/t3code control plane for Claude, Pi, Codex & Antigravity (threads, subagents, worktrees, usage, cost & limits)",
+    defaultWidth: 1220,
+    defaultHeight: 740,
+    minWidth: 740,
+    minHeight: 460,
+    accent: "from-cyan-400 via-violet-500 to-fuchsia-500",
+    shortcut: "⌘0",
+  },
   "agent-studio": {
     id: "agent-studio",
     title: "Agent Studio",

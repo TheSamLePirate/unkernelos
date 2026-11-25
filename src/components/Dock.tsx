@@ -42,6 +42,7 @@ import { APP_CATALOG, useWm, wmStore, type AppId } from "../wm/wm-store.ts";
 import { ReactiveSurfaceSlot } from "./ReactiveSurfaceHost.tsx";
 
 const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+  "t3-code": Sparkles,
   "agent-studio": Bot,
   "agent-swarm": Network,
   "agent-api": Workflow,
@@ -77,6 +78,7 @@ const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string; style?:
 };
 
 const PINNED_DOCK_IDS: readonly AppId[] = [
+  "t3-code",
   "agent-studio",
   "agent-swarm",
   "ide",

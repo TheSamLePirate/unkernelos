@@ -35,6 +35,7 @@ try {
       'echo "BUN=$(bun --version)"',
       'echo "PI=$(which pi)"',
       'echo "CLAUDE=$(claude --version)"',
+      'echo "T3CODE=$(t3 --version 2>&1 | head -n1)"',
       'echo "GFX=$(which eglinfo kmscube foot | tr "\\n" " ")"',
     ].join(" && "),
   ]);

@@ -608,6 +608,59 @@ vals.forEach((v, i) => {
     builtin: true,
   },
   {
+    id: "surf-t3-topbar-metrics",
+    name: "Capsule TopBar T3 Code (Threads · Tokens · $)",
+    emoji: "🤖",
+    description: "Expose en direct les threads actifs, sous-agents, tokens et coût USD de T3 Code dans la TopBar de l'OS.",
+    enabled: false,
+    contentType: "html",
+    slot: "topbar",
+    pointerEvents: "auto",
+    html: `<div style="display:flex;align-items:center;gap:6px;padding:0 9px;height:24px;border-radius:999px;background:linear-gradient(90deg,rgba(139,92,246,0.2),rgba(34,211,238,0.18));border:1px solid rgba(167,139,250,0.45);font-family:var(--font-mono);font-size:10px;color:#f5f3ff;white-space:nowrap;">
+  <span style="font-weight:800;color:#67e8f9;">T3</span>
+  <span>{{t3.threads.active}} act</span>
+  <span style="opacity:0.35;">·</span>
+  <span>{{t3.tokens.total}} tok</span>
+  <span style="opacity:0.35;">·</span>
+  <span style="color:#6ee7b7;">\${{t3.cost.today}}</span>
+</div>`,
+    builtin: true,
+  },
+  {
+    id: "surf-t3-3d-command-deck",
+    name: "Panneau 3D T3 Code Metrics & Limites",
+    emoji: "🛰️",
+    description: "Panneau spatial 3D flottant à droite des fenêtres affichant threads, sous-agents, coûts USD et quotas Claude/Pi/Codex/Antigravity.",
+    enabled: false,
+    contentType: "html",
+    slot: "3d-panel",
+    width: 350,
+    height: 235,
+    pointerEvents: "auto",
+    pose3d: { x: 1120, y: 170, z: 160, rx: 0, ry: -0.42, rz: 0 },
+    html: `<div style="width:100%;height:100%;padding:16px;border-radius:24px;background:linear-gradient(145deg,rgba(15,12,34,0.9),rgba(10,20,38,0.86));border:1px solid rgba(167,139,250,0.5);box-shadow:0 0 46px rgba(139,92,246,0.32);color:#f8fafc;font-family:var(--font-mono);display:flex;flex-direction:column;justify-content:space-between;">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <span style="color:#c4b5fd;font-weight:800;font-size:12px;">T3 CODE CONTROL SURFACE</span>
+    <span style="font-size:10px;color:#34d399;text-transform:uppercase;">{{t3.status}}</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+    <div style="padding:9px;border-radius:12px;background:rgba(255,255,255,0.06);">
+      <div style="font-size:9px;color:#94a3b8;">THREADS / SUBS</div>
+      <div style="font-size:17px;font-weight:800;color:#38bdf8;">{{t3.threads.active}} / {{t3.subagents}}</div>
+    </div>
+    <div style="padding:9px;border-radius:12px;background:rgba(255,255,255,0.06);">
+      <div style="font-size:9px;color:#94a3b8;">COÛT DU JOUR</div>
+      <div style="font-size:17px;font-weight:800;color:#34d399;">\${{t3.cost.today}}</div>
+    </div>
+  </div>
+  <div style="font-size:10px;color:#cbd5e1;display:flex;flex-direction:column;gap:4px;">
+    <div style="display:flex;justify-content:space-between;"><span>Tokens totaux</span><span style="color:#facc15;">{{t3.tokens.total}}</span></div>
+    <div style="display:flex;justify-content:space-between;"><span>Claude / Pi Quota</span><span style="color:#67e8f9;">{{t3.limits.claude}}% · {{t3.limits.pi}}%</span></div>
+  </div>
+</div>`,
+    builtin: true,
+  },
+  {
     id: "surf-3d-holo-board",
     name: "Panneau Holographique 3D Spatial",
     emoji: "🧊",

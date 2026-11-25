@@ -42,6 +42,7 @@ const APP_META: Record<
   AppId,
   { icon: React.ComponentType<{ className?: string }>; category: Exclude<CategoryId, "all"> }
 > = {
+  "t3-code": { icon: Sparkles, category: "dev" },
   "agent-studio": { icon: Bot, category: "dev" },
   "agent-swarm": { icon: Network, category: "dev" },
   "agent-api": { icon: Workflow, category: "dev" },

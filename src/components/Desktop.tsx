@@ -6,6 +6,7 @@ import { clipboardStore } from "../core/clipboard-store.ts";
 import { modStore, ULTRA_HD_BACKDROPS, useMods } from "../core/mod-store.ts";
 import { applyOsThemeToDocument } from "../core/os-themes.ts";
 import { reactiveEngine } from "../core/reactive-mod-engine.ts";
+import { t3CodeStore } from "../core/t3code-store.ts";
 import {
   appRuntime,
   GithubAuthService,
@@ -77,6 +78,7 @@ const SettingsApp = lazy(() => import("./apps/SettingsApp.tsx").then((m) => ({ d
 const ShaderSynthApp = lazy(() => import("./apps/ShaderSynthApp.tsx").then((m) => ({ default: m.ShaderSynthApp })));
 const StoreApp = lazy(() => import("./apps/StoreApp.tsx").then((m) => ({ default: m.StoreApp })));
 const SystemMonitorApp = lazy(() => import("./apps/SystemMonitorApp.tsx").then((m) => ({ default: m.SystemMonitorApp })));
+const T3CodeApp = lazy(() => import("./apps/T3CodeApp.tsx").then((m) => ({ default: m.T3CodeApp })));
 const ToolchainInstallerApp = lazy(() => import("./apps/ToolchainInstallerApp.tsx").then((m) => ({ default: m.ToolchainInstallerApp })));
 const WaylandSurfaceWindow = lazy(() => import("./apps/WaylandSurfaceWindow.tsx").then((m) => ({ default: m.WaylandSurfaceWindow })));
 const WhiteboardApp = lazy(() => import("./apps/WhiteboardApp.tsx").then((m) => ({ default: m.WhiteboardApp })));
@@ -103,6 +105,8 @@ const LiveClock: React.FC = () => {
 
 const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean): React.ReactNode => {
   switch (win.appId) {
+    case "t3-code":
+      return <T3CodeApp />;
     case "agent-studio":
       return <AgentStudioApp windowFocused={focused} />;
     case "agent-swarm":
@@ -229,10 +233,14 @@ export const Desktop: React.FC = () => {
     }
   }, [wm.activeWorkspace, mods.shell.compizCube]);
 
-  // Start the Reactive Data & Modding Engine (live signals, sh/python/bun/node/http sources, bindings & JS scripts)
+  // Start the Reactive Data & Modding Engine + T3 Code live metrics bridge
   useEffect(() => {
     reactiveEngine.start();
-    return () => reactiveEngine.stop();
+    t3CodeStore.startPolling();
+    return () => {
+      reactiveEngine.stop();
+      t3CodeStore.stopPolling();
+    };
   }, []);
 
   // Sync live OS theme, blur, opacity, UI sound preference & active OS Mod overrides
@@ -441,6 +449,7 @@ export const Desktop: React.FC = () => {
   // Global OS Keyboard Shortcuts (⌘K, ⌘E, ⌘L, ⌃1..4, ⌘1..8, ⌘,)
   useEffect(() => {
     const shortcutMap: Record<string, AppId> = {
+      "0": "t3-code",
       "1": "agent-studio",
       "2": "terminal",
       "3": "explorer",
