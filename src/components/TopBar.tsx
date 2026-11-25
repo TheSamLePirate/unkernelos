@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import {
   Bell,
+  Box,
   Command,
   Cpu,
   Download,
@@ -9,6 +10,7 @@ import {
   Layers,
   Mic,
   Search,
+  Sliders,
   SlidersHorizontal,
   Volume2,
   VolumeX,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { INITIAL_GITHUB_AUTH } from "../core/github-auth-service.ts";
+import { modStore, useMods } from "../core/mod-store.ts";
 import { pwaStore, usePwa } from "../core/pwa-service.ts";
 import { appRuntime, GithubAuthService, useSubscriptionRef, VmService } from "../core/runtime.ts";
 import { voiceOsEngine } from "../core/voice-os.ts";
@@ -27,6 +30,7 @@ const WORKSPACES: readonly WorkspaceId[] = [1, 2, 3, 4];
 
 export const TopBar: React.FC = () => {
   const wm = useWm();
+  const mods = useMods();
   const pwa = usePwa();
   const ghAuth = useSubscriptionRef(
     Effect.map(GithubAuthService, (g) => g.stateRef),
@@ -81,10 +85,24 @@ export const TopBar: React.FC = () => {
       ? "bg-sky-400"
       : "bg-rose-400";
 
+  if (mods.shell.topBarStyle === "hidden") return null;
+
+  const isFloatingBar = mods.shell.topBarStyle === "floating-pills";
+  const isRetroBar = mods.shell.topBarStyle === "retro";
+  const isMinimalBar = mods.shell.topBarStyle === "minimal";
+
   return (
     <header
       style={{ paddingTop: "env(safe-area-inset-top)" }}
-      className="fixed top-0 left-0 right-0 min-h-[36px] z-50 glass-bar px-2.5 sm:px-3 flex items-center justify-between text-xs select-none"
+      className={`fixed z-50 glass-bar px-2.5 sm:px-3 flex items-center justify-between text-xs select-none transition-all ${
+        isFloatingBar
+          ? "top-2 left-3 right-3 min-h-[36px] rounded-2xl border border-white/15"
+          : isRetroBar
+          ? "top-0 left-0 right-0 min-h-[34px] !bg-[#1a1f36] border-b-2 border-white/35"
+          : isMinimalBar
+          ? "top-0 left-0 right-0 min-h-[34px] !bg-[#0c0c0e]/92 border-b border-white/15"
+          : "top-0 left-0 right-0 min-h-[36px]"
+      }`}
     >
       {/* Left: Brand, Active App & Workspaces */}
       <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
@@ -96,7 +114,7 @@ export const TopBar: React.FC = () => {
           <span className="w-4.5 h-4.5 rounded-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 flex items-center justify-center text-[10px] font-bold shadow">
             U
           </span>
-          <span className="tracking-tight hidden xs:inline sm:inline">unkernelOS</span>
+          <span className="tracking-tight hidden xs:inline sm:inline">{mods.shell.brandLabel || "unkernelOS"}</span>
         </button>
 
         <span className="text-white/20 hidden sm:inline">/</span>
@@ -165,8 +183,34 @@ export const TopBar: React.FC = () => {
       {/* Center: Futuristic Dynamic Island Live Hub */}
       <DynamicIsland />
 
-      {/* Right: Live VM Telemetry Pills + Quick Controls + Control Center */}
+      {/* Right: Live VM Telemetry Pills + Quick 3D/Mods + Control Center */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* 1-Click 3D WebGPU Spatial Desktop Toggle */}
+        <button
+          type="button"
+          onClick={() => modStore.setDesktop3d({ enabled: !mods.desktop3d.enabled })}
+          className={`hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-semibold transition cursor-pointer ${
+            mods.desktop3d.enabled
+              ? "bg-gradient-to-r from-cyan-500/30 to-violet-500/30 border-cyan-300/60 text-cyan-100 shadow-[0_0_12px_rgba(34,211,238,0.35)]"
+              : "bg-white/[0.05] hover:bg-white/12 border-white/12 text-zinc-300 hover:text-white"
+          }`}
+          title="Basculer le Bureau 3D WebGPU Three.js"
+        >
+          <Box className="w-3 h-3" />
+          3D
+        </button>
+
+        {/* Quick Mod Studio Shortcut */}
+        <button
+          type="button"
+          onClick={() => wmStore.openApp("mod-studio")}
+          className="hidden lg:flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.05] hover:bg-white/12 border border-white/10 text-[10px] font-medium text-fuchsia-200 transition cursor-pointer"
+          title="Ouvrir OS Mod Studio"
+        >
+          <Sliders className="w-3 h-3" />
+          Mods
+        </button>
+
         {/* Mobile Spotlight Quick Search */}
         <button
           type="button"

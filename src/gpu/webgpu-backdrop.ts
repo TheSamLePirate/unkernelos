@@ -1,7 +1,7 @@
 import { WALLPAPER_SHADERS } from "../core/os-themes.ts";
 import type { WallpaperShaderId } from "../core/schema.ts";
 
-const BACKDROP_WGSL = /* wgsl */ `
+const COMMON_WGSL_PREFIX = /* wgsl */ `
 struct Uniforms {
   time: f32,
   width: f32,
@@ -35,7 +35,9 @@ fn hash21(p: vec2<f32>) -> f32 {
   q += dot(q, q + 45.32);
   return fract(q.x * q.y);
 }
+`;
 
+const BACKDROP_WGSL = `${COMMON_WGSL_PREFIX}
 fn renderAurora(uv: vec2<f32>, aspect: f32, t: f32, px: vec2<f32>) -> vec3<f32> {
   var col = vec3<f32>(0.022, 0.026, 0.046);
   let p1 = vec2<f32>(0.22 + 0.14 * sin(t * 0.9), 0.24 + 0.10 * cos(t * 0.7));
@@ -77,12 +79,10 @@ fn renderLiquidPrism(uv: vec2<f32>, aspect: f32, t: f32) -> vec3<f32> {
 }
 
 fn renderCyberGrid(uv: vec2<f32>, aspect: f32, t: f32) -> vec3<f32> {
-  // Flip y so horizon sits at 0.46 from bottom
   let y = 1.0 - uv.y;
   let horizon = 0.46;
   var col = mix(vec3<f32>(0.03, 0.015, 0.07), vec3<f32>(0.12, 0.025, 0.16), smoothstep(0.0, horizon, y));
 
-  // Synthwave glowing sun above horizon
   let sunPos = vec2<f32>(0.5, horizon - 0.12);
   let sunDist = length((vec2<f32>(uv.x, y) - sunPos) * vec2<f32>(aspect, 1.0));
   let sunGlow = exp(-sunDist * 4.5);
@@ -92,7 +92,6 @@ fn renderCyberGrid(uv: vec2<f32>, aspect: f32, t: f32) -> vec3<f32> {
   col += vec3<f32>(0.95, 0.18, 0.42) * sunGlow * 0.45;
   col += mix(vec3<f32>(1.0, 0.65, 0.15), vec3<f32>(0.95, 0.15, 0.55), clamp((y - (horizon - 0.25)) * 4.0, 0.0, 1.0)) * sunCore * sunBand * 0.85;
 
-  // Perspective neon floor grid below horizon
   if (y > horizon) {
     let dy = max(y - horizon, 0.004);
     let gz = 0.24 / dy;
@@ -110,7 +109,6 @@ fn renderCyberGrid(uv: vec2<f32>, aspect: f32, t: f32) -> vec3<f32> {
 fn renderNordicBorealis(uv: vec2<f32>, aspect: f32, t: f32) -> vec3<f32> {
   var col = mix(vec3<f32>(0.032, 0.048, 0.075), vec3<f32>(0.065, 0.095, 0.145), 1.0 - uv.y);
 
-  // Flowing borealis curtain waves
   let x = uv.x * aspect;
   let wave1 = 0.55 + 0.16 * sin(x * 1.9 + t * 0.9) + 0.08 * cos(x * 3.7 - t * 0.6);
   let wave2 = 0.42 + 0.14 * cos(x * 2.3 - t * 0.7 + 1.2) + 0.06 * sin(x * 4.1 + t * 0.5);
@@ -121,7 +119,6 @@ fn renderNordicBorealis(uv: vec2<f32>, aspect: f32, t: f32) -> vec3<f32> {
   col += vec3<f32>(0.36, 0.64, 0.85) * curtain2 * 0.36;
   col += vec3<f32>(0.48, 0.40, 0.72) * curtain1 * curtain2 * 0.45;
 
-  // Subtle arctic starfield
   let cell = floor(uv * vec2<f32>(120.0 * aspect, 120.0));
   let star = step(0.994, hash21(cell)) * (0.5 + 0.5 * sin(t * 2.5 + hash21(cell + 19.0) * 6.28));
   col += vec3<f32>(0.85, 0.93, 1.0) * star * 0.38 * smoothstep(0.2, 0.9, uv.y);
@@ -142,7 +139,6 @@ fn renderSolarEmber(uv: vec2<f32>, aspect: f32, t: f32) -> vec3<f32> {
   col += vec3<f32>(0.76, 0.20, 0.24) * exp(-d2 * d2 * 3.5) * 0.36;
   col += vec3<f32>(0.96, 0.68, 0.18) * exp(-d3 * d3 * 4.4) * 0.28;
 
-  // Warm diagonal silky ribbons
   let rib = 0.5 + 0.5 * sin((uv.x * 2.8 + uv.y * 2.2) * 3.14 + t * 0.8 + sin(uv.y * 4.0 - t));
   col += vec3<f32>(0.85, 0.48, 0.14) * pow(rib, 5.0) * 0.09;
   return col;
@@ -168,15 +164,37 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     col = renderSolarEmber(uv, aspect, t);
   }
 
-  // Gentle studio vignette
   let vig = 1.0 - smoothstep(0.38, 1.2, length((uv - 0.5) * vec2<f32>(1.18, 1.0)));
   col *= 0.74 + 0.26 * vig;
 
-  // Anti-banding dither noise
   let n = (hash21(px + fract(u.time)) - 0.5) * (1.0 / 255.0);
   return vec4<f32>(col + n, 1.0);
 }
 `;
+
+function wrapCustomWgsl(userCode: string): string {
+  const trimmed = userCode.trim();
+  // Allow either a full WGSL module containing `fn fs_main` OR a concise `fn renderCustom(uv, aspect, t, px) -> vec3<f32>`
+  if (trimmed.includes("fn fs_main")) {
+    return trimmed.includes("fn vs_main") ? trimmed : `${COMMON_WGSL_PREFIX}\n${trimmed}`;
+  }
+  return `${COMMON_WGSL_PREFIX}
+${trimmed}
+
+@fragment
+fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
+  let aspect = u.width / max(u.height, 1.0);
+  let uv = in.uv;
+  let t = u.time * 0.65;
+  let px = uv * vec2<f32>(u.width, u.height);
+  var col = renderCustom(uv, aspect, t, px);
+  let vig = 1.0 - smoothstep(0.42, 1.25, length((uv - 0.5) * vec2<f32>(1.15, 1.0)));
+  col *= 0.78 + 0.22 * vig;
+  let n = (hash21(px + fract(u.time)) - 0.5) * (1.0 / 255.0);
+  return vec4<f32>(col + n, 1.0);
+}
+`;
+}
 
 export class WebGpuBackdrop {
   private canvas: HTMLCanvasElement;
@@ -184,9 +202,13 @@ export class WebGpuBackdrop {
   private disposed = false;
   private device: GPUDevice | null = null;
   private ctx: GPUCanvasContext | null = null;
-  private pipeline: GPURenderPipeline | null = null;
+  private format: GPUTextureFormat = "bgra8unorm";
+  private stockPipeline: GPURenderPipeline | null = null;
+  private customPipeline: GPURenderPipeline | null = null;
   private uniformBuf: GPUBuffer | null = null;
-  private bindGroup: GPUBindGroup | null = null;
+  private stockBindGroup: GPUBindGroup | null = null;
+  private customBindGroup: GPUBindGroup | null = null;
+  private pendingCustomWgsl: string | null = null;
   private startTime = performance.now();
   private lastDrawTime = 0;
   private modeIndex = 0;
@@ -204,7 +226,6 @@ export class WebGpuBackdrop {
     this.reducedMotion =
       typeof window !== "undefined" &&
       Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-    // 30fps ambient wallpaper on mobile/iPad saves ~60% GPU heat & battery while staying silky
     this.frameIntervalMs = isCoarse ? 33 : 16;
   }
 
@@ -213,6 +234,52 @@ export class WebGpuBackdrop {
     this.renderedStaticFrame = false;
     if (this.reducedMotion && !this.disposed) {
       this.drawFrame(performance.now());
+    }
+  }
+
+  /**
+   * Hot-compile and activate a custom WGSL wallpaper shader mod on the live WebGPU device!
+   * Pass `null` to return immediately to the built-in shader pipeline.
+   */
+  public async setCustomWgsl(wgslCode: string | null): Promise<{ ok: boolean; error?: string }> {
+    this.pendingCustomWgsl = wgslCode;
+    if (!wgslCode || !wgslCode.trim()) {
+      this.customPipeline = null;
+      this.customBindGroup = null;
+      this.renderedStaticFrame = false;
+      return { ok: true };
+    }
+    if (!this.device || !this.uniformBuf) {
+      return { ok: true }; // Will compile automatically as soon as init() finishes
+    }
+    try {
+      const fullCode = wrapCustomWgsl(wgslCode);
+      const module = this.device.createShaderModule({ code: fullCode });
+      const info = await module.getCompilationInfo();
+      const errors = info.messages.filter((m) => m.type === "error");
+      if (errors.length > 0) {
+        const msg = errors.map((e) => `L${e.lineNum}: ${e.message}`).join(" | ");
+        return { ok: false, error: msg };
+      }
+      const pipeline = this.device.createRenderPipeline({
+        layout: "auto",
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_main", targets: [{ format: this.format }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const bindGroup = this.device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: this.uniformBuf } }],
+      });
+      this.customPipeline = pipeline;
+      this.customBindGroup = bindGroup;
+      this.renderedStaticFrame = false;
+      if (this.reducedMotion && !this.disposed) {
+        this.drawFrame(performance.now());
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 
@@ -271,9 +338,14 @@ export class WebGpuBackdrop {
 
       this.device = device;
       this.ctx = ctx;
-      this.pipeline = pipeline;
+      this.format = format;
+      this.stockPipeline = pipeline;
       this.uniformBuf = uniformBuf;
-      this.bindGroup = bindGroup;
+      this.stockBindGroup = bindGroup;
+
+      if (this.pendingCustomWgsl) {
+        await this.setCustomWgsl(this.pendingCustomWgsl);
+      }
 
       document.addEventListener("visibilitychange", this.onVisibilityChange);
       if (this.reducedMotion) {
@@ -306,7 +378,9 @@ export class WebGpuBackdrop {
   }
 
   private drawFrame(now: number): void {
-    if (!this.device || !this.ctx || !this.pipeline || !this.uniformBuf || !this.bindGroup) {
+    const activePipeline = this.customPipeline ?? this.stockPipeline;
+    const activeBindGroup = this.customBindGroup ?? this.stockBindGroup;
+    if (!this.device || !this.ctx || !activePipeline || !this.uniformBuf || !activeBindGroup) {
       return;
     }
     const elapsed = (now - this.startTime) / 1000;
@@ -328,8 +402,8 @@ export class WebGpuBackdrop {
         },
       ],
     });
-    pass.setPipeline(this.pipeline);
-    pass.setBindGroup(0, this.bindGroup);
+    pass.setPipeline(activePipeline);
+    pass.setBindGroup(0, activeBindGroup);
     pass.draw(3);
     pass.end();
     this.device.queue.submit([enc.finish()]);

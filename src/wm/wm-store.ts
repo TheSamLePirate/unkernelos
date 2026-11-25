@@ -33,6 +33,7 @@ export type AppId =
   | "git"
   | "toolchain"
   | "monitor"
+  | "mod-studio"
   | "rune-settings"
   | "settings";
 
@@ -389,6 +390,17 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minHeight: 360,
     accent: "from-sky-400 to-cyan-500",
     shortcut: "⌘8",
+  },
+  "mod-studio": {
+    id: "mod-studio",
+    title: "OS Mod Studio & Bureau 3D",
+    shortTitle: "Mod Studio",
+    description: "Moddez tout : variantes OS, Bureau 3D WebGPU Three.js, décorateurs, shaders WGSL, widgets, CSS & API agents",
+    defaultWidth: 1080,
+    defaultHeight: 690,
+    minWidth: 640,
+    minHeight: 440,
+    accent: "from-fuchsia-500 via-violet-500 to-cyan-400",
   },
   "rune-settings": {
     id: "rune-settings",

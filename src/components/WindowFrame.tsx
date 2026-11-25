@@ -1,5 +1,6 @@
-import { Layers, Maximize2, Minimize2, Minus, PanelLeft, PanelRight, Pin, X } from "lucide-react";
+import { Layers, Maximize2, Minimize2, Minus, PanelLeft, PanelRight, Pin, Square, X } from "lucide-react";
 import React, { useRef, useState } from "react";
+import { useMods } from "../core/mod-store.ts";
 import { useViewport } from "../core/use-viewport.ts";
 import { APP_CATALOG, useWm, wmStore, type SnapZone, type WindowInstance, type WorkspaceId } from "../wm/wm-store.ts";
 import { getSnapZoneStyle } from "./SnapPreviewOverlay.tsx";
@@ -40,6 +41,9 @@ function detectSnapZone(clientX: number, clientY: number): SnapZone | null {
 
 export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible, children }) => {
   const wm = useWm();
+  const mods = useMods();
+  const dec = mods.decorator;
+  const spatial3d = mods.desktop3d.enabled && mods.desktop3d.spatialWindows;
   const { isMobile, isTouch, keyboardInset } = useViewport();
   const [interacting, setInteracting] = useState(false);
 
@@ -259,30 +263,247 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
         }),
     zIndex: win.pinned ? win.zIndex + 5000 : win.zIndex,
     display: !visible || win.minimized ? "none" : "flex",
+    borderRadius: isMobile ? undefined : `${dec.radiusPx}px`,
+    borderWidth: isMobile ? undefined : `${dec.borderWidthPx}px`,
+    opacity: focused ? 1 : dec.unfocusedOpacity,
+    boxShadow:
+      focused && !isMobile && dec.activeGlowPx > 0
+        ? `0 32px 86px -12px rgba(0,0,0,0.86), 0 0 ${dec.activeGlowPx}px -10px var(--window-glow), 0 1px 0 0 rgba(255,255,255,0.22) inset`
+        : undefined,
+    transform:
+      !isMobile && spatial3d && !interacting
+        ? focused
+          ? "translate3d(0, 0, 18px) scale(1)"
+          : "translate3d(0, 4px, -36px) scale(0.985)"
+        : undefined,
+    transition: interacting ? "none" : "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease, box-shadow 220ms ease",
     willChange: interacting ? "left, top, width, height" : undefined,
   };
 
   const openWsCount = wm.windows.filter((w) => w.workspace === wm.activeWorkspace).length;
 
+  const isCyber = dec.style === "cyber-hud";
+  const isRetro = dec.style === "retro-95";
+  const isSwiss = dec.style === "minimal-swiss";
+  const isZen = dec.style === "floating-zen";
+  const isI3 = dec.style === "tiling-i3";
+  const isWin = dec.style === "windows";
+
+  const renderWindowControls = () => {
+    if (isRetro) {
+      return (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => wmStore.minimizeWindow(win.id)}
+            title="Minimize"
+            className="w-5 h-5 flex items-center justify-center bg-[#272f4a] border border-white/40 border-b-black/70 border-r-black/70 text-[10px] font-bold text-white hover:bg-[#354066] active:scale-95 cursor-pointer"
+          >
+            _
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.toggleMaximize(win.id)}
+            title="Maximize"
+            className="w-5 h-5 flex items-center justify-center bg-[#272f4a] border border-white/40 border-b-black/70 border-r-black/70 text-white hover:bg-[#354066] active:scale-95 cursor-pointer"
+          >
+            <Square className="w-2.5 h-2.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.closeWindow(win.id)}
+            title="Close"
+            className="w-5 h-5 flex items-center justify-center bg-rose-600/90 border border-white/45 border-b-black/70 border-r-black/70 text-white hover:bg-rose-500 active:scale-95 cursor-pointer"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      );
+    }
+
+    if (isCyber || isSwiss || isI3 || isWin) {
+      return (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => wmStore.minimizeWindow(win.id)}
+            title="Minimize"
+            className={`px-2 py-1 text-zinc-300 hover:text-white transition cursor-pointer ${
+              isCyber
+                ? "border border-cyan-400/35 bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-200"
+                : isSwiss
+                ? "hover:bg-white/10 font-mono text-[10px]"
+                : "rounded-md hover:bg-white/12"
+            }`}
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.toggleMaximize(win.id)}
+            title="Maximize"
+            className={`px-2 py-1 text-zinc-300 hover:text-white transition cursor-pointer ${
+              isCyber
+                ? "border border-cyan-400/35 bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-200"
+                : isSwiss
+                ? "hover:bg-white/10 font-mono text-[10px]"
+                : "rounded-md hover:bg-white/12"
+            }`}
+          >
+            <Square className="w-2.5 h-2.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => wmStore.closeWindow(win.id)}
+            title="Close"
+            className={`px-2 py-1 transition cursor-pointer ${
+              isCyber
+                ? "border border-rose-500/55 bg-rose-500/20 hover:bg-rose-500/40 text-rose-200"
+                : isSwiss
+                ? "bg-[#ff4d00]/85 hover:bg-[#ff4d00] text-black font-bold"
+                : "rounded-md hover:bg-rose-500/80 text-zinc-200 hover:text-white"
+            }`}
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      );
+    }
+
+    if (isZen) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => wmStore.closeWindow(win.id)}
+            title="Close"
+            className="w-2.5 h-2.5 rounded-full bg-white/30 hover:bg-rose-400 transition cursor-pointer"
+          />
+          <button
+            type="button"
+            onClick={() => wmStore.minimizeWindow(win.id)}
+            title="Minimize"
+            className="w-2.5 h-2.5 rounded-full bg-white/22 hover:bg-amber-300 transition cursor-pointer"
+          />
+          <button
+            type="button"
+            onClick={() => wmStore.toggleMaximize(win.id)}
+            title="Maximize"
+            className="w-2.5 h-2.5 rounded-full bg-white/22 hover:bg-emerald-300 transition cursor-pointer"
+          />
+        </div>
+      );
+    }
+
+    // Default macOS / iPadOS traffic lights
+    return (
+      <div className={`flex items-center group ${isTabletTouch ? "gap-1.5" : "gap-2"}`}>
+        <button
+          type="button"
+          onClick={() => wmStore.closeWindow(win.id)}
+          title="Close"
+          className={`flex items-center justify-center rounded-full transition cursor-pointer ${
+            isTabletTouch ? "w-7 h-7 active:scale-90" : "w-3 h-3"
+          }`}
+        >
+          <span
+            className={`${
+              isTabletTouch ? "w-4 h-4" : "w-3 h-3"
+            } rounded-full bg-rose-500/90 hover:bg-rose-400 flex items-center justify-center shadow-inner`}
+          >
+            <X
+              className={`${
+                isTabletTouch ? "w-2.5 h-2.5 opacity-80" : "w-2 h-2 opacity-0 group-hover:opacity-100"
+              } text-rose-950`}
+            />
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => wmStore.minimizeWindow(win.id)}
+          title="Minimize"
+          className={`flex items-center justify-center rounded-full transition cursor-pointer ${
+            isTabletTouch ? "w-7 h-7 active:scale-90" : "w-3 h-3"
+          }`}
+        >
+          <span
+            className={`${
+              isTabletTouch ? "w-4 h-4" : "w-3 h-3"
+            } rounded-full bg-amber-400/90 hover:bg-amber-300 flex items-center justify-center shadow-inner`}
+          >
+            <Minimize2
+              className={`${
+                isTabletTouch ? "w-2.5 h-2.5 opacity-80" : "w-2 h-2 opacity-0 group-hover:opacity-100"
+              } text-amber-950`}
+            />
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => wmStore.toggleMaximize(win.id)}
+          title="Maximize"
+          className={`flex items-center justify-center rounded-full transition cursor-pointer ${
+            isTabletTouch ? "w-7 h-7 active:scale-90" : "w-3 h-3"
+          }`}
+        >
+          <span
+            className={`${
+              isTabletTouch ? "w-4 h-4" : "w-3 h-3"
+            } rounded-full bg-emerald-500/90 hover:bg-emerald-400 flex items-center justify-center shadow-inner`}
+          >
+            <Maximize2
+              className={`${
+                isTabletTouch ? "w-2.5 h-2.5 opacity-80" : "w-2 h-2 opacity-0 group-hover:opacity-100"
+              } text-emerald-950`}
+            />
+          </span>
+        </button>
+      </div>
+    );
+  };
+
+  const titlebarBg = isRetro
+    ? focused
+      ? "bg-gradient-to-r from-[#0c4a6e] via-[#4f46e5] to-[#be185d] border-b border-white/30"
+      : "bg-gradient-to-r from-[#1e293b] to-[#334155] border-b border-white/15"
+    : isCyber
+    ? "bg-gradient-to-r from-rose-500/18 via-[#0a0816]/90 to-cyan-500/18 border-b border-cyan-400/25"
+    : isSwiss
+    ? "bg-[#111113]/95 border-b border-white/15"
+    : isI3
+    ? "bg-black/75 border-b border-white/12"
+    : "bg-gradient-to-b from-white/[0.075] to-white/[0.015] border-b border-white/10";
+
   return (
     <div
       style={style}
       onPointerDown={() => wmStore.focusWindow(win.id)}
-      className={`fixed flex-col overflow-hidden animate-window-in transition-shadow ${
-        isMobile ? "rounded-t-[20px] border-x-0" : "rounded-2xl"
-      } ${focused ? "glass-surface-focused" : "glass-surface opacity-95"}`}
+      data-window-decorator={dec.style}
+      className={`fixed flex-col overflow-hidden animate-window-in ${
+        isMobile ? "rounded-t-[20px] border-x-0" : ""
+      } ${focused ? "glass-surface-focused" : "glass-surface"}`}
     >
+      {/* Optional Laser Accent Bar (Cyber HUD / Swiss / Spatial Mod) */}
+      {dec.titlebarAccentBar && focused && !isMobile && (
+        <div
+          style={{
+            background: "linear-gradient(90deg, var(--accent-primary), var(--accent-cyan), var(--accent-primary))",
+          }}
+          className="h-[2px] w-full shrink-0"
+        />
+      )}
+
       {/* Titlebar */}
       <div
+        data-unkernel-titlebar="true"
         onPointerDown={onHeaderPointerDown}
         onPointerUp={onHeaderPointerUpMobile}
         onDoubleClick={() => !isMobile && wmStore.toggleMaximize(win.id)}
-        className={`relative flex items-center justify-between px-3 bg-gradient-to-b from-white/[0.075] to-white/[0.015] border-b border-white/10 shrink-0 select-none touch-none ${
-          isMobile
-            ? "h-11"
-            : isTabletTouch
-            ? "h-11 cursor-grab active:cursor-grabbing"
-            : "h-9 cursor-grab active:cursor-grabbing"
+        style={{
+          height: isMobile ? "44px" : isTabletTouch ? "44px" : `${dec.titlebarHeightPx}px`,
+        }}
+        className={`relative flex items-center justify-between px-3 shrink-0 select-none touch-none ${titlebarBg} ${
+          isMobile ? "" : "cursor-grab active:cursor-grabbing"
         }`}
       >
         {isMobile ? (
@@ -324,124 +545,85 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({ win, focused, visible,
           </>
         ) : (
           <>
-            {/* macOS / iPadOS traffic lights (expanded touch hit-area on iPad!) */}
-            <div className={`flex items-center group ${isTabletTouch ? "gap-1.5" : "gap-2"}`}>
-              <button
-                type="button"
-                onClick={() => wmStore.closeWindow(win.id)}
-                title="Close"
-                className={`flex items-center justify-center rounded-full transition ${
-                  isTabletTouch ? "w-7 h-7 active:scale-90" : "w-3 h-3"
-                }`}
-              >
-                <span
-                  className={`${
-                    isTabletTouch ? "w-4 h-4" : "w-3 h-3"
-                  } rounded-full bg-rose-500/90 hover:bg-rose-400 flex items-center justify-center shadow-inner`}
-                >
-                  <X
-                    className={`${
-                      isTabletTouch ? "w-2.5 h-2.5 opacity-80" : "w-2 h-2 opacity-0 group-hover:opacity-100"
-                    } text-rose-950`}
-                  />
+            {dec.buttonPosition === "left" && renderWindowControls()}
+
+            <div
+              className={`flex items-center gap-2 text-xs font-medium text-zinc-100 truncate px-2 ${
+                dec.titleAlign === "left" ? "flex-1 justify-start" : "justify-center"
+              }`}
+            >
+              {isCyber ? (
+                <span className="font-mono text-[11px] tracking-wider text-cyan-200 truncate">
+                  [ {win.title} ]
                 </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => wmStore.minimizeWindow(win.id)}
-                title="Minimize"
-                className={`flex items-center justify-center rounded-full transition ${
-                  isTabletTouch ? "w-7 h-7 active:scale-90" : "w-3 h-3"
-                }`}
-              >
-                <span
-                  className={`${
-                    isTabletTouch ? "w-4 h-4" : "w-3 h-3"
-                  } rounded-full bg-amber-400/90 hover:bg-amber-300 flex items-center justify-center shadow-inner`}
-                >
-                  <Minimize2
-                    className={`${
-                      isTabletTouch ? "w-2.5 h-2.5 opacity-80" : "w-2 h-2 opacity-0 group-hover:opacity-100"
-                    } text-amber-950`}
-                  />
+              ) : isI3 ? (
+                <span className="font-mono text-[11px] text-emerald-300 truncate">
+                  ws:{win.workspace} :: {win.title}
                 </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => wmStore.toggleMaximize(win.id)}
-                title="Maximize"
-                className={`flex items-center justify-center rounded-full transition ${
-                  isTabletTouch ? "w-7 h-7 active:scale-90" : "w-3 h-3"
-                }`}
-              >
-                <span
-                  className={`${
-                    isTabletTouch ? "w-4 h-4" : "w-3 h-3"
-                  } rounded-full bg-emerald-500/90 hover:bg-emerald-400 flex items-center justify-center shadow-inner`}
-                >
-                  <Maximize2
-                    className={`${
-                      isTabletTouch ? "w-2.5 h-2.5 opacity-80" : "w-2 h-2 opacity-0 group-hover:opacity-100"
-                    } text-emerald-950`}
-                  />
-                </span>
-              </button>
+              ) : (
+                <>
+                  <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${def.accent} shrink-0`} />
+                  <span className="truncate">{win.title}</span>
+                </>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 text-xs font-medium text-zinc-100 truncate px-3">
-              <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${def.accent} shrink-0`} />
-              <span className="truncate">{win.title}</span>
-            </div>
-
-            {/* Workspace & Snap controls */}
+            {/* Workspace, Snap & Right-Side Controls */}
             <div className="flex items-center gap-1">
-              <div className="hidden lg:flex items-center gap-0.5 mr-1 px-1 py-0.5 rounded-md bg-white/[0.04] border border-white/8">
-                {([1, 2, 3, 4] as WorkspaceId[]).map((ws) => (
+              {dec.showWorkspacePills && (
+                <div className="hidden lg:flex items-center gap-0.5 mr-1 px-1 py-0.5 rounded-md bg-white/[0.04] border border-white/8">
+                  {([1, 2, 3, 4] as WorkspaceId[]).map((ws) => (
+                    <button
+                      key={ws}
+                      type="button"
+                      title={`Move to Desktop ${ws}`}
+                      onClick={() => wmStore.moveWindowToWorkspace(win.id, ws)}
+                      className={`w-4 h-4 rounded text-[9px] font-mono transition ${
+                        win.workspace === ws
+                          ? "bg-white/18 text-white font-semibold"
+                          : "text-zinc-500 hover:text-zinc-200 hover:bg-white/8"
+                      }`}
+                    >
+                      {ws}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {dec.showSnapButtons && (
+                <>
                   <button
-                    key={ws}
                     type="button"
-                    title={`Move to Desktop ${ws}`}
-                    onClick={() => wmStore.moveWindowToWorkspace(win.id, ws)}
-                    className={`w-4 h-4 rounded text-[9px] font-mono transition ${
-                      win.workspace === ws
-                        ? "bg-white/18 text-white font-semibold"
-                        : "text-zinc-500 hover:text-zinc-200 hover:bg-white/8"
+                    onClick={() => wmStore.togglePinWindow(win.id)}
+                    title={win.pinned ? "Unpin Always-on-Top (PiP)" : "Pin Always-on-Top (PiP)"}
+                    className={`${isTabletTouch ? "p-2" : "p-1"} rounded-lg hover:bg-white/10 active:scale-90 transition ${
+                      win.pinned ? "text-amber-300 bg-amber-500/18" : "text-zinc-400 hover:text-zinc-100"
                     }`}
                   >
-                    {ws}
+                    <Pin className={isTabletTouch ? "w-4 h-4" : "w-3.5 h-3.5"} />
                   </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => wmStore.togglePinWindow(win.id)}
-                title={win.pinned ? "Unpin Always-on-Top (PiP)" : "Pin Always-on-Top (PiP)"}
-                className={`${isTabletTouch ? "p-2" : "p-1"} rounded-lg hover:bg-white/10 active:scale-90 transition ${
-                  win.pinned ? "text-amber-300 bg-amber-500/18" : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <Pin className={isTabletTouch ? "w-4 h-4" : "w-3.5 h-3.5"} />
-              </button>
-              <button
-                type="button"
-                onClick={() => wmStore.snapWindow(win.id, win.snap === "left" ? "none" : "left")}
-                title="Snap Left"
-                className={`${isTabletTouch ? "p-2" : "p-1"} rounded-lg hover:bg-white/10 active:scale-90 transition ${
-                  win.snap === "left" ? "text-violet-300 bg-violet-500/18" : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <PanelLeft className={isTabletTouch ? "w-4 h-4" : "w-3.5 h-3.5"} />
-              </button>
-              <button
-                type="button"
-                onClick={() => wmStore.snapWindow(win.id, win.snap === "right" ? "none" : "right")}
-                title="Snap Right"
-                className={`${isTabletTouch ? "p-2" : "p-1"} rounded-lg hover:bg-white/10 active:scale-90 transition ${
-                  win.snap === "right" ? "text-violet-300 bg-violet-500/18" : "text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                <PanelRight className={isTabletTouch ? "w-4 h-4" : "w-3.5 h-3.5"} />
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => wmStore.snapWindow(win.id, win.snap === "left" ? "none" : "left")}
+                    title="Snap Left"
+                    className={`${isTabletTouch ? "p-2" : "p-1"} rounded-lg hover:bg-white/10 active:scale-90 transition ${
+                      win.snap === "left" ? "text-violet-300 bg-violet-500/18" : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <PanelLeft className={isTabletTouch ? "w-4 h-4" : "w-3.5 h-3.5"} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => wmStore.snapWindow(win.id, win.snap === "right" ? "none" : "right")}
+                    title="Snap Right"
+                    className={`${isTabletTouch ? "p-2" : "p-1"} rounded-lg hover:bg-white/10 active:scale-90 transition ${
+                      win.snap === "right" ? "text-violet-300 bg-violet-500/18" : "text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <PanelRight className={isTabletTouch ? "w-4 h-4" : "w-3.5 h-3.5"} />
+                  </button>
+                </>
+              )}
+              {dec.buttonPosition === "right" && <div className="ml-1">{renderWindowControls()}</div>}
             </div>
           </>
         )}

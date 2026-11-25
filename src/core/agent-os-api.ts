@@ -4,6 +4,17 @@ import type { HostCommandContext, KernelHandle } from "unkernel";
 import { clipboardStore } from "./clipboard-store.ts";
 import { dynamicAppsStore } from "./dynamic-apps-store.ts";
 import { hostMountManager } from "./host-mount.ts";
+import {
+  modStore,
+  type CustomDesktopWidget,
+  type CustomShaderMod,
+  type CustomThemeTokens,
+  type DecoratorModConfig,
+  type Desktop3dModConfig,
+  type ModKind,
+  type OsMod,
+  type ShellModConfig,
+} from "./mod-store.ts";
 import { OS_THEMES, WALLPAPER_SHADERS } from "./os-themes.ts";
 import { pwaStore } from "./pwa-service.ts";
 import { swarmStore } from "./swarm-store.ts";
@@ -776,6 +787,255 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
       },
     },
     example: { action: "add", title: "Verify responsive layout", assignee: "QA Bot" },
+  },
+  // ─── FULL OS MODDING ENGINE & AAA 3D WEBGPU DESKTOP ──────────────────
+  {
+    method: "mod.status",
+    category: "theme",
+    summary: "Inspect full OS Modding state: active variant, custom theme tokens, window decorator, shell/dock/topbar, 3D WebGPU desktop, shaders, widgets & mods.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "mod.variants",
+    category: "theme",
+    summary: "List all available full OS Variants (stock, macOS Liquid Metal, Night City 2099, Retro 95, Swiss Mono, Kyoto Zen, VisionOS 3D, plus user variants).",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
+  },
+  {
+    method: "mod.variant.apply",
+    category: "theme",
+    summary: "Apply a full 1-click OS Variant by ID (transforms theme, decorator, dock, topbar, shader, widgets, 3D desktop & mods atomically).",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } },
+    },
+    example: { id: "cyberpunk-2099" },
+  },
+  {
+    method: "mod.variant.create",
+    category: "theme",
+    summary: "Save the current modded OS configuration as a reusable named OS Variant.",
+    paramsSchema: {
+      type: "object",
+      required: ["id", "name"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        tagline: { type: "string" },
+        emoji: { type: "string" },
+      },
+    },
+    example: { id: "agent-edition", name: "Agent Dark Neon", tagline: "Created by Claude Code", emoji: "🤖" },
+  },
+  {
+    method: "mod.list",
+    category: "theme",
+    summary: "List all installed OS mods (general & specific), optionally filtered by kind.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["theme", "decorator", "shader", "widget", "css", "shell"] },
+      },
+    },
+    example: {},
+  },
+  {
+    method: "mod.toggle",
+    category: "theme",
+    summary: "Enable or disable any installed OS mod by ID.",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        enabled: { type: "boolean" },
+      },
+    },
+    example: { id: "mod-crt-scanlines", enabled: true },
+  },
+  {
+    method: "mod.install",
+    category: "theme",
+    summary: "Install or update a custom OS mod (CSS, theme patch, decorator patch, shell patch, shader or widget link).",
+    paramsSchema: {
+      type: "object",
+      required: ["id", "name", "kind"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        kind: { type: "string", enum: ["theme", "decorator", "shader", "widget", "css", "shell"] },
+        scope: { type: "string", enum: ["general", "specific"] },
+        description: { type: "string" },
+        enabled: { type: "boolean" },
+        css: { type: "string" },
+      },
+    },
+    example: { id: "agent-neon", name: "Agent Cyan Rim", kind: "css", scope: "specific", enabled: true, css: ".glass-surface-focused{border-color:#22d3ee!important}" },
+  },
+  {
+    method: "mod.uninstall",
+    category: "theme",
+    summary: "Uninstall a custom OS mod by ID.",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } },
+    },
+    example: { id: "agent-neon" },
+  },
+  {
+    method: "mod.theme.set",
+    category: "theme",
+    summary: "Live-mod any OS theme token (accentPrimary, accentSecondary, glassRgb, blurPx, glassOpacity, borderColor, windowGlow, fontSans, fontMono, enabled).",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        enabled: { type: "boolean" },
+        name: { type: "string" },
+        accentPrimary: { type: "string" },
+        accentSecondary: { type: "string" },
+        glassRgb: { type: "string" },
+        elevatedRgb: { type: "string" },
+        blurPx: { type: "number" },
+        glassOpacity: { type: "number" },
+        borderColor: { type: "string" },
+        activeBorderColor: { type: "string" },
+        windowGlow: { type: "string" },
+      },
+    },
+    example: { enabled: true, accentPrimary: "#22d3ee", accentSecondary: "#f43f5e", blurPx: 32 },
+  },
+  {
+    method: "mod.decorator.set",
+    category: "theme",
+    summary: "Live-mod the Window Decorator: style (macos, windows, cyber-hud, retro-95, minimal-swiss, floating-zen, tiling-i3), buttonPosition, radiusPx, titlebarHeightPx, titlebarAccentBar, activeGlowPx.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        style: { type: "string", enum: ["macos", "windows", "cyber-hud", "retro-95", "minimal-swiss", "floating-zen", "tiling-i3"] },
+        buttonPosition: { type: "string", enum: ["left", "right"] },
+        radiusPx: { type: "number" },
+        borderWidthPx: { type: "number" },
+        titlebarHeightPx: { type: "number" },
+        titleAlign: { type: "string", enum: ["left", "center"] },
+        titlebarAccentBar: { type: "boolean" },
+        showWorkspacePills: { type: "boolean" },
+        showSnapButtons: { type: "boolean" },
+        activeGlowPx: { type: "number" },
+        unfocusedOpacity: { type: "number" },
+      },
+    },
+    example: { style: "cyber-hud", buttonPosition: "right", radiusPx: 6, titlebarAccentBar: true },
+  },
+  {
+    method: "mod.shell.set",
+    category: "theme",
+    summary: "Live-mod OS Shell: dockStyle (floating-glass, full-taskbar, minimal-pill, cyber-rail, hidden), dockRadiusPx, topBarStyle, brandLabel, showStockWidgets.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        dockStyle: { type: "string", enum: ["floating-glass", "full-taskbar", "minimal-pill", "cyber-rail", "hidden"] },
+        dockRadiusPx: { type: "number" },
+        topBarStyle: { type: "string", enum: ["glass", "floating-pills", "retro", "minimal", "hidden"] },
+        brandLabel: { type: "string" },
+        showStockWidgets: { type: "boolean" },
+      },
+    },
+    example: { dockStyle: "cyber-rail", topBarStyle: "floating-pills", brandLabel: "AgentOS" },
+  },
+  {
+    method: "mod.desktop3d.set",
+    category: "theme",
+    summary: "Control the AAA Three.js WebGPU 3D Spatial Desktop: enabled, scene (cyber-observatory, liquid-monolith, cyberpunk-city, kyoto-sanctuary), spatialWindows, interactiveOrbit, cameraSpeed, bloomIntensity, particleDensity, mouseParallax.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        enabled: { type: "boolean" },
+        scene: { type: "string", enum: ["cyber-observatory", "liquid-monolith", "cyberpunk-city", "kyoto-sanctuary"] },
+        spatialWindows: { type: "boolean" },
+        interactiveOrbit: { type: "boolean" },
+        cameraSpeed: { type: "number" },
+        bloomIntensity: { type: "number" },
+        particleDensity: { type: "number" },
+        mouseParallax: { type: "number" },
+      },
+    },
+    example: { enabled: true, scene: "cyber-observatory", spatialWindows: true, interactiveOrbit: false },
+  },
+  {
+    method: "mod.shader.set",
+    category: "theme",
+    summary: "Activate a built-in custom WGSL wallpaper shader by ID, OR hot-compile & activate brand-new custom WGSL fragment code live on the desktop! Pass id:null to return to stock.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        id: { type: ["string", "null"] },
+        name: { type: "string" },
+        wgsl: { type: "string" },
+        description: { type: "string" },
+      },
+    },
+    example: { id: "shader-event-horizon" },
+  },
+  {
+    method: "mod.widget.upsert",
+    category: "theme",
+    summary: "Create, update, reposition, resize, or toggle a live draggable HTML/SVG/JS Desktop Widget (receives live CPU/GPU/RAM/ports telemetry via postMessage).",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        emoji: { type: "string" },
+        description: { type: "string" },
+        x: { type: "number" },
+        y: { type: "number" },
+        width: { type: "number" },
+        height: { type: "number" },
+        enabled: { type: "boolean" },
+        transparent: { type: "boolean" },
+        html: { type: "string" },
+      },
+    },
+    example: { id: "agent-kpi", title: "Agent Status", emoji: "🤖", x: 32, y: 60, width: 220, height: 100, enabled: true, html: "<body style='margin:0;padding:12px;color:#22d3ee;font-family:monospace'><b>AGENT ACTIVE</b></body>" },
+  },
+  {
+    method: "mod.widget.remove",
+    category: "theme",
+    summary: "Delete a desktop widget by ID.",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } },
+    },
+    example: { id: "agent-kpi" },
+  },
+  {
+    method: "mod.css.set",
+    category: "theme",
+    summary: "Inject or update a live global/specific CSS mod (or update raw userCss).",
+    paramsSchema: {
+      type: "object",
+      required: ["css"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        css: { type: "string" },
+        enabled: { type: "boolean" },
+      },
+    },
+    example: { id: "agent-css", name: "Neon Glow", css: ".glass-dock{border-color:#22d3ee!important}", enabled: true },
+  },
+  {
+    method: "mod.reset",
+    category: "theme",
+    summary: "Reset all OS mods, custom theme tokens, decorator, 3D desktop, widgets & CSS back to stock unkernelOS.",
+    paramsSchema: { type: "object", properties: {} },
+    example: {},
   },
 ];
 
@@ -1626,6 +1886,271 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       if (!title) throw new Error("title is required");
       const task = swarmStore.addTask(title, String(p.assignee || "all"));
       return { created: task };
+    }
+
+    // ─── OS MODDING ENGINE & 3D WEBGPU DESKTOP ─────────────────────────
+    case "mod.status": {
+      const s = modStore.getSnapshot();
+      return {
+        activeVariantId: s.activeVariantId,
+        theme: s.theme,
+        decorator: s.decorator,
+        shell: s.shell,
+        desktop3d: s.desktop3d,
+        activeShaderModId: s.activeShaderModId,
+        shaderCompileError: s.shaderCompileError,
+        enabledMods: s.mods.filter((m) => m.enabled).map((m) => ({ id: m.id, name: m.name, kind: m.kind })),
+        enabledWidgets: s.widgets.filter((w) => w.enabled).map((w) => ({ id: w.id, title: w.title, x: w.x, y: w.y })),
+        counts: {
+          variants: s.variants.length,
+          mods: s.mods.length,
+          shaders: s.shaders.length,
+          widgets: s.widgets.length,
+        },
+      };
+    }
+
+    case "mod.variants": {
+      return {
+        activeVariantId: modStore.getSnapshot().activeVariantId,
+        variants: modStore.getSnapshot().variants.map((v) => ({
+          id: v.id,
+          name: v.name,
+          emoji: v.emoji,
+          tagline: v.tagline,
+          decorator: v.decorator.style,
+          dockStyle: v.shell.dockStyle,
+          desktop3d: Boolean(v.desktop3d?.enabled),
+          builtin: Boolean(v.builtin),
+        })),
+      };
+    }
+
+    case "mod.variant.apply": {
+      const id = String(p.id ?? "").trim();
+      if (!id) throw new Error("id is required");
+      const applied = modStore.applyVariant(id);
+      if (!applied) throw new Error(`Unknown OS variant '${id}'`);
+      wmStore.pushToast("OS Variant Applied", `${applied.emoji} ${applied.name}`, "success");
+      return { applied: { id: applied.id, name: applied.name, desktop3d: applied.desktop3d ?? null } };
+    }
+
+    case "mod.variant.create": {
+      const id = String(p.id ?? "").trim();
+      const name = String(p.name ?? "").trim();
+      if (!id || !name) throw new Error("id and name are required");
+      const created = modStore.saveCurrentAsVariant(
+        id,
+        name,
+        String(p.tagline || "Custom OS Variant"),
+        String(p.emoji || "✨")
+      );
+      return { created: { id: created.id, name: created.name } };
+    }
+
+    case "mod.list": {
+      const kind = typeof p.kind === "string" ? p.kind : null;
+      const all = modStore.getSnapshot().mods;
+      return { mods: kind ? all.filter((m) => m.kind === kind) : all };
+    }
+
+    case "mod.toggle": {
+      const id = String(p.id ?? "").trim();
+      if (!id) throw new Error("id is required");
+      const force = typeof p.enabled === "boolean" ? p.enabled : undefined;
+      const res = modStore.toggleMod(id, force);
+      if (!res) throw new Error(`Mod '${id}' not found`);
+      return { mod: res };
+    }
+
+    case "mod.install": {
+      const id = String(p.id ?? "").trim();
+      const name = String(p.name ?? "").trim();
+      const kind = String(p.kind ?? "css") as ModKind;
+      if (!id || !name) throw new Error("id and name are required");
+      const mod: OsMod = {
+        id,
+        name,
+        author: String(p.author || "Agent OS API"),
+        version: String(p.version || "1.0.0"),
+        kind,
+        scope: p.scope === "general" ? "general" : "specific",
+        description: String(p.description || "Agent-installed OS mod"),
+        tags: Array.isArray(p.tags) ? p.tags.map(String) : ["agent"],
+        enabled: p.enabled !== false,
+        css: typeof p.css === "string" ? p.css : undefined,
+      };
+      return { installed: modStore.upsertMod(mod) };
+    }
+
+    case "mod.uninstall": {
+      const id = String(p.id ?? "").trim();
+      return { id, removed: modStore.uninstallMod(id) };
+    }
+
+    case "mod.theme.set": {
+      const patch: Partial<CustomThemeTokens> = {};
+      if (typeof p.enabled === "boolean") (patch as Record<string, unknown>).enabled = p.enabled;
+      else (patch as Record<string, unknown>).enabled = true;
+      for (const k of [
+        "name",
+        "glassRgb",
+        "elevatedRgb",
+        "barRgb",
+        "dockRgb",
+        "borderColor",
+        "activeBorderColor",
+        "accentPrimary",
+        "accentSecondary",
+        "windowGlow",
+        "fontSans",
+        "fontMono",
+        "fallbackBg",
+      ] as const) {
+        if (typeof p[k] === "string") (patch as Record<string, unknown>)[k] = p[k];
+      }
+      if (typeof p.blurPx === "number") (patch as Record<string, unknown>).blurPx = p.blurPx;
+      if (typeof p.glassOpacity === "number") (patch as Record<string, unknown>).glassOpacity = p.glassOpacity;
+      modStore.setTheme(patch);
+      return { theme: modStore.getSnapshot().theme };
+    }
+
+    case "mod.decorator.set": {
+      const patch: Record<string, unknown> = {};
+      for (const k of [
+        "style",
+        "buttonPosition",
+        "radiusPx",
+        "borderWidthPx",
+        "titlebarHeightPx",
+        "titleAlign",
+        "titlebarAccentBar",
+        "showWorkspacePills",
+        "showSnapButtons",
+        "activeGlowPx",
+        "unfocusedOpacity",
+      ]) {
+        if (p[k] !== undefined) patch[k] = p[k];
+      }
+      modStore.setDecorator(patch as Partial<DecoratorModConfig>);
+      return { decorator: modStore.getSnapshot().decorator };
+    }
+
+    case "mod.shell.set": {
+      const patch: Record<string, unknown> = {};
+      for (const k of ["dockStyle", "dockRadiusPx", "topBarStyle", "brandLabel", "showStockWidgets"]) {
+        if (p[k] !== undefined) patch[k] = p[k];
+      }
+      modStore.setShell(patch as Partial<ShellModConfig>);
+      return { shell: modStore.getSnapshot().shell };
+    }
+
+    case "mod.desktop3d.set": {
+      const patch: Record<string, unknown> = {};
+      for (const k of [
+        "enabled",
+        "scene",
+        "spatialWindows",
+        "interactiveOrbit",
+        "cameraSpeed",
+        "bloomIntensity",
+        "particleDensity",
+        "mouseParallax",
+      ]) {
+        if (p[k] !== undefined) patch[k] = p[k];
+      }
+      modStore.setDesktop3d(patch as Partial<Desktop3dModConfig>);
+      const next = modStore.getSnapshot().desktop3d;
+      if (typeof p.enabled === "boolean") {
+        wmStore.pushToast(
+          next.enabled ? "Bureau 3D WebGPU Activé" : "Bureau 2D Restauré",
+          next.enabled ? `Scène Three.js : ${next.scene}` : "Retour au fond WebGPU 2D.",
+          "info"
+        );
+      }
+      return { desktop3d: next };
+    }
+
+    case "mod.shader.set": {
+      if (p.id === null) {
+        modStore.setActiveShaderMod(null);
+        return { activeShaderModId: null };
+      }
+      if (typeof p.wgsl === "string" && p.wgsl.trim()) {
+        const id = String(p.id || `shader-agent-${Date.now().toString(36).slice(-4)}`);
+        const sh: CustomShaderMod = {
+          id,
+          name: String(p.name || "Agent WGSL Shader"),
+          author: "Agent OS API",
+          description: String(p.description || "Hot-compiled custom WGSL shader"),
+          wgsl: p.wgsl,
+          previewGradient: "linear-gradient(135deg,#0f172a,#7c3aed,#06b6d4)",
+        };
+        modStore.setDesktop3d({ enabled: false });
+        modStore.upsertShader(sh, true);
+        return { shader: sh, activeShaderModId: id };
+      }
+      const id = String(p.id ?? "").trim();
+      if (!id) throw new Error("id or wgsl is required");
+      if (!modStore.getSnapshot().shaders.some((s) => s.id === id)) {
+        throw new Error(`Shader '${id}' not found`);
+      }
+      modStore.setDesktop3d({ enabled: false });
+      modStore.setActiveShaderMod(id);
+      return { activeShaderModId: id };
+    }
+
+    case "mod.widget.upsert": {
+      const id = String(p.id ?? "").trim();
+      if (!id) throw new Error("id is required");
+      const existing = modStore.getSnapshot().widgets.find((w) => w.id === id);
+      const widget: CustomDesktopWidget = {
+        id,
+        title: String(p.title ?? existing?.title ?? "Agent Widget"),
+        emoji: String(p.emoji ?? existing?.emoji ?? "✨"),
+        description: String(p.description ?? existing?.description ?? "Custom desktop widget"),
+        x: typeof p.x === "number" ? p.x : (existing?.x ?? 48),
+        y: typeof p.y === "number" ? p.y : (existing?.y ?? 64),
+        width: typeof p.width === "number" ? p.width : (existing?.width ?? 240),
+        height: typeof p.height === "number" ? p.height : (existing?.height ?? 140),
+        enabled: typeof p.enabled === "boolean" ? p.enabled : (existing?.enabled ?? true),
+        transparent: typeof p.transparent === "boolean" ? p.transparent : (existing?.transparent ?? false),
+        html: typeof p.html === "string" ? p.html : (existing?.html ?? "<body style='color:#fff;font-family:sans-serif;padding:12px'>Widget</body>"),
+        builtin: existing?.builtin,
+      };
+      return { widget: modStore.upsertWidget(widget) };
+    }
+
+    case "mod.widget.remove": {
+      const id = String(p.id ?? "").trim();
+      return { id, removed: modStore.removeWidget(id) };
+    }
+
+    case "mod.css.set": {
+      const css = String(p.css ?? "");
+      if (typeof p.id === "string" && p.id.trim()) {
+        const mod: OsMod = {
+          id: p.id.trim(),
+          name: String(p.name || p.id.trim()),
+          author: "Agent OS API",
+          version: "1.0.0",
+          kind: "css",
+          scope: "specific",
+          description: "Agent-injected live CSS mod",
+          tags: ["agent", "css"],
+          enabled: p.enabled !== false,
+          css,
+        };
+        return { mod: modStore.upsertMod(mod) };
+      }
+      modStore.setUserCss(css);
+      return { userCssLength: css.length };
+    }
+
+    case "mod.reset": {
+      modStore.resetAll();
+      wmStore.pushToast("OS Mods Reset", "All mods restored to unkernelOS Stock.", "info");
+      return { reset: true };
     }
 
     default:

@@ -24,6 +24,7 @@ import {
   Send,
   Settings,
   Sigma,
+  Sliders,
   Sparkles,
   Store,
   Terminal,
@@ -70,6 +71,7 @@ const APP_META: Record<
   git: { icon: GitBranch, category: "dev" },
   toolchain: { icon: Package, category: "system" },
   monitor: { icon: Activity, category: "system" },
+  "mod-studio": { icon: Sliders, category: "creative" },
   "rune-settings": { icon: Gem, category: "system" },
   settings: { icon: Settings, category: "system" },
 };

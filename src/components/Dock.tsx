@@ -25,6 +25,7 @@ import {
   Send,
   Settings,
   Sigma,
+  Sliders,
   Sparkles,
   Store,
   Terminal,
@@ -33,6 +34,7 @@ import {
   Zap,
 } from "lucide-react";
 import React, { useCallback, useMemo, useRef, useState } from "react";
+import { useMods } from "../core/mod-store.ts";
 import { SettingsService, useSubscriptionRef } from "../core/runtime.ts";
 import { DEFAULT_UNKERNEL_CONFIG } from "../core/schema.ts";
 import { useViewport } from "../core/use-viewport.ts";
@@ -68,6 +70,7 @@ const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string; style?:
   git: GitBranch,
   toolchain: Package,
   monitor: Activity,
+  "mod-studio": Sliders,
   "rune-settings": Gem,
   settings: Settings,
 };
@@ -85,6 +88,7 @@ const PINNED_DOCK_IDS: readonly AppId[] = [
   "preview",
   "git",
   "agent-api",
+  "mod-studio",
   "rune-settings",
   "settings",
 ];
@@ -120,6 +124,7 @@ const TRAY_PAD_Y = 10; // exact top & bottom symmetry inside glass tray
  */
 export const Dock: React.FC = () => {
   const wm = useWm();
+  const mods = useMods();
   const { isTouch, width: viewportWidth, keyboardInset } = useViewport();
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
@@ -252,6 +257,13 @@ export const Dock: React.FC = () => {
   };
 
   const hiddenForKeyboard = isTouch && keyboardInset > 100;
+  const dockStyle = mods.shell.dockStyle;
+  if (dockStyle === "hidden") return null;
+
+  const isTaskbar = dockStyle === "full-taskbar";
+  const isCyberRail = dockStyle === "cyber-rail";
+  const isMinimalPill = dockStyle === "minimal-pill";
+
   const trayHeight = baseSize + TRAY_PAD_Y * 2;
   const dividerHeight = Math.round(baseSize * 0.56);
   const dividerOffsetBottom = Math.round((baseSize - dividerHeight) / 2);
@@ -259,9 +271,11 @@ export const Dock: React.FC = () => {
   return (
     <div
       style={{
-        bottom: "max(0.75rem, env(safe-area-inset-bottom))",
+        bottom: isTaskbar ? "0px" : "max(0.75rem, env(safe-area-inset-bottom))",
       }}
-      className={`hidden md:flex fixed left-1/2 -translate-x-1/2 z-50 justify-center pointer-events-none transition-all duration-200 ${
+      className={`hidden md:flex fixed ${
+        isTaskbar ? "inset-x-0" : "left-1/2 -translate-x-1/2"
+      } z-50 justify-center pointer-events-none transition-all duration-200 ${
         hiddenForKeyboard ? "translate-y-28 opacity-0" : "translate-y-0 opacity-100"
       }`}
     >
@@ -274,12 +288,23 @@ export const Dock: React.FC = () => {
           paddingBottom: `${TRAY_PAD_Y}px`,
           paddingTop: `${TRAY_PAD_Y}px`,
         }}
-        className="relative pointer-events-auto flex items-end overflow-visible"
+        className={`relative pointer-events-auto flex items-end overflow-visible ${
+          isTaskbar ? "w-full justify-center" : ""
+        }`}
       >
-        {/* Frosted Liquid Glass Tray (exact symmetrical height around resting squircles!) */}
+        {/* Frosted Liquid Glass Tray (adapts to modded dockStyle & dockRadiusPx!) */}
         <div
-          style={{ height: `${trayHeight}px` }}
-          className="glass-dock pointer-events-none absolute inset-x-0 bottom-0 rounded-[22px] transition-all duration-150"
+          style={{
+            height: `${trayHeight}px`,
+            borderRadius: isTaskbar ? "0px" : `${mods.shell.dockRadiusPx}px`,
+          }}
+          className={`glass-dock pointer-events-none absolute inset-x-0 bottom-0 transition-all duration-150 ${
+            isCyberRail
+              ? "!border-cyan-400/45 shadow-[0_0_28px_rgba(34,211,238,0.28)]"
+              : isMinimalPill
+              ? "!bg-black/45 !border-white/12"
+              : ""
+          }`}
         />
 
         {/* Icons Row — overflow-visible & pixel-aligned baseline! */}

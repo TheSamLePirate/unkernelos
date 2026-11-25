@@ -3,6 +3,7 @@ import { Loader2, X } from "lucide-react";
 import React, { lazy, Suspense, useCallback, useEffect, useRef } from "react";
 import { attachAgentOsBridge, detachAgentOsBridge } from "../core/agent-os-api.ts";
 import { clipboardStore } from "../core/clipboard-store.ts";
+import { modStore, useMods } from "../core/mod-store.ts";
 import { applyOsThemeToDocument } from "../core/os-themes.ts";
 import {
   appRuntime,
@@ -54,6 +55,8 @@ const GitApp = lazy(() => import("./apps/GitApp.tsx").then((m) => ({ default: m.
 const GlViewportWindow = lazy(() => import("./apps/GlViewportWindow.tsx").then((m) => ({ default: m.GlViewportWindow })));
 const KittyTerminalApp = lazy(() => import("./apps/KittyTerminalApp.tsx").then((m) => ({ default: m.KittyTerminalApp })));
 const MediaStudioApp = lazy(() => import("./apps/MediaStudioApp.tsx").then((m) => ({ default: m.MediaStudioApp })));
+const ModStudioApp = lazy(() => import("./apps/ModStudioApp.tsx").then((m) => ({ default: m.ModStudioApp })));
+const ThreeDesktop3d = lazy(() => import("../gpu/ThreeDesktop3d.tsx").then((m) => ({ default: m.ThreeDesktop3d })));
 const ProofStudioApp = lazy(() => import("./apps/ProofStudioApp.tsx").then((m) => ({ default: m.ProofStudioApp })));
 const MicromlExplorerApp = lazy(() => import("./apps/MicromlExplorerApp.tsx").then((m) => ({ default: m.MicromlExplorerApp })));
 const NetworkInspectorApp = lazy(() => import("./apps/NetworkInspectorApp.tsx").then((m) => ({ default: m.NetworkInspectorApp })));
@@ -145,6 +148,8 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
       return <ToolchainInstallerApp />;
     case "monitor":
       return <SystemMonitorApp />;
+    case "mod-studio":
+      return <ModStudioApp />;
     case "rune-settings":
       return <RuneLiquidSettingsApp />;
     case "settings":
@@ -167,6 +172,7 @@ const renderWindowApp = (win: WindowInstance, focused: boolean, visible: boolean
 
 export const Desktop: React.FC = () => {
   const wm = useWm();
+  const mods = useMods();
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
     DEFAULT_UNKERNEL_CONFIG
@@ -202,16 +208,17 @@ export const Desktop: React.FC = () => {
   const waylandRootRef = useRef<HTMLDivElement>(null);
   const glAutoOpenedRef = useRef(false);
 
-  // Sync live OS theme, blur, opacity & UI sound preference
+  // Sync live OS theme, blur, opacity, UI sound preference & active OS Mod overrides
   useEffect(() => {
     applyOsThemeToDocument(cfg.osTheme, cfg.glassBlur, cfg.glassOpacity);
+    modStore.applyDomOverrides();
     uiSounds.setEnabled(cfg.uiSounds);
-  }, [cfg.osTheme, cfg.glassBlur, cfg.glassOpacity, cfg.uiSounds]);
+  }, [cfg.osTheme, cfg.glassBlur, cfg.glassOpacity, cfg.uiSounds, mods.theme, mods.mods, mods.userCss, mods.decorator.style, mods.shell]);
 
-  // WebGPU Animated Live Shader Wallpaper (5 selectable shaders!)
+  // WebGPU Animated Live Shader Wallpaper (5 stock shaders + custom WGSL shader mods; paused when 3D Desktop is active)
   useEffect(() => {
     const canvas = wallpaperRef.current;
-    if (!canvas || !cfg.webgpuWallpaper) return;
+    if (!canvas || !cfg.webgpuWallpaper || mods.desktop3d.enabled) return;
     const bg = new WebGpuBackdrop(canvas, cfg.wallpaperShader);
     backdropInstanceRef.current = bg;
     const onResize = () => bg.resize(window.innerWidth, window.innerHeight);
@@ -223,12 +230,27 @@ export const Desktop: React.FC = () => {
       backdropInstanceRef.current = null;
       bg.dispose();
     };
-  }, [cfg.webgpuWallpaper]);
+  }, [cfg.webgpuWallpaper, mods.desktop3d.enabled]);
 
   // Hot-switch WebGPU shader mode without recreating GPUDevice
   useEffect(() => {
     backdropInstanceRef.current?.setShader(cfg.wallpaperShader);
   }, [cfg.wallpaperShader]);
+
+  // Hot-compile custom WGSL wallpaper shader mod whenever activeShaderModId or its WGSL source changes
+  const activeShaderMod = mods.activeShaderModId
+    ? mods.shaders.find((s) => s.id === mods.activeShaderModId) ?? null
+    : null;
+  const activeShaderWgsl = activeShaderMod?.wgsl ?? null;
+
+  useEffect(() => {
+    if (mods.desktop3d.enabled) return;
+    const bg = backdropInstanceRef.current;
+    if (!bg) return;
+    void bg.setCustomWgsl(activeShaderWgsl).then((res) => {
+      modStore.setShaderCompileError(res.ok ? null : (res.error ?? "WGSL compilation error"));
+    });
+  }, [activeShaderWgsl, mods.desktop3d.enabled, cfg.webgpuWallpaper]);
 
   // Boot unkernel automatically on first mount, reconcile startup workspace, & open requested app (or Agent Studio)
   useEffect(() => {
@@ -458,12 +480,18 @@ export const Desktop: React.FC = () => {
       }}
       className="relative w-screen h-[100dvh] overflow-hidden wallpaper-fallback"
     >
-      {/* WebGPU Live Selectable Shader Backdrop */}
-      {cfg.webgpuWallpaper && (
-        <canvas
-          ref={wallpaperRef}
-          className="fixed inset-0 w-full h-full pointer-events-none z-0"
-        />
+      {/* AAA 3D WebGPU Three.js Spatial Desktop OR 2D WebGPU Live Shader Backdrop */}
+      {mods.desktop3d.enabled ? (
+        <Suspense fallback={null}>
+          <ThreeDesktop3d />
+        </Suspense>
+      ) : (
+        cfg.webgpuWallpaper && (
+          <canvas
+            ref={wallpaperRef}
+            className="fixed inset-0 w-full h-full pointer-events-none z-0"
+          />
+        )
       )}
 
       {/* Desktop Wayland Host Root (output geometry + popups/dnd; top-level surfaces mount in WindowFrame) */}
@@ -478,8 +506,15 @@ export const Desktop: React.FC = () => {
       {/* Magnetic Drag Snap Zone Preview Overlay */}
       <SnapPreviewOverlay />
 
-      {/* Floating Glass Window Layer (all workspaces kept mounted so PTYs/agents stay alive!) */}
-      <main className="relative z-10 w-full h-full pointer-events-none">
+      {/* Floating Glass Window Layer (with Spatial 3D perspective when 3D Desktop + Spatial Windows active) */}
+      <main
+        style={
+          mods.desktop3d.enabled && mods.desktop3d.spatialWindows
+            ? { perspective: "1600px", transformStyle: "preserve-3d" }
+            : undefined
+        }
+        className="relative z-10 w-full h-full pointer-events-none"
+      >
         {wm.windows.map((win) => {
           const visible = win.workspace === wm.activeWorkspace;
           const focused = visible && win.id === wm.activeWindowId && !wm.missionControlOpen && !wm.locked;

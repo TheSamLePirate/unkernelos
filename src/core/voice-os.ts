@@ -32,6 +32,7 @@ interface SpeechRecognitionLike {
 }
 
 const APP_KEYWORDS: readonly [RegExp, AppId, string][] = [
+  [/\b(mod|mods|modder|mod studio|variantes?|décorateur)\b/i, "mod-studio", "OS Mod Studio"],
   [/\b(rune|liquid metal|métal liquide|metal liquide)\b/i, "rune-settings", "Liquid Metal Réglages (Rune)"],
   [/\b(preuve|preuves|proof|poule|théorème|theoreme)\b/i, "proof-studio", "Studio de preuves"],
   [/\b(notebook|jupyter|science|python|rust|ocaml)\b/i, "notebook", "Polyglot Notebook"],
@@ -309,6 +310,13 @@ class VoiceOsEngine {
           break;
         }
       }
+    }
+
+    // 1b. 3D WebGPU Desktop Voice Control
+    if (!reply && /\b(bureau 3d|desktop 3d|mode 3d|spatial 3d|three\.?js)\b/i.test(text)) {
+      const disable = /\b(off|désactive|desactive|stop|2d|quitte)\b/i.test(text);
+      await executeOsAction("mod.desktop3d.set", { enabled: !disable }, { source: "ui" });
+      reply = disable ? "Switched back to 2D Desktop" : "Activated AAA 3D WebGPU Desktop";
     }
 
     // 2. Virtual Desktop Switch (workspace 1..4)
