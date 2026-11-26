@@ -42,7 +42,7 @@ import {
   wmStore,
   type WindowInstance,
 } from "../../wm/wm-store.ts";
-import { attachWindowAutomation } from "../../core/window-automation.ts";
+import { ReactiveSurfaceSlot } from "../ReactiveSurfaceHost.tsx";
 import { screenToElement } from "../../core/spatial-pointer.ts";
 interface Props {
   win: WindowInstance;
@@ -73,9 +73,6 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
     frame = useRef<HTMLDivElement>(null),
     gesture = useRef<Gesture | null>(null),
     cleanup = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    if (frame.current) return attachWindowAutomation(win.id, frame.current);
-  }, [win.id]);
   const [docking, setDocking] = useState(false);
   const [moving, setMoving] = useState(false),
     [destination, setDestination] = useState<HorizonPlacement | null>(null),
@@ -497,7 +494,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
         role="region"
         aria-hidden={pose.hidden || !visible}
         inert={pose.hidden || !visible}
-        className="horizon-window"
+        className={"horizon-window " + (focused ? "glass-surface-focused" : "glass-surface")}
         style={{
           width: pose.width,
           height: pose.height,
@@ -554,6 +551,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
           />
         ))}
         <header
+          data-unkernel-titlebar="true"
           inert={!!pose.docked && !moving}
           className="horizon-windowbar"
           onPointerDown={(e) => onStart(e)}
@@ -600,6 +598,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
             </button>
           </div>
           <span className="horizon-windowtitle">{a?.title ?? win.title}</span>
+          {focused && <ReactiveSurfaceSlot slot="titlebar" />}
           <div className="horizon-windowtools">
             <button
               title="Aile gauche"

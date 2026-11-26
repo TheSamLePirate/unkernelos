@@ -3,12 +3,12 @@
   --hz-ink: #edf1ef;
   --hz-muted: #a0adb3;
   --hz-dim: #73848c;
-  --hz-bg: #10191f;
-  --hz-panel: #172229;
-  --hz-elevated: #1d2b32;
-  --hz-line: rgba(213, 230, 228, 0.13);
-  --hz-focus: #d9c39a;
-  --hz-soft: rgba(217, 195, 154, 0.1);
+  --hz-bg: var(--glass-bg);
+  --hz-panel: var(--glass-bg-elevated);
+  --hz-elevated: var(--glass-bar-bg);
+  --hz-line: var(--glass-border);
+  --hz-focus: var(--accent-primary);
+  --hz-soft: color-mix(in srgb, var(--accent-primary) 10%, transparent);
   --hz-shadow: rgba(0, 5, 10, 0.52);
   --hz-radius: 16px;
   color-scheme: dark;
@@ -21,8 +21,8 @@
   --hz-panel: #f4f6f1;
   --hz-elevated: #e5ebe6;
   --hz-line: rgba(30, 60, 60, 0.18);
-  --hz-focus: #77561c;
-  --hz-soft: rgba(135, 103, 45, 0.09);
+  --hz-focus: color-mix(in srgb, var(--accent-primary) 65%, #24343a);
+  --hz-soft: color-mix(in srgb, var(--accent-primary) 10%, transparent);
   --hz-shadow: rgba(12, 30, 32, 0.17);
   color-scheme: light;
 }
@@ -31,6 +31,9 @@
   color: var(--hz-ink);
   font-family: var(--font-sans);
   isolation: isolate;
+}
+.horizon-root[data-horizon-wallpaper="system"] {
+  background: var(--wallpaper-fallback-bg);
 }
 .horizon-root button,
 .horizon-panel button,
@@ -100,7 +103,7 @@
   color: var(--hz-ink);
   background: color-mix(in srgb, var(--hz-bg) 70%, transparent);
   border-bottom: 1px solid var(--hz-line);
-  backdrop-filter: blur(22px);
+  backdrop-filter: blur(var(--glass-blur-effective));
 }
 .horizon-topbar button {
   border: 0;
@@ -267,7 +270,7 @@
   padding: 3px;
   border: 1px solid var(--hz-line);
   background: color-mix(in srgb, var(--hz-bg) 70%, transparent);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--glass-blur-effective));
   border-radius: 10px;
   box-shadow: 0 4px 15px #0000000c;
 }
@@ -346,7 +349,7 @@
   overflow: visible;
   contain: layout style;
 }
-.horizon-window[data-focused="true"] {
+:where(.horizon-window)[data-focused="true"] {
   border-color: color-mix(in srgb, var(--hz-focus) 43%, transparent);
   box-shadow:
     0 30px 90px -12px var(--hz-shadow),
@@ -685,7 +688,7 @@
     color-mix(in srgb, var(--hz-panel) 85%, transparent),
     color-mix(in srgb, var(--hz-bg) 90%, transparent)
   );
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(var(--glass-blur-effective));
   border: 1px solid color-mix(in srgb, var(--hz-line) 90%, white 5%);
   box-shadow:
     0 14px 35px var(--hz-shadow),

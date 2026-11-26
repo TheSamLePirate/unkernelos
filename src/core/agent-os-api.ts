@@ -203,6 +203,7 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
     example: { path: "/tmp/project" },
   })),
   {method:"horizon.status",category:"wm",summary:"Read Horizon desktop mode, layout and placements. Does not expose drawer content.",paramsSchema:{type:"object",properties:{}},example:{}},
+  {method:"wm.desktop.set",category:"wm",summary:"Switch between the default Horizon desktop and the classic themed compositor while keeping app sessions open.",paramsSchema:{type:"object",properties:{mode:{type:"string",enum:["horizon","classic"]}},required:["mode"]},example:{mode:"horizon"}},
   {method:"horizon.sessions",category:"wm",summary:"Discover session capabilities and current revisions. Context and published actions are shared by default; private sessions require an explicit grant.",paramsSchema:{type:"object",properties:{}},example:{}},
   {method:"horizon.session.read",category:"wm",summary:"Read the shared session state and context. An optional grantId restricts access to a user-selected scope.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"}},required:["windowId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant"}},
   {method:"horizon.session.action",category:"wm",summary:"Invoke any published action in a shared session, or a restricted action via optional grantId, at the expected revision. Replayed requestIds are deduplicated.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"},action:{type:"string"},expectedRevision:{type:"string"},requestId:{type:"string"},args:{type:"object"}},required:["windowId","action","expectedRevision","requestId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant",action:"save",expectedRevision:"3",requestId:"unique-action-id",args:{}}},
@@ -1770,6 +1771,11 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
     }
 
     case "horizon.status": {const w=wmStore.getSnapshot();return {enabled:w.horizonEnabled,layout:w.horizonLayout,flat:w.horizonFlat,workspace:w.activeWorkspace,windows:w.windows.map(x=>({id:x.id,sessionId:x.sessionId,contextId:x.contextId,placement:x.placement??"center",minimized:x.minimized}))};}
+    case "wm.desktop.set": {
+      if (p.mode !== "horizon" && p.mode !== "classic") throw new Error("mode must be horizon or classic");
+      wmStore.setHorizonEnabled(p.mode === "horizon");
+      return { mode: p.mode, preservedSessions: wmStore.getSnapshot().windows.length };
+    }
     case "horizon.sessions": return surfaceRegistry.list();
     case "horizon.session.read": return surfaceRegistry.read(String(p.windowId??""),String(p.grantId??""));
     case "horizon.session.action": {
@@ -2176,21 +2182,33 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
     case "theme.set": {
       const patch: { -readonly [K in keyof UnkernelConfig]?: UnkernelConfig[K] } = {};
       if (typeof p.osTheme === "string" && p.osTheme in OS_THEMES) {
+        modStore.setTheme({ enabled: false });
         patch.osTheme = p.osTheme as OsThemeId;
       }
       if (typeof p.wallpaperShader === "string" && p.wallpaperShader in WALLPAPER_SHADERS) {
+        modStore.setBackdropImage(null);
+        modStore.setActiveShaderMod(null);
         patch.wallpaperShader = p.wallpaperShader as WallpaperShaderId;
         patch.webgpuWallpaper = true;
       }
       if (typeof p.kittyTheme === "string" && p.kittyTheme in KITTY_THEMES) {
         patch.kittyTheme = p.kittyTheme as KittyThemeId;
       }
-      if (typeof p.glassBlur === "number") patch.glassBlur = Math.max(4, Math.min(48, p.glassBlur));
-      if (typeof p.glassOpacity === "number") patch.glassOpacity = Math.max(0.4, Math.min(0.98, p.glassOpacity));
+      if (typeof p.glassBlur === "number") {
+        patch.glassBlur = Math.max(4, Math.min(48, p.glassBlur));
+        if (modStore.getSnapshot().theme.enabled) modStore.setTheme({ blurPx: patch.glassBlur });
+      }
+      if (typeof p.glassOpacity === "number") {
+        patch.glassOpacity = Math.max(0.4, Math.min(0.98, p.glassOpacity));
+        if (modStore.getSnapshot().theme.enabled) modStore.setTheme({ glassOpacity: patch.glassOpacity });
+      }
       if (typeof p.desktopWidgets === "boolean") patch.desktopWidgets = p.desktopWidgets;
       if (typeof p.uiSounds === "boolean") patch.uiSounds = p.uiSounds;
       if (typeof p.dockMagnification === "boolean") patch.dockMagnification = p.dockMagnification;
-      if (typeof p.webgpuWallpaper === "boolean") patch.webgpuWallpaper = p.webgpuWallpaper;
+      if (typeof p.webgpuWallpaper === "boolean") {
+        modStore.setWallpaperMode("system");
+        patch.webgpuWallpaper = p.webgpuWallpaper;
+      }
       const updated = await appRuntime.runPromise(
         Effect.flatMap(SettingsService, (s) => s.updateConfig(patch))
       );
@@ -2461,6 +2479,8 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
     case "mod.status": {
       const s = modStore.getSnapshot();
       return {
+        desktopMode: wmStore.getSnapshot().horizonEnabled ? "horizon" : "classic",
+        wallpaperMode: s.wallpaperMode,
         activeVariantId: s.activeVariantId,
         theme: s.theme,
         decorator: s.decorator,

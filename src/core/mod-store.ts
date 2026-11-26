@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { Spatial3dLayoutKind } from "../gpu/spatial-3d-bridge.ts";
 import type { OsThemeId, WallpaperShaderId } from "./schema.ts";
+import { wmStore } from "../wm/wm-store.ts";
 import type { SoundProfileId } from "./ui-sounds.ts";
 
 export type WindowDecoratorStyle =
@@ -401,6 +402,10 @@ export interface OsMod {
 }
 
 export interface OsVariant {
+  readonly desktopMode?: "horizon" | "classic";
+  readonly wallpaperMode?: "horizon" | "system";
+  readonly activeBackdropImageId?: string | null;
+  readonly customBackdropImageUrl?: string;
   readonly id: string;
   readonly name: string;
   readonly family: VariantFamily;
@@ -421,6 +426,7 @@ export interface OsVariant {
 }
 
 export interface ModState {
+  readonly wallpaperMode: "horizon" | "system";
   readonly activeVariantId: string;
   readonly theme: CustomThemeTokens;
   readonly decorator: DecoratorModConfig;
@@ -1811,6 +1817,34 @@ header.glass-bar:hover, .glass-dock:hover {
 // ---------------------------------------------------------------------------
 
 export const BUILTIN_VARIANTS: readonly OsVariant[] = [
+  {
+    id: "horizon",
+    desktopMode: "horizon",
+    name: "Horizon",
+    family: "creative",
+    tagline: "Bureau spatial par défaut · Profondeur continue, docks vivants et tiroirs de contexte",
+    emoji: "🌅",
+    swatches: ["#d9c39a", "#539394", "#10191f"],
+    activeShaderModId: null,
+    theme: {
+      ...DEFAULT_CUSTOM_THEME,
+      enabled: true,
+      name: "Horizon",
+      glassRgb: "16, 25, 31",
+      elevatedRgb: "23, 34, 41",
+      barRgb: "16, 25, 31",
+      dockRgb: "23, 34, 41",
+      accentPrimary: "#d9c39a",
+      accentSecondary: "#539394",
+      fallbackBg: "linear-gradient(160deg, #1e3b49, #182d37 45%, #0b1722)",
+    },
+    decorator: { ...DEFAULT_DECORATOR },
+    shell: { ...DEFAULT_SHELL, showStockWidgets: false },
+    desktop3d: { ...DEFAULT_DESKTOP_3D, enabled: false },
+    enabledModIds: [],
+    enabledWidgetIds: [],
+    builtin: true,
+  },
   // ─── STOCK ──────────────────────────────────────────────────────────
   {
     id: "unkernel-default",
@@ -2680,10 +2714,11 @@ export const BUILTIN_VARIANTS: readonly OsVariant[] = [
 
 function createDefaultState(): ModState {
   return {
-    activeVariantId: "unkernel-default",
-    theme: { ...DEFAULT_CUSTOM_THEME },
+    wallpaperMode: "horizon",
+    activeVariantId: "horizon",
+    theme: { ...BUILTIN_VARIANTS[0]!.theme },
     decorator: { ...DEFAULT_DECORATOR },
-    shell: { ...DEFAULT_SHELL },
+    shell: { ...BUILTIN_VARIANTS[0]!.shell },
     desktop3d: { ...DEFAULT_DESKTOP_3D },
     fx: { ...DEFAULT_WINDOW_FX },
     eyeCandy: { ...DEFAULT_EYE_CANDY, hotCorners: { ...DEFAULT_EYE_CANDY.hotCorners } },
@@ -2749,6 +2784,8 @@ function loadModState(): ModState {
     const p = JSON.parse(raw) as Partial<ModState>;
     return {
       activeVariantId: typeof p.activeVariantId === "string" ? p.activeVariantId : def.activeVariantId,
+      wallpaperMode: p.wallpaperMode === "horizon" ? "horizon"
+        : p.wallpaperMode === "system" || p.activeBackdropImageId || p.activeShaderModId ? "system" : "horizon",
       theme: { ...def.theme, ...(p.theme ?? {}) },
       decorator: { ...def.decorator, ...(p.decorator ?? {}) },
       shell: { ...def.shell, ...(p.shell ?? {}) },
@@ -2777,6 +2814,17 @@ function loadModState(): ModState {
 class ModEngineStore {
   private state: ModState = loadModState();
   private listeners = new Set<() => void>();
+  private appearanceBridge?: {
+    read: () => Pick<OsVariant, "baseOsTheme" | "baseShader">;
+    apply: (variant: Pick<OsVariant, "baseOsTheme" | "baseShader">) => void;
+  };
+
+  public bindBaseAppearance(bridge: NonNullable<ModEngineStore["appearanceBridge"]>): () => void {
+    this.appearanceBridge = bridge;
+    return () => {
+      if (this.appearanceBridge === bridge) this.appearanceBridge = undefined;
+    };
+  }
 
   public subscribe = (fn: () => void): (() => void) => {
     this.listeners.add(fn);
@@ -2871,10 +2919,13 @@ class ModEngineStore {
   }
 
   public setDecorator(patch: Partial<DecoratorModConfig>): void {
+    wmStore.setHorizonEnabled(false);
     this.setState((s) => ({ ...s, decorator: { ...s.decorator, ...patch } }));
   }
 
   public setShell(patch: Partial<ShellModConfig>): void {
+    if (Object.keys(patch).some((key) => key !== "showStockWidgets"))
+      wmStore.setHorizonEnabled(false);
     this.setState((s) => {
       const nextShell: ShellModConfig = { ...s.shell, ...patch };
       // Keep Dock & Taskbar coherent when toggling taskbarMode directly from Settings / Mod Studio
@@ -2891,10 +2942,12 @@ class ModEngineStore {
   }
 
   public setDesktop3d(patch: Partial<Desktop3dModConfig>): void {
+    if (patch.enabled) wmStore.setHorizonEnabled(false);
     this.setState((s) => ({ ...s, desktop3d: { ...s.desktop3d, ...patch } }));
   }
 
   public setFx(patch: Partial<WindowFxConfig>): void {
+    wmStore.setHorizonEnabled(false);
     this.setState((s) => ({ ...s, fx: { ...s.fx, ...patch } }));
   }
 
@@ -2926,6 +2979,7 @@ class ModEngineStore {
   public setBackdropImage(id: string | null, customUrl?: string): void {
     this.setState((s) => ({
       ...s,
+      wallpaperMode: "system",
       activeBackdropImageId: id,
       customBackdropImageUrl: customUrl !== undefined ? customUrl : s.customBackdropImageUrl,
     }));
@@ -2936,7 +2990,11 @@ class ModEngineStore {
   }
 
   public setActiveShaderMod(id: string | null): void {
-    this.setState((s) => ({ ...s, activeShaderModId: id, shaderCompileError: null }));
+    this.setState((s) => ({ ...s, wallpaperMode: "system", activeBackdropImageId: null, activeShaderModId: id, shaderCompileError: null }));
+  }
+
+  public setWallpaperMode(wallpaperMode: "horizon" | "system"): void {
+    this.setState((s) => ({ ...s, wallpaperMode }));
   }
 
   public setShaderCompileError(err: string | null): void {
@@ -2955,6 +3013,8 @@ class ModEngineStore {
         ...s,
         shaders: next,
         activeShaderModId: activate ? shader.id : s.activeShaderModId,
+        activeBackdropImageId: activate ? null : s.activeBackdropImageId,
+        wallpaperMode: activate ? "system" : s.wallpaperMode,
         shaderCompileError: activate ? null : s.shaderCompileError,
       };
     });
@@ -2976,6 +3036,8 @@ class ModEngineStore {
     const target = this.state.mods.find((m) => m.id === id);
     if (!target) return null;
     const nextEnabled = forceEnabled ?? !target.enabled;
+    if (nextEnabled && (target.decoratorPatch || target.shellPatch))
+      wmStore.setHorizonEnabled(false);
     this.setState((s) => {
       const mods = s.mods.map((m) => (m.id === id ? { ...m, enabled: nextEnabled } : m));
       let next: ModState = { ...s, mods };
@@ -2983,7 +3045,7 @@ class ModEngineStore {
         if (target.themePatch) next = { ...next, theme: { ...next.theme, ...target.themePatch } };
         if (target.decoratorPatch) next = { ...next, decorator: { ...next.decorator, ...target.decoratorPatch } };
         if (target.shellPatch) next = { ...next, shell: { ...next.shell, ...target.shellPatch } };
-        if (target.shaderId) next = { ...next, activeShaderModId: target.shaderId };
+        if (target.shaderId) next = { ...next, wallpaperMode: "system", activeBackdropImageId: null, activeShaderModId: target.shaderId };
         if (target.widgetId) {
           next = {
             ...next,
@@ -3044,11 +3106,15 @@ class ModEngineStore {
   public applyVariant(variantId: string): OsVariant | null {
     const v = this.state.variants.find((x) => x.id === variantId);
     if (!v) return null;
+    wmStore.setHorizonEnabled(v.desktopMode === "horizon");
     const modSet = new Set(v.enabledModIds);
     const widgetSet = new Set(v.enabledWidgetIds);
     this.setState((s) => ({
       ...s,
       activeVariantId: v.id,
+      wallpaperMode: v.wallpaperMode ?? (v.desktopMode === "horizon" ? "horizon" : "system"),
+      activeBackdropImageId: v.activeBackdropImageId ?? null,
+      customBackdropImageUrl: v.customBackdropImageUrl ?? s.customBackdropImageUrl,
       theme: { ...v.theme },
       decorator: { ...v.decorator },
       shell: { ...v.shell },
@@ -3068,6 +3134,7 @@ class ModEngineStore {
       mods: s.mods.map((m) => ({ ...m, enabled: modSet.has(m.id) })),
       widgets: s.widgets.map((w) => ({ ...w, enabled: widgetSet.has(w.id) })),
     }));
+    this.appearanceBridge?.apply(v);
     return v;
   }
 
@@ -3075,6 +3142,11 @@ class ModEngineStore {
     const s = this.state;
     const variant: OsVariant = {
       id,
+      ...this.appearanceBridge?.read(),
+      desktopMode: wmStore.getSnapshot().horizonEnabled ? "horizon" : "classic",
+      wallpaperMode: s.wallpaperMode,
+      activeBackdropImageId: s.activeBackdropImageId,
+      customBackdropImageUrl: s.customBackdropImageUrl,
       name,
       family: "creative",
       tagline,
@@ -3118,6 +3190,9 @@ class ModEngineStore {
         schema: "unkernelos-mod-pack/v3",
         exportedAt: new Date().toISOString(),
         activeVariantId: this.state.activeVariantId,
+        ...this.appearanceBridge?.read(),
+        desktopMode: wmStore.getSnapshot().horizonEnabled ? "horizon" : "classic",
+        wallpaperMode: this.state.wallpaperMode,
         theme: this.state.theme,
         decorator: this.state.decorator,
         shell: this.state.shell,
@@ -3141,10 +3216,13 @@ class ModEngineStore {
 
   public importBundleJson(jsonText: string): { ok: boolean; error?: string } {
     try {
-      const data = JSON.parse(jsonText) as Partial<ModState> & { reactive?: unknown };
+      const data = JSON.parse(jsonText) as Partial<ModState> & {
+        reactive?: unknown; desktopMode?: "horizon" | "classic";
+      } & Pick<OsVariant, "baseOsTheme" | "baseShader">;
       this.setState((s) => ({
         ...s,
         activeVariantId: data.activeVariantId ?? s.activeVariantId,
+        wallpaperMode: data.wallpaperMode === "horizon" || data.wallpaperMode === "system" ? data.wallpaperMode : "system",
         theme: data.theme ? { ...s.theme, ...data.theme } : s.theme,
         decorator: data.decorator ? { ...s.decorator, ...data.decorator } : s.decorator,
         shell: data.shell ? { ...s.shell, ...data.shell } : s.shell,
@@ -3172,6 +3250,11 @@ class ModEngineStore {
       if (data.reactive && this.reactiveBundleHooks) {
         this.reactiveBundleHooks.importConfig(data.reactive);
       }
+      if (data.desktopMode === "horizon" || data.desktopMode === "classic")
+        wmStore.setHorizonEnabled(data.desktopMode === "horizon");
+      else if (data.activeVariantId)
+        wmStore.setHorizonEnabled(this.state.variants.find((v) => v.id === data.activeVariantId)?.desktopMode === "horizon");
+      if (data.baseOsTheme || data.baseShader) this.appearanceBridge?.apply(data);
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -3179,6 +3262,7 @@ class ModEngineStore {
   }
 
   public resetAll(): void {
+    wmStore.setHorizonEnabled(true);
     this.state = createDefaultState();
     this.emit();
   }

@@ -10,10 +10,12 @@ export function attachWindowAutomation(id: string, root: HTMLElement) {
     timer: ReturnType<typeof setTimeout> | undefined;
   const ids = new WeakMap<HTMLElement, string>(),
     controls = new Map<string, HTMLElement>();
+  const body = root.matches("[data-app-content]")
+    ? root
+    : root.querySelector<HTMLElement>(".horizon-windowbody, [data-app-content]") ?? root;
   const privateElement = (el: HTMLElement) =>
     !!el.closest('[data-private],input[type="password"],input[type="hidden"]');
   const snapshot = () => {
-    const body = root.querySelector<HTMLElement>(".horizon-windowbody");
     controls.clear();
     const items = [
       ...(body?.querySelectorAll<HTMLElement>(
@@ -161,7 +163,7 @@ export function attachWindowAutomation(id: string, root: HTMLElement) {
         run: (args) => {
           const el = args.id
             ? target(args)
-            : root.querySelector<HTMLElement>(".horizon-windowbody");
+            : body;
           el?.scrollTo({ top: Number(args.top) || 0 });
           return { scrolled: true };
         },
@@ -170,7 +172,7 @@ export function attachWindowAutomation(id: string, root: HTMLElement) {
   };
   let unregister: (() => void) | undefined;
   const observer = new MutationObserver(schedule);
-  observer.observe(root.querySelector(".horizon-windowbody") ?? root, {
+  observer.observe(body, {
     childList: true,
     subtree: true,
     attributes: true,

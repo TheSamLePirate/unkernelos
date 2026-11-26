@@ -805,17 +805,7 @@ class WindowManagerStore {
     }));
   }
   public setHorizonEnabled(enabled: boolean): void {
-    if (
-      enabled !== this.state.horizonEnabled &&
-      this.state.windows.length > 0
-    ) {
-      this.pushToast(
-        "Changement de shell",
-        "Fermez les fenêtres avant de changer de shell. Le mode à plat reste disponible sans interrompre les sessions.",
-        "info",
-      );
-      return;
-    }
+    if (enabled === this.state.horizonEnabled) return;
     try {
       localStorage.setItem("unkernelos:horizon:enabled:v1", String(enabled));
     } catch {}

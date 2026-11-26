@@ -18,11 +18,23 @@ Horizon compose les applications réelles du bureau dans un plan de travail cent
 - Sélectionner du texte, puis ouvrir le tiroir de cette fenêtre et choisir **Garder la sélection**. Les copies attribuables dans les apps intégrées alimentent aussi sa liste d’extraits et de copies. Ce tiroir est non modal : il ne bloque pas le reste du bureau.
 - Déposer des textes, images, fichiers hôtes ou références de fichiers Linux. Les fichiers Linux restent des références au fichier courant ; leur téléchargement peut échouer si la source a disparu.
 - Dans l’explorateur, glisser un fichier vers un autre dossier le copie ; Shift demande un déplacement. Les collisions de noms créent une destination distincte.
-- Le menu **Votre Horizon** propose une apparence claire/sombre, les surfaces à plat, les mouvements réduits et le mode privé. Le shell classique est accessible lorsque les fenêtres sont fermées afin de préserver les sessions en cours.
+- Le menu **Votre Horizon** propose une apparence claire/sombre, les surfaces à plat, les mouvements réduits et le mode privé. Le bureau classique est accessible même avec des apps ouvertes.
 
 Ouvrir un tiroir sur une surface distante ou dockée agrandit temporairement son plan pour permettre la lecture, tout en conservant sa profondeur mémorisée et sa session. Le fermer retrouve sa taille précédente. Le tiroir est ajusté au viewport avec son propriétaire ; il ne devient pas un panneau global du bureau. Sur téléphone, il coulisse à l’intérieur de la fenêtre.
 
 Sur téléphone, une seule surface centrale est présentée ; les autres sessions restent dans le ruban de rappel. Sur tablette, les contrôles et les zones de resize sont agrandis. La sélection tactile du terminal possède un mode explicite pour la distinguer du défilement.
+
+## Bureaux, thèmes et mods
+
+Horizon est le bureau par défaut des nouvelles installations. **Réglages → Apparence** et **Mod Studio → Votre bureau** permettent de passer entre Horizon et le bureau classique. Les fenêtres, sessions, brouillons, terminaux et surfaces applicatives restent montés pendant la bascule. Les coordonnées classiques sont conservées ; revenir à Horizon retrouve les placements spatiaux mémorisés.
+
+Choisir une variante Windows, GNOME, KDE, XFCE, Compiz, macOS ou visionOS active son vrai bureau classique et ses décors. Une décoration classique, un réglage de dock/taskbar ou un effet de fenêtres classique active également ce bureau. Activer une scène 3D sélectionne le compositor 3D classique. La variante **Horizon** rétablit le profil spatial par défaut. Une simple bascule de bureau conserve les réglages de thème en cours.
+
+Les couleurs, polices, transparences et flous partagent les tokens du moteur de thèmes. Les fenêtres Horizon publient aussi les sélecteurs `.glass-surface` / `.glass-surface-focused`, le dock `.glass-dock`, la barre `.glass-bar` et les titres `[data-unkernel-titlebar]`. Les mods CSS existants et le CSS utilisateur peuvent ainsi cibler les deux bureaux. Les widgets et effets globaux sont disponibles dans Horizon ; les emplacements réactifs `topbar`, `dock` et `titlebar` le sont aussi.
+
+Choisir une image ou un shader remplace le paysage d’origine dans Horizon. **Votre Horizon → Paysage Horizon** le rétablit. Le choix du bureau et du fond est conservé dans les variantes personnalisées et les exports/imports de configuration.
+
+Le contenu applicatif utilise un hôte DOM stable lors d’un changement de décor. La bascule utilise [les déplacements DOM atomiques](https://developer.mozilla.org/en-US/docs/Web/API/Element/moveBefore) lorsqu’ils sont disponibles pour conserver aussi les documents d’iframe. Sur un navigateur sans cette API, les composants React et leurs états restent montés, mais les iframes peuvent se recharger lors de la bascule.
 
 ## Tiroirs et reprise
 
@@ -72,6 +84,7 @@ Le contexte et toutes les actions publiées sont partagés par défaut avec les 
 Méthodes disponibles via `window.unkernelOS.call`, `osctl` et MCP :
 
 - `horizon.status` : mode, disposition et placements.
+- `wm.desktop.set` avec `mode: "horizon"` ou `mode: "classic"` : changer de bureau en conservant les sessions. `mod.variant.apply` active également le bureau de la variante choisie ; `mod.status` expose le bureau et le fond actifs.
 - `horizon.sessions` : cibles, capacités, schémas des paramètres, état du partage et révisions.
 - `horizon.session.read` avec `windowId` : état et tiroir de la session partagée. `grantId` optionnel applique un périmètre explicite.
 - `horizon.session.action` avec `windowId`, `action`, `expectedRevision`, `requestId`, `args` : action publiée et révision vérifiée ; un même requestId est dédupliqué. `grantId` est optionnel pour un périmètre explicite.
@@ -96,6 +109,8 @@ bun run test:horizon-browser
 ```
 
 `PORT=3081 bun run dev`, puis `bun run test:fullscreen-browser`, vérifie le plein écran dans un Chromium isolé : bord à bord, tiroir interne, resize mobile, restauration, Exposé et shells classiques 2D/3D. Les artefacts sont dans `.cache/fullscreen-qa/`.
+
+Sur ce même serveur, `bun run test:modding-browser` vérifie les variantes intégrées, la conservation des brouillons et documents d’iframe, les thèmes, le CSS partagé, les slots réactifs, les widgets, les fonds et les commandes agent. Le profil et le rapport sont isolés dans `.cache/modding-qa/`.
 
 Les captures et le rapport sont générés dans `.cache/horizon-qa/`. Les tests vérifient les vraies fenêtres, les gestes via le pointeur, la sélection, les tiroirs, la persistance, les fichiers Linux et les permissions. Les gestes tactiles sur matériel réel, les lecteurs d’écran et toutes les variantes de pilotes Wayland/GPU nécessitent une validation dédiée ; le profil émulé ne certifie pas ces appareils.
 

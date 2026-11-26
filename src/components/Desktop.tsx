@@ -426,6 +426,19 @@ export const Desktop: React.FC = () => {
   }, []);
 
   // Sync live OS theme, blur, opacity, UI sound preference & active OS Mod overrides
+  useEffect(() => modStore.bindBaseAppearance({
+    read: () => ({ baseOsTheme: cfg.osTheme, baseShader: cfg.wallpaperShader }),
+    apply: (variant) => {
+      if (!variant.baseOsTheme && !variant.baseShader) return;
+      void appRuntime.runPromise(Effect.flatMap(SettingsService, (settings) =>
+        settings.updateConfig({
+          ...(variant.baseOsTheme ? { osTheme: variant.baseOsTheme } : {}),
+          ...(variant.baseShader ? { wallpaperShader: variant.baseShader } : {}),
+        }),
+      )).catch((error) => wmStore.pushToast("Thème non appliqué", String(error), "error"));
+    },
+  }), [cfg.osTheme, cfg.wallpaperShader]);
+
   useEffect(() => {
     applyOsThemeToDocument(cfg.osTheme, cfg.glassBlur, cfg.glassOpacity);
     modStore.applyDomOverrides();
@@ -451,13 +464,14 @@ export const Desktop: React.FC = () => {
             ?.url ?? "")
         : "";
   const hasBackdropImage = Boolean(activeBackdropUrl);
+  const horizonLandscape = wm.horizonEnabled && mods.wallpaperMode === "horizon";
 
   // WebGPU Animated Live Shader Wallpaper (5 stock shaders + custom WGSL shader mods; paused when 3D Desktop or 4K Image is active)
   useEffect(() => {
     const canvas = wallpaperRef.current;
     if (
       !canvas ||
-      wm.horizonEnabled ||
+      horizonLandscape ||
       !cfg.webgpuWallpaper ||
       spatialEnabled ||
       hasBackdropImage
@@ -478,7 +492,7 @@ export const Desktop: React.FC = () => {
     cfg.webgpuWallpaper,
     spatialEnabled,
     hasBackdropImage,
-    wm.horizonEnabled,
+    horizonLandscape,
   ]);
 
   // Hot-switch WebGPU shader mode without recreating GPUDevice
@@ -493,7 +507,7 @@ export const Desktop: React.FC = () => {
   const activeShaderWgsl = activeShaderMod?.wgsl ?? null;
 
   useEffect(() => {
-    if (spatialEnabled || hasBackdropImage) return;
+    if (spatialEnabled || hasBackdropImage || horizonLandscape) return;
     const bg = backdropInstanceRef.current;
     if (!bg) return;
     void bg.setCustomWgsl(activeShaderWgsl).then((res) => {
@@ -501,7 +515,7 @@ export const Desktop: React.FC = () => {
         res.ok ? null : (res.error ?? "WGSL compilation error"),
       );
     });
-  }, [activeShaderWgsl, spatialEnabled, cfg.webgpuWallpaper, hasBackdropImage]);
+  }, [activeShaderWgsl, spatialEnabled, cfg.webgpuWallpaper, hasBackdropImage, horizonLandscape]);
 
   // Boot unkernel automatically on first mount, reconcile startup workspace, & open requested app (or Agent Studio)
   useEffect(() => {
@@ -823,9 +837,10 @@ export const Desktop: React.FC = () => {
         wmStore.setContextMenu({ x: e.clientX, y: e.clientY, kind: "desktop" });
       }}
       className={`relative w-screen h-[100dvh] overflow-hidden ${wm.horizonEnabled ? "horizon-root" : "wallpaper-fallback"}`}
+      data-horizon-wallpaper={wm.horizonEnabled ? mods.wallpaperMode : undefined}
     >
       {/* AAA 3D WebGPU Three.js Spatial Desktop OR Ultra-HD 2D NASA/4K Image OR 2D WebGPU Live Shader Backdrop */}
-      {wm.horizonEnabled ? (
+      {horizonLandscape ? (
         <HorizonBackground />
       ) : spatialEnabled ? (
         <Suspense fallback={null}>
@@ -860,13 +875,13 @@ export const Desktop: React.FC = () => {
       />
 
       {/* Desktop Ambient Widgets (Behind Windows, Toggleable) */}
-      {!wm.horizonEnabled && <DesktopWidgets />}
+      <DesktopWidgets />
 
       {/* Injectable Desktop-Layer Reactive Surfaces (HTML / Iframe / Canvas) */}
       <ReactiveSurfaceSlot slot="desktop" />
 
       {/* AAA Eye-Candy, Cursor Spotlight/Trail, Ambient Particles, Night Shift, Hot Corners & Perf HUD */}
-      {!wm.horizonEnabled && <OsEyeCandyLayer />}
+      <OsEyeCandyLayer />
 
       {/* Injectable Overlay HUD Reactive Surfaces (above windows) */}
       <ReactiveSurfaceSlot slot="overlay" />

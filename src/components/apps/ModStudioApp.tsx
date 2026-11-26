@@ -42,7 +42,8 @@ import {
   type WindowOpenAnimKind,
 } from "../../core/mod-store.ts";
 import type { SoundProfileId } from "../../core/ui-sounds.ts";
-import { wmStore, type GridLayoutMode } from "../../wm/wm-store.ts";
+import { useWm, wmStore, type GridLayoutMode } from "../../wm/wm-store.ts";
+import { DesktopModeSelector } from "../DesktopModeSelector.tsx";
 import { spatial3dBridge, type Spatial3dLayoutKind } from "../../gpu/spatial-3d-bridge.ts";
 import { ReactiveModStudioPane } from "./ReactiveModStudioPane.tsx";
 
@@ -212,6 +213,7 @@ const STARTER_WIDGET_HTML = `<!doctype html><html><head><style>
 
 export const ModStudioApp: React.FC = () => {
   const mods = useMods();
+  const { horizonEnabled } = useWm();
   const [tab, setTab] = useState<ModTab>("variants");
   const [familyFilter, setFamilyFilter] = useState<"all" | VariantFamily>("all");
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
@@ -399,6 +401,7 @@ export const ModStudioApp: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+        <DesktopModeSelector />
         {tab === "reactive" && <ReactiveModStudioPane />}
 
         {/* ─── TAB 1: OS VARIANTS (16 COMPLETE DESKTOP PARADIGMS) ─────────────── */}
@@ -434,7 +437,7 @@ export const ModStudioApp: React.FC = () => {
               {mods.variants
                 .filter((v) => familyFilter === "all" || v.family === familyFilter)
                 .map((v) => {
-                const active = mods.activeVariantId === v.id;
+                const active = mods.activeVariantId === v.id && horizonEnabled === (v.desktopMode === "horizon");
                 return (
                   <div
                     key={v.id}

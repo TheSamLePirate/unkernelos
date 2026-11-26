@@ -166,6 +166,8 @@ export function applyOsThemeToDocument(themeId: OsThemeId, blurPx: number, opaci
   const elevatedOp = Math.min(0.96, clampedOp + 0.1);
 
   root.dataset.osTheme = theme.id;
+  root.style.setProperty("--font-sans", '"Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif');
+  root.style.setProperty("--font-mono", '"JetBrains Mono", "SF Mono", "Fira Code", ui-monospace, monospace');
   root.style.setProperty("--glass-bg", `rgba(${theme.glassRgb}, ${clampedOp.toFixed(2)})`);
   root.style.setProperty("--glass-bg-elevated", `rgba(${theme.elevatedRgb}, ${elevatedOp.toFixed(2)})`);
   root.style.setProperty("--glass-bar-bg", `rgba(${theme.barRgb}, ${Math.min(0.9, clampedOp).toFixed(2)})`);

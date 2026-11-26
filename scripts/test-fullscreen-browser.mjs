@@ -49,6 +49,9 @@ try {
     results.push(name);
   };
   await send("Page.enable");
+  await send("Page.addScriptToEvaluateOnNewDocument", {
+    source: "localStorage.removeItem('unkernelos:horizon:enabled:v1');localStorage.removeItem('unkernelos:mods:v2');",
+  });
   await send("Emulation.setDeviceMetricsOverride", { width: 1512, height: 982, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: base + "/?app=notes" });
   for (let i = 0; i < 150; i++) {

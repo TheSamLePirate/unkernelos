@@ -46,6 +46,8 @@ import {
 } from "../../wm/wm-store.ts";
 import { useViewport } from "../../core/use-viewport.ts";
 import "./horizon.css";
+import { ReactiveSurfaceSlot } from "../ReactiveSurfaceHost.tsx";
+import { modStore } from "../../core/mod-store.ts";
 const apps: readonly {
   id: AppId;
   icon: typeof Terminal;
@@ -210,7 +212,7 @@ export function HorizonShell({
   const open = (id: AppId) => wmStore.openApp(id);
   return (
     <>
-      <header className="horizon-topbar">
+      <header className="horizon-topbar glass-bar">
         <button
           className="horizon-brand"
           title="Toutes les applications"
@@ -227,6 +229,7 @@ export function HorizonShell({
           <span className="horizon-edition">HORIZON</span>
         </button>
         <div className="horizon-top-center">
+          <ReactiveSurfaceSlot slot="topbar" />
           <button className="horizon-project" onClick={() => open("explorer")}>
             <FolderOpen size={13} />
             <span>
@@ -419,7 +422,8 @@ export function HorizonShell({
             )}
           </button>
         </div>
-        <nav className="horizon-dock" aria-label="Applications">
+        <nav className="horizon-dock glass-dock" aria-label="Applications">
+          <ReactiveSurfaceSlot slot="dock" />
           <button
             className="horizon-dock-launch"
             onClick={() => wmStore.toggleLauncher()}
@@ -553,15 +557,16 @@ export function HorizonShell({
             </button>
             <hr />
             <button
-              disabled={wm.windows.length > 0}
-              title={
-                wm.windows.length
-                  ? "Fermez les fenêtres pour changer de shell. Surfaces à plat conserve vos sessions."
-                  : "Changer de shell"
-              }
+              title="Changer de bureau en conservant les applications ouvertes"
               onClick={() => wmStore.setHorizonEnabled(false)}
             >
               <RotateCcw size={16} /> Passer au bureau classique
+            </button>
+            <button onClick={() => {
+              modStore.setWallpaperMode("horizon");
+              setSettings(false);
+            }}>
+              <Sun size={16} /> Paysage Horizon
             </button>
           </aside>
         </>

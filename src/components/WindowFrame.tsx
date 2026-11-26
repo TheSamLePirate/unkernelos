@@ -1,5 +1,6 @@
 import { WindowSessionContext } from "../core/app-surface-registry.tsx";
 import { HorizonWindowFrame } from "./horizon/HorizonWindowFrame.tsx";
+import { useLiveWindowContent } from "./LiveWindowContent.tsx";
 import {
   ChevronDown,
   ChevronUp,
@@ -92,6 +93,8 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
   } | null>(null);
   const [sheenX, setSheenX] = useState<number | null>(null);
   const frameElRef = useRef<HTMLDivElement>(null);
+  const gestureCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => gestureCleanup.current?.(), []);
   const ec = mods.eyeCandy;
 
   const handleCloseWindow = () => {
@@ -154,6 +157,7 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
   const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button")) return;
     if (win.maximized) return;
+    gestureCleanup.current?.();
 
     // On Mobile: track horizontal swipe on titlebar to cycle open windows smoothly!
     if (isMobile) {
@@ -249,21 +253,25 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
       dragRef.current = null;
       setInteracting(false);
       if (wobblyEnabled) setWobble({ skewX: 0, skewY: 0, rot: 0 });
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      try {
-        headerEl.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
-      if (activePreview) {
+      gestureCleanup.current?.();
+      if (activePreview && ev.type !== "pointercancel") {
         wmStore.snapWindow(win.id, activePreview);
       } else {
         wmStore.setDragSnapPreview(null);
       }
     };
 
+    gestureCleanup.current = () => {
+      cancelAnimationFrame(rafId);
+      dragRef.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      wmStore.setDragSnapPreview(null);
+      if (headerEl.hasPointerCapture(e.pointerId))
+        headerEl.releasePointerCapture(e.pointerId);
+      gestureCleanup.current = null;
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -289,6 +297,7 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
 
   // Unified Pointer Events for Mouse, iPad Touch & Apple Pencil bottom-right resizing!
   const onResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    gestureCleanup.current?.();
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
@@ -353,16 +362,19 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
       }
       resizeRef.current = null;
       setInteracting(false);
+      gestureCleanup.current?.();
+    };
+
+    gestureCleanup.current = () => {
+      cancelAnimationFrame(rafId);
+      resizeRef.current = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
-      try {
-        handleEl.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
+      if (handleEl.hasPointerCapture(e.pointerId))
+        handleEl.releasePointerCapture(e.pointerId);
+      gestureCleanup.current = null;
     };
-
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -1312,11 +1324,14 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
 
 export const WindowFrame: React.FC<WindowFrameProps> = (props) => {
   const { horizonEnabled } = useWm();
-  return horizonEnabled ? (
-    <HorizonWindowFrame {...props} />
-  ) : (
+  const live = useLiveWindowContent(props.win.id, props.children);
+  return (
     <WindowSessionContext.Provider value={props.win}>
-      <LegacyWindowFrame {...props} />
+      {live.parking}
+      {horizonEnabled
+        ? <HorizonWindowFrame {...props}>{live.slot}</HorizonWindowFrame>
+        : <LegacyWindowFrame {...props}>{live.slot}</LegacyWindowFrame>}
+      {live.content}
     </WindowSessionContext.Provider>
   );
 };

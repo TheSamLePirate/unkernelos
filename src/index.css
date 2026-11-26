@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+.window-app-slot,
+.window-app-host,
+.window-app-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
 @layer base {
   :root {
     --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
@@ -68,7 +80,7 @@
 }
 
 /* AAA Liquid Dark Glass Surfaces (Specular Rim Lighting + OLED Depth) */
-.glass-surface {
+:where(.glass-surface) {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0) 28%),
     var(--glass-bg);
@@ -81,7 +93,7 @@
     0 1px 0 0 rgba(255, 255, 255, 0.14) inset;
 }
 
-.glass-surface-focused {
+:where(.glass-surface-focused) {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 24%),
     var(--glass-bg-elevated);
@@ -95,7 +107,7 @@
     0 1px 0 0 rgba(255, 255, 255, 0.22) inset;
 }
 
-.glass-widget {
+:where(.glass-widget) {
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.06) 0%, transparent 45%),
     var(--glass-bg);
@@ -107,19 +119,19 @@
     0 1px 0 0 rgba(255, 255, 255, 0.14) inset;
 }
 
-.glass-bar {
+:where(.glass-bar) {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 100%),
     var(--glass-bar-bg);
-  backdrop-filter: blur(22px) saturate(190%);
-  -webkit-backdrop-filter: blur(22px) saturate(190%);
+  backdrop-filter: blur(var(--glass-blur-effective)) saturate(190%);
+  -webkit-backdrop-filter: blur(var(--glass-blur-effective)) saturate(190%);
   border-bottom: 1px solid var(--glass-border);
   box-shadow:
     0 4px 24px -8px rgba(0, 0, 0, 0.5),
     0 1px 0 0 rgba(255, 255, 255, 0.06);
 }
 
-.glass-dock {
+:where(.glass-dock) {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(0, 0, 0, 0.12) 100%),
     var(--glass-dock-bg);

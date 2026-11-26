@@ -72,7 +72,8 @@ import {
 import { uiSounds, type SoundProfileId } from "../../core/ui-sounds.ts";
 import { spatial3dBridge, type Spatial3dLayoutKind } from "../../gpu/spatial-3d-bridge.ts";
 import { KITTY_THEMES } from "../../gpu/webgpu-terminal.ts";
-import { wmStore, type GridLayoutMode } from "../../wm/wm-store.ts";
+import { useWm, wmStore, type GridLayoutMode } from "../../wm/wm-store.ts";
+import { DesktopModeSelector } from "../DesktopModeSelector.tsx";
 
 export type SettingsTab =
   | "appearance"
@@ -488,6 +489,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
     }
   );
   const mods = useMods();
+  const { horizonEnabled } = useWm();
   const reactive = useReactiveMod();
 
   const [tab, setTab] = useState<SettingsTab>(initialTab ?? "appearance");
@@ -895,6 +897,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                ═══════════════════════════════════════════════════════════ */}
             {tab === "appearance" && (
               <>
+                <DesktopModeSelector />
                 <SectionCard
                   title="Variantes Complètes de l'OS"
                   subtitle="Transforme instantanément l'interface (Windows 95→11, Linux GNOME/KDE/Compiz, macOS→visionOS, Cyber…)"
@@ -902,7 +905,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                 >
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     {mods.variants.map((v) => {
-                      const active = mods.activeVariantId === v.id;
+                      const active = mods.activeVariantId === v.id && horizonEnabled === (v.desktopMode === "horizon");
                       return (
                         <button
                           key={v.id}
@@ -944,7 +947,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                     {(Object.keys(OS_THEMES) as OsThemeId[]).map((id) => {
                       const t = OS_THEMES[id];
-                      const active = cfg.osTheme === id;
+                      const active = cfg.osTheme === id && !mods.theme.enabled;
                       return (
                         <button
                           key={id}
@@ -1013,11 +1016,11 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                       <div className="col-span-2 grid grid-cols-2 gap-2.5">
                         <SliderControl
                           label="Flou Verre"
-                          valueLabel={`${cfg.glassBlur} px`}
+                          valueLabel={`${mods.theme.enabled ? mods.theme.blurPx : cfg.glassBlur} px`}
                           min={8}
                           max={48}
                           step={2}
-                          value={cfg.glassBlur}
+                          value={mods.theme.enabled ? mods.theme.blurPx : cfg.glassBlur}
                           onChange={(v) => {
                             patchCfg({ glassBlur: v }, false);
                             if (mods.theme.enabled) modStore.setTheme({ blurPx: v });
@@ -1025,11 +1028,11 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                         />
                         <SliderControl
                           label="Opacité Verre"
-                          valueLabel={`${Math.round(cfg.glassOpacity * 100)}%`}
+                          valueLabel={`${Math.round((mods.theme.enabled ? mods.theme.glassOpacity : cfg.glassOpacity) * 100)}%`}
                           min={45}
                           max={95}
                           step={2}
-                          value={Math.round(cfg.glassOpacity * 100)}
+                          value={Math.round((mods.theme.enabled ? mods.theme.glassOpacity : cfg.glassOpacity) * 100)}
                           onChange={(v) => {
                             patchCfg({ glassOpacity: v / 100 }, false);
                             if (mods.theme.enabled) modStore.setTheme({ glassOpacity: v / 100 });
@@ -1058,7 +1061,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                 >
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     {ULTRA_HD_BACKDROPS.map((b) => {
-                      const active = mods.activeBackdropImageId === b.id;
+                      const active = mods.activeBackdropImageId === b.id && (!horizonEnabled || mods.wallpaperMode === "system");
                       return (
                         <button
                           key={b.id}
@@ -1121,7 +1124,10 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                     title="Moteur de Shaders WebGPU Live"
                     desc="Rendu procédural 60/120fps sur le GPU"
                     checked={cfg.webgpuWallpaper}
-                    onChange={(v) => patchCfg({ webgpuWallpaper: v }, false)}
+                    onChange={(v) => {
+                      modStore.setWallpaperMode("system");
+                      patchCfg({ webgpuWallpaper: v }, false);
+                    }}
                     accent="cyan"
                   />
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -1129,6 +1135,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                       const s = WALLPAPER_SHADERS[id];
                       const active =
                         cfg.wallpaperShader === id &&
+                        (!horizonEnabled || mods.wallpaperMode === "system") &&
                         !mods.activeShaderModId &&
                         !mods.activeBackdropImageId;
                       return (
