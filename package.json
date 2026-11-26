@@ -16,6 +16,7 @@
     "test:fullscreen-browser": "bun scripts/test-fullscreen-browser.mjs",
     "test:modding-browser": "bun scripts/test-modding-browser.mjs",
     "test:proof-glossary-browser": "bun scripts/test-proof-glossary-browser.mjs",
+    "test:poule-contingency": "bun scripts/test-poule-contingency.ts",
     "test:sonora-browser": "bun scripts/test-sonora-browser.mjs",
     "companion:build": "scripts/build-companion.sh",
     "companion:dev": "cargo run --manifest-path companion/Cargo.toml",

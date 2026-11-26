@@ -1,3 +1,5 @@
+import { CONTINGENCY_EXAMPLE } from "./poule-contingency.ts";
+
 /**
  * Poule — the proof language shipped with microML (coucou747/microML, poulelib/).
  *
@@ -1188,6 +1190,7 @@ theorem brouwer : forall (w : M). a(w) -> forall (v : M). acc(w, v) -> exists (u
     pack [M, w, (symetrie [w] [v] r, h)]
 `,
   },
+  CONTINGENCY_EXAMPLE,
   {
     id: "ontological",
     level: "expert",

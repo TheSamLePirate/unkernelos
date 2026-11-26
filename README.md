@@ -47,6 +47,8 @@ Les bureaux et variantes classiques restent disponibles dans Réglages et Mod St
 
 Dans **Studio de preuves → Récit → Vocabulaire du récit**, ajoutez ou modifiez les définitions des symboles sans écrire les commentaires à la main. La lecture usuelle et la définition rigoureuse sont conservées dans le fichier Poule ; les paramètres s’insèrent avec `{x}`, `{n}`, etc. Le récit se met à jour dès l’enregistrement. Les formules vérifiées restent inchangées.
 
+L’exemple **L’être nécessaire · la contingence** contient l’argument principal, six lemmes, les définitions modales et leurs récits. Les hypothèses de raison suffisante et d’extériorité sont explicites : voir [la présentation de la formalisation](docs/necessary-being.md).
+
 Sonora est le lecteur MP3 intégré avec dock play/pause et commandes agent. Voir [le lecteur](docs/sonora.md) et [le SDK d’applications Bun/Node/Rust](docs/app-sdk.md). Les applications compatibles partagent leur contexte et leurs actions par défaut.
 
 ## Companion macOS Rust : Wisp local, MCP et CLI
