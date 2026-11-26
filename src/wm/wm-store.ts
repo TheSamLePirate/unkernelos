@@ -489,6 +489,12 @@ export interface WindowInstance {
   readonly placement?: HorizonPlacement;
   readonly placementOrder?: number;
   readonly centerOrder?: number;
+  readonly horizonSpatial?: {
+    readonly depth: number;
+    readonly y: number;
+    readonly anchor: number;
+  };
+  readonly horizonDrawerOpen?: boolean;
   readonly horizonOffset?: { readonly x: number; readonly y: number };
   readonly title: string;
   readonly workspace: WorkspaceId;
@@ -776,6 +782,7 @@ class WindowManagerStore {
               width: old.width,
               height: old.height,
               horizonOffset: old.horizonOffset,
+              horizonSpatial: old.horizonSpatial,
               maximized: old.maximized,
               snap: old.snap,
             }
@@ -835,6 +842,7 @@ class WindowManagerStore {
     id: string,
     placement: HorizonPlacement,
     index?: number,
+    spatial?: { depth: number; y: number; anchor: number },
   ): void {
     if (!this.state.windows.some((w) => w.id === id))
       throw new Error("Window unavailable");
@@ -850,6 +858,30 @@ class WindowManagerStore {
               ...w,
               placement,
               placementOrder: Date.now(),
+              horizonDrawerOpen:
+                spatial && spatial.depth >= 0.94 ? false : w.horizonDrawerOpen,
+              horizonSpatial: spatial
+                ? {
+                    depth: Math.max(
+                      0,
+                      Math.min(
+                        1,
+                        Number.isFinite(spatial.depth) ? spatial.depth : 0.68,
+                      ),
+                    ),
+                    y: Math.max(
+                      0,
+                      Math.min(1, Number.isFinite(spatial.y) ? spatial.y : 0.5),
+                    ),
+                    anchor: Math.max(
+                      0,
+                      Math.min(
+                        1,
+                        Number.isFinite(spatial.anchor) ? spatial.anchor : 0.5,
+                      ),
+                    ),
+                  }
+                : { depth: 0.68, y: 0.5, anchor: 0.5 },
               minimized: false,
               maximized: false,
             }
@@ -888,19 +920,46 @@ class WindowManagerStore {
       return {
         ...s,
         windows,
+        horizonDrawerId:
+          spatial && spatial.depth >= 0.94 && s.horizonDrawerId === id
+            ? null
+            : s.horizonDrawerId,
         activeWindowId:
           s.activeWindowId === id ? (center?.id ?? null) : s.activeWindowId,
       };
     });
   }
   public setHorizonDrawer(id: string | null): void {
+    if (id !== null && !this.state.windows.some((w) => w.id === id)) return;
     this.setState((s) => ({
       ...s,
       horizonDrawerId: id,
+      windows: s.windows.map((w) =>
+        id === null
+          ? { ...w, horizonDrawerOpen: false }
+          : w.id === id
+            ? { ...w, horizonDrawerOpen: true }
+            : w,
+      ),
       horizonHistoryOpen: false,
       missionControlOpen: false,
       commandPaletteOpen: false,
       launcherOpen: false,
+    }));
+  }
+  public toggleHorizonDrawer(id: string): void {
+    const win = this.state.windows.find((w) => w.id === id);
+    if (!win) return;
+    if (!win.horizonDrawerOpen) this.setHorizonDrawer(id);
+    else this.closeHorizonDrawer(id);
+  }
+  public closeHorizonDrawer(id: string): void {
+    this.setState((s) => ({
+      ...s,
+      horizonDrawerId: s.horizonDrawerId === id ? null : s.horizonDrawerId,
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, horizonDrawerOpen: false } : w,
+      ),
     }));
   }
   public setHorizonHistory(open: boolean): void {
@@ -963,6 +1022,7 @@ class WindowManagerStore {
                   placement: old.placement,
                   placementOrder: old.placementOrder,
                   horizonOffset: old.horizonOffset,
+                  horizonSpatial: old.horizonSpatial,
                 }
               : w;
           }),

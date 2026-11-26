@@ -157,6 +157,13 @@ export const ShaderSynthApp: React.FC = () => {
   );
   useAppSurface({
     document: "shader:" + presetId,
+    dock: {
+      label: paused ? "Reprendre le shader" : "Mettre le shader en pause",
+      glyph: paused ? "play" : "pause",
+      value: presetId,
+      detail: paused ? "En pause" : "Shader en direct",
+      primaryAction: paused ? "resume" : "pause",
+    },
     revision,
     status: shaderErr ? "disconnected" : paused ? "paused" : "live",
     state: {

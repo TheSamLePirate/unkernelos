@@ -8,7 +8,17 @@ import {
 import { wmStore, type WindowInstance } from "../wm/wm-store.ts";
 import { contextStore } from "./context-store.ts";
 export const WindowSessionContext = createContext<WindowInstance | null>(null);
+/** Declarative, live dock presentation. Action names must exist in the same adapter. */
+export interface SurfaceDock {
+  label: string;
+  value?: string;
+  detail?: string;
+  glyph?: "play" | "pause" | "sun" | "cloud" | "rain" | "snow" | "activity";
+  primaryAction?: string;
+  progress?: number;
+}
 export interface SurfaceAdapter {
+  dock?: SurfaceDock;
   document?: string;
   title?: string;
   state: Record<string, unknown>;
@@ -203,6 +213,9 @@ export function useAppSurface(adapter: SurfaceAdapter, enabled = true) {
     if (!win || !enabled) return;
     const stable: SurfaceAdapter = {
       ...adapter,
+      get dock() {
+        return latest.current.dock;
+      },
       get state() {
         return latest.current.state;
       },

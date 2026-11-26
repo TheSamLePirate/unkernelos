@@ -21,10 +21,20 @@ import { createPortal } from "react-dom";
 import {
   WindowSessionContext,
   surfaceRegistry,
+  useSurfaces,
 } from "../../core/app-surface-registry.tsx";
 import { contextStore } from "../../core/context-store.ts";
 import { useViewport } from "../../core/use-viewport.ts";
-import { horizonPose, type HorizonPlacement } from "../../wm/horizon-layout.ts";
+import { HorizonWindowDrawer } from "./HorizonDrawer.tsx";
+import { HorizonDockFace } from "./HorizonDockFace.tsx";
+import {
+  clamp,
+  horizonDepthScale,
+  horizonTravel,
+  HORIZON_DOCK_DEPTH,
+  horizonPose,
+  type HorizonPlacement,
+} from "../../wm/horizon-layout.ts";
 import {
   APP_CATALOG,
   useWm,
@@ -54,11 +64,14 @@ type Gesture = {
 };
 const directions = ["n", "ne", "e", "se", "s", "sw", "w", "nw"] as const;
 export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
+  useSurfaces();
+  const suppressClick = useRef(false);
   const wm = useWm(),
     vp = useViewport(),
     frame = useRef<HTMLDivElement>(null),
     gesture = useRef<Gesture | null>(null),
     cleanup = useRef<(() => void) | null>(null);
+  const [docking, setDocking] = useState(false);
   const [moving, setMoving] = useState(false),
     [destination, setDestination] = useState<HorizonPlacement | null>(null),
     [menu, setMenu] = useState<{ x: number; y: number } | null>(null),
@@ -127,6 +140,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
     wm.missionControlOpen && vp.width >= 760
       ? {
           ...basePose,
+          docked: false,
           x: 24 + (index % cols) * cw + (cw - previewW * previewScale) / 2,
           y:
             120 +
@@ -157,29 +171,42 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
     }
     setMoving(false);
     setDestination(null);
+    setDocking(false);
   }, []);
   useEffect(() => () => reset(), [reset]);
   useEffect(() => {
     reset();
   }, [vp.width, vp.height]);
-  const onStart = (e: React.PointerEvent<HTMLElement>, kind = "move") => {
+  const onStart = (
+    e: React.PointerEvent<HTMLElement>,
+    kind = "move",
+    fromDock = false,
+  ) => {
     if (wm.missionControlOpen) return;
     if (
       e.button !== 0 ||
       !e.isPrimary ||
       (e.target instanceof Element &&
         kind === "move" &&
+        !fromDock &&
         e.target.closest("button,input,select,a"))
     )
       return;
     if (gesture.current) return;
     e.preventDefault();
-    const el = e.currentTarget;
-    el.setPointerCapture(e.pointerId);
-    wmStore.focusWindow(win.id, false);
-    const local = frame.current
-      ? screenToElement(frame.current, e.clientX, e.clientY)
-      : { x: 0, y: 0 };
+    suppressClick.current = false;
+    // The non-transformed desktop owns capture after activation. Dock/window
+    // planes change scale and hit regions during travel; a tap keeps its native click.
+    const el =
+      frame.current?.closest<HTMLElement>(".horizon-root") ??
+      frame.current ??
+      e.currentTarget;
+    if (!fromDock) wmStore.focusWindow(win.id, false);
+    const local = fromDock
+      ? { x: pose.width / 2, y: 24 }
+      : frame.current
+        ? screenToElement(frame.current, e.clientX, e.clientY)
+        : { x: 0, y: 0 };
     const g: Gesture = {
       id: e.pointerId,
       startX: e.clientX,
@@ -195,8 +222,11 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
       y: e.clientY,
     };
     gesture.current = g;
-    const targetPlace = (x: number): HorizonPlacement =>
-      x < vp.width * 0.18 ? "left" : x > vp.width * 0.82 ? "right" : "center";
+    const travel = (x: number) =>
+      vp.width < 760
+        ? { placement: "center" as const, depth: 0, docked: false }
+        : horizonTravel(x, vp.width);
+    const targetPlace = (x: number): HorizonPlacement => travel(x).placement;
     const paint = () => {
       g.raf = 0;
       const node = frame.current;
@@ -205,21 +235,34 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
       const dx = g.x - g.startX,
         dy = g.y - g.startY;
       if (kind === "move") {
-        const dest = targetPlace(g.x),
-          t =
-            dest === "center"
-              ? 0
-              : Math.min(1, Math.abs(g.x - vp.width / 2) / (vp.width * 0.44));
-        const scale =
-          pose.scale + (1 - pose.scale) * Math.min(1, Math.hypot(dx, dy) / 160);
-        const actualScale = dest === "center" ? scale : scale * (1 - t * 0.22);
+        const destination = travel(g.x),
+          depth = destination.depth;
+        const amount = Math.min(1, Math.hypot(dx, dy) / 80);
+        const targetScale = horizonDepthScale(depth);
+        const actualScale = pose.scale + (targetScale - pose.scale) * amount;
+        const angle = wm.horizonFlat
+          ? 0
+          : destination.placement === "left"
+            ? depth * 22
+            : destination.placement === "right"
+              ? -depth * 22
+              : 0;
         node.style.transform = transform({
           ...pose,
-          x: g.x - local.x * actualScale,
-          y: g.y - local.y * actualScale,
+          x: clamp(
+            g.x - local.x * actualScale,
+            12,
+            Math.max(12, vp.width - pose.width * actualScale - 12),
+          ),
+          y: clamp(
+            g.y - local.y * actualScale,
+            100,
+            Math.max(100, vp.height - 110 - pose.height * actualScale),
+          ),
           scale: actualScale,
-          angle: dest === "left" ? t * 13 : dest === "right" ? -t * 13 : 0,
+          angle,
         });
+        node.dataset.travelDepth = String(depth);
       } else {
         const def = APP_CATALOG[win.appId],
           minW = Math.min(def.minWidth, pose.width, 400),
@@ -259,10 +302,14 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
           (ev.pointerType === "mouse" ? 5 : 10)
       ) {
         g.moved = true;
+        if (fromDock) wmStore.focusWindow(win.id, false);
+        g.el.setPointerCapture(g.id);
+        suppressClick.current = true;
         setMoving(true);
       }
       if (g.moved) {
         const next = targetPlace(g.x);
+        setDocking(travel(g.x).docked);
         setDestination((prev) => (prev === next ? prev : next));
         if (!g.raf) g.raf = requestAnimationFrame(paint);
       }
@@ -283,23 +330,20 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
       if (!moved) return;
       if (kind === "move") {
         const dest = targetPlace(g.x);
-        wmStore.placeHorizonWindow(
-          win.id,
-          dest,
-          dest === "center"
-            ? undefined
-            : Math.round(
-                (g.y - 100) /
-                  Math.max(
-                    40,
-                    (vp.height - 210) /
-                      Math.max(
-                        1,
-                        wm.windows.filter((w) => w.placement === dest).length,
-                      ),
-                  ),
-              ),
-        );
+        const depth = travel(g.x).depth,
+          scale = horizonDepthScale(depth);
+        const wingTop = 165,
+          wingH = Math.max(100, vp.height - wingTop - 110);
+        wmStore.placeHorizonWindow(win.id, dest, undefined, {
+          depth,
+          anchor: g.localX / pose.width,
+          y: clamp(
+            (g.y - g.localY * scale - wingTop) /
+              Math.max(1, wingH - pose.height * scale),
+            0,
+            1,
+          ),
+        });
         if (dest === "center") {
           const current = wmStore.getSnapshot();
           const movedWindow = current.windows.find((w) => w.id === win.id)!;
@@ -322,8 +366,12 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
           dest === "center"
             ? "Centre"
             : dest === "left"
-              ? "Aile gauche"
-              : "Aile droite",
+              ? depth >= HORIZON_DOCK_DEPTH
+                ? "Dock gauche"
+                : "Profondeur gauche"
+              : depth >= HORIZON_DOCK_DEPTH
+                ? "Dock droit"
+                : "Profondeur droite",
         );
       } else {
         wmStore.rememberHorizon();
@@ -339,6 +387,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
       }
     };
     const cancel = (ev: PointerEvent) => {
+      if (ev.type === "lostpointercapture" && ev.target !== g.el) return;
       if (ev.pointerId === g.id) reset();
     };
     const key = (ev: KeyboardEvent) => {
@@ -433,6 +482,9 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
         data-window-surface={win.id}
         data-horizon-window={win.id}
         data-placement={place}
+        data-docked={!!pose.docked && !moving}
+        data-drawer-open={!!win.horizonDrawerOpen && !wm.missionControlOpen}
+        data-depth={pose.depth ?? 0}
         data-focused={focused}
         data-app-id={win.appId}
         aria-label={win.title}
@@ -448,13 +500,16 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
           visibility: pose.hidden || !visible ? "hidden" : "visible",
           pointerEvents: pose.hidden || !visible ? "none" : "auto",
         }}
-        onPointerUpCapture={() => {
+        onPointerUpCapture={(e) => {
+          if ((e.target as Element).closest("[data-window-drawer]")) return;
           if (frame.current) rememberWindowSelection(win.id, frame.current);
         }}
-        onKeyUpCapture={() => {
+        onKeyUpCapture={(e) => {
+          if ((e.target as Element).closest("[data-window-drawer]")) return;
           if (frame.current) rememberWindowSelection(win.id, frame.current);
         }}
-        onCopyCapture={() => {
+        onCopyCapture={(e) => {
+          if ((e.target as Element).closest("[data-window-drawer]")) return;
           if (frame.current) recordWindowCopy(win.id, frame.current);
         }}
         onClick={() => {
@@ -493,6 +548,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
           />
         ))}
         <header
+          inert={!!pose.docked && !moving}
           className="horizon-windowbar"
           onPointerDown={(e) => onStart(e)}
           onDoubleClick={(e) => {
@@ -548,7 +604,10 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
             <button
               title="Tiroir de cette fenêtre"
               aria-label="Ouvrir le tiroir de cette fenêtre"
-              onClick={() => wmStore.setHorizonDrawer(win.id)}
+              data-drawer-toggle
+              aria-expanded={!!win.horizonDrawerOpen}
+              aria-controls={"horizon-drawer-" + win.id}
+              onClick={() => wmStore.toggleHorizonDrawer(win.id)}
             >
               <PanelRight size={14} />
             </button>
@@ -576,6 +635,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
         <WindowSessionContext.Provider value={win}>
           <div
             className="horizon-windowbody"
+            inert={!!pose.docked && !moving}
             style={{
               pointerEvents: wm.missionControlOpen ? "none" : undefined,
             }}
@@ -583,6 +643,61 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
             {children}
           </div>
         </WindowSessionContext.Provider>
+        <HorizonWindowDrawer
+          win={win}
+          open={!!win.horizonDrawerOpen && !wm.missionControlOpen && !moving}
+        />
+        {!pose.docked && !wm.missionControlOpen && (
+          <button
+            className="horizon-drawer-tab"
+            data-drawer-toggle
+            aria-label={
+              win.horizonDrawerOpen
+                ? "Fermer le tiroir de cette fenêtre"
+                : "Ouvrir le tiroir de cette fenêtre"
+            }
+            aria-expanded={!!win.horizonDrawerOpen}
+            aria-controls={"horizon-drawer-" + win.id}
+            onClick={() => wmStore.toggleHorizonDrawer(win.id)}
+          >
+            <PanelRight size={15} />
+            <span>{win.horizonDrawerOpen ? "Fermer" : "Tiroir"}</span>
+          </button>
+        )}
+        {place !== "center" && !pose.docked && !wm.missionControlOpen && (
+          <div
+            className="horizon-surface-label"
+            style={{
+              width: Math.max(130, Math.min(250, pose.width * pose.scale)),
+              transform: `scale(${1 / pose.scale})`,
+              top: -30 / pose.scale,
+            }}
+          >
+            <button
+              onClick={() => wmStore.focusWindow(win.id)}
+              title="Ramener au centre"
+            >
+              {a?.title ?? win.title}
+            </button>
+            <button
+              data-drawer-toggle
+              aria-label={"Tiroir de " + win.title}
+              aria-expanded={!!win.horizonDrawerOpen}
+              onClick={() => wmStore.toggleHorizonDrawer(win.id)}
+            >
+              <PanelRight size={13} />
+            </button>
+          </div>
+        )}
+        {pose.docked && (
+          <HorizonDockFace
+            win={win}
+            scale={pose.scale}
+            onGrab={(e) => onStart(e, "move", true)}
+            suppressClick={suppressClick}
+            onMenu={openMenu}
+          />
+        )}
         {place === "center" &&
           !win.maximized &&
           vp.width >= 760 &&
@@ -598,16 +713,17 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
       {moving &&
         destination &&
         createPortal(
-          <div
-            className={"horizon-drop-guide horizon-drop-" + destination}
-            aria-live="polite"
-          >
+          <div className="horizon-depth-guide" aria-live="polite">
             <span>
               {destination === "center"
                 ? "Ramener au centre"
                 : destination === "left"
-                  ? "Déposer dans l’aile gauche"
-                  : "Déposer dans l’aile droite"}
+                  ? docking
+                    ? "Relâcher pour docker à gauche"
+                    : "Éloigner à gauche · extrémité pour docker"
+                  : docking
+                    ? "Relâcher pour docker à droite"
+                    : "Éloigner à droite · extrémité pour docker"}
             </span>
           </div>,
           document.body,
@@ -716,7 +832,9 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
               <hr />
               <button
                 role="menuitem"
-                onClick={() => command(() => wmStore.setHorizonDrawer(win.id))}
+                onClick={() =>
+                  command(() => wmStore.toggleHorizonDrawer(win.id))
+                }
               >
                 <PanelRight size={15} /> Ouvrir le tiroir
               </button>
@@ -779,6 +897,34 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
                   </button>
                 </form>
               )}
+              <button
+                role="menuitem"
+                onClick={() =>
+                  command(() =>
+                    wmStore.placeHorizonWindow(win.id, "left", undefined, {
+                      depth: 1,
+                      y: 0.5,
+                      anchor: 0.5,
+                    }),
+                  )
+                }
+              >
+                <ArrowDownLeft size={15} /> Docker à gauche
+              </button>
+              <button
+                role="menuitem"
+                onClick={() =>
+                  command(() =>
+                    wmStore.placeHorizonWindow(win.id, "right", undefined, {
+                      depth: 1,
+                      y: 0.5,
+                      anchor: 0.5,
+                    }),
+                  )
+                }
+              >
+                <ArrowDownRight size={15} /> Docker à droite
+              </button>
               <button
                 role="menuitem"
                 onClick={() => command(() => wmStore.undoHorizon())}

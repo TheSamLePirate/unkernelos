@@ -10,6 +10,66 @@ export interface HorizonPose {
   angle: number;
   z: number;
   hidden: boolean;
+  depth?: number;
+  docked?: boolean;
+}
+export const HORIZON_DOCK_DEPTH = 0.94;
+export const HORIZON_DRAWER_WIDTH = 340;
+export const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+/** Continuous travel, not rectangular side snap targets. Only the terminal ends dock. */
+export function horizonTravel(x: number, width: number) {
+  const side: HorizonPlacement =
+    x < width * 0.32 ? "left" : x > width * 0.68 ? "right" : "center";
+  const distance = side === "left" ? width * 0.32 - x : x - width * 0.68;
+  const depth =
+    side === "center"
+      ? 0
+      : clamp(distance / Math.max(1, width * 0.32 - 32), 0, 1);
+  return { placement: side, depth, docked: depth >= HORIZON_DOCK_DEPTH };
+}
+export const horizonDepthScale = (depth: number) =>
+  Math.exp(-2.65 * clamp(depth, 0, 1));
+export const isHorizonDocked = (win: WindowInstance) =>
+  win.placement !== "center" &&
+  !!win.horizonSpatial &&
+  win.horizonSpatial.depth >= HORIZON_DOCK_DEPTH;
+export function fitHorizonDrawer(
+  pose: HorizonPose,
+  win: WindowInstance,
+  width: number,
+  height: number,
+): HorizonPose {
+  if (!win.horizonDrawerOpen || pose.hidden) return pose;
+  const mobile = width < 760;
+  const extent = pose.width + (mobile ? 0 : HORIZON_DRAWER_WIDTH + 28);
+  const scale = Math.min(
+    1,
+    (width - (mobile ? 28 : 60)) / extent,
+    (height - (mobile ? 175 : 240)) / pose.height,
+  );
+  const angle = mobile ? 0 : pose.angle * 0.25;
+  // Parent perspective is applied after scale. Reserve the projected right/bottom edge too.
+  const denominator = Math.min(
+    1,
+    1 + (extent * scale * Math.sin((angle * Math.PI) / 180)) / 1800,
+  );
+  const projectedWidth =
+    (extent * scale * Math.cos((angle * Math.PI) / 180)) / denominator;
+  const projectedHeight = (pose.height * scale) / denominator;
+  return {
+    ...pose,
+    docked: false,
+    scale,
+    angle,
+    x: clamp(pose.x, 14, Math.max(14, width - projectedWidth - 14)),
+    y: clamp(
+      pose.y,
+      mobile ? 78 : 125,
+      Math.max(mobile ? 78 : 125, height - 110 - projectedHeight),
+    ),
+    z: 200 + win.zIndex,
+  };
 }
 export const centerSlots = (layout: HorizonLayout) =>
   layout === "triple" ? 3 : layout === "split" ? 2 : 1;
@@ -41,7 +101,20 @@ export function settleHorizon(
       if (!overflow.has(w.id)) return w;
       const placement = left <= right ? "left" : "right";
       placement === "left" ? left++ : right++;
-      return { ...w, placement, placementOrder: Date.now() + left + right };
+      return {
+        ...w,
+        placement,
+        placementOrder: Date.now() + left + right,
+        horizonSpatial: {
+          depth: 0.68,
+          y: clamp(
+            0.2 + ((placement === "left" ? left : right) - 1) * 0.35,
+            0.08,
+            0.9,
+          ),
+          anchor: 0.5,
+        },
+      };
     });
   }
   return result;
@@ -87,31 +160,39 @@ export function horizonPose(
     const offset = win.horizonOffset ?? { x: 0, y: 0 };
     const quarter = win.snap.includes("top") || win.snap.includes("bottom");
     const actualH = quarter ? Math.min(h, (availH - 12) / 2) : h;
-    return {
-      x:
-        stageX +
-        index * (cellW + gap) +
-        (cellW - w) / 2 +
-        Math.max(-(cellW - w) / 2, Math.min((cellW - w) / 2, offset.x)),
-      y:
-        (quarter
-          ? win.snap.includes("bottom")
-            ? top + (availH + 12) / 2
-            : top
-          : top + (availH - h) / 2) +
-        (quarter
-          ? 0
-          : Math.max(-(availH - h) / 2, Math.min((availH - h) / 2, offset.y))),
-      width: Math.max(220, w),
-      height: Math.max(160, actualH),
-      scale: 1,
-      angle: 0,
-      z: 20 + win.zIndex,
-      hidden:
-        win.minimized ||
-        win.workspace !== workspace ||
-        (mobile && centers[0]?.id !== win.id),
-    };
+    return fitHorizonDrawer(
+      {
+        x:
+          stageX +
+          index * (cellW + gap) +
+          (cellW - w) / 2 +
+          Math.max(-(cellW - w) / 2, Math.min((cellW - w) / 2, offset.x)),
+        y:
+          (quarter
+            ? win.snap.includes("bottom")
+              ? top + (availH + 12) / 2
+              : top
+            : top + (availH - h) / 2) +
+          (quarter
+            ? 0
+            : Math.max(
+                -(availH - h) / 2,
+                Math.min((availH - h) / 2, offset.y),
+              )),
+        width: Math.max(220, w),
+        height: Math.max(160, actualH),
+        scale: 1,
+        angle: 0,
+        z: 20 + win.zIndex,
+        hidden:
+          win.minimized ||
+          win.workspace !== workspace ||
+          (mobile && centers[0]?.id !== win.id),
+      },
+      win,
+      width,
+      height,
+    );
   }
   const wing = windows
     .filter(
@@ -121,42 +202,64 @@ export function horizonPose(
       (a, b) => (a.placementOrder ?? a.zIndex) - (b.placementOrder ?? b.zIndex),
     );
   const index = Math.max(
-      0,
-      wing.findIndex((w) => w.id === win.id),
-    ),
-    count = wing.length;
-  const w = Math.max(600, Math.min(win.width, 1000)),
-    h = Math.max(380, Math.min(win.height, 700));
-  // Cards retain their real app viewport. CSS projection only; no copied screenshot or duplicate session.
+    0,
+    wing.findIndex((w) => w.id === win.id),
+  );
+  const w = Math.max(600, Math.min(win.width, 1200)),
+    h = Math.max(380, Math.min(win.height, 850));
+  const spatial = win.horizonSpatial ?? {
+    depth: 0.68,
+    y: clamp(0.2 + index * 0.35, 0.08, 0.9),
+    anchor: 0.5,
+  };
+  const depth = clamp(spatial.depth, 0, 1),
+    docked = depth >= HORIZON_DOCK_DEPTH;
+  const scale = horizonDepthScale(depth);
+  const pointerX =
+    place === "left"
+      ? width * 0.32 - depth * (width * 0.32 - 32)
+      : width * 0.68 + depth * (width * 0.32 - 32);
   const wingTop = top + 65,
     wingH = Math.max(100, height - wingTop - bottom);
-  const compactReserve = count <= 2 && width >= 1100 && height >= 800 ? 110 : 0;
-  const visibleCount = Math.max(1, Math.min(3, count));
-  const scale = Math.max(
-    0.03,
-    Math.min(
-      side / w,
-      (wingH - compactReserve * visibleCount - 30 * (visibleCount - 1)) /
-        visibleCount /
-        h,
-      0.37,
-    ),
+  const dockPeers = wing.filter(isHorizonDocked),
+    dockIndex = Math.max(
+      0,
+      dockPeers.findIndex((w) => w.id === win.id),
+    );
+  const dockRows = Math.max(1, Math.floor((height - 280) / 90));
+  const column = Math.floor(dockIndex / dockRows),
+    row = dockIndex % dockRows;
+  const dockCount = Math.min(
+    dockRows,
+    Math.max(1, dockPeers.length - column * dockRows),
   );
-  const visibleH = h * scale;
-  const spacing =
-    count <= 3
-      ? visibleH + compactReserve + 30
-      : Math.max(32, (wingH - visibleH - 20) / Math.max(1, count - 1));
-  const stackH = visibleH + compactReserve + spacing * (count - 1);
-  const y = wingTop + Math.max(0, (wingH - stackH) / 2) + spacing * index;
-  return {
-    x: place === "left" ? 16 : width - 16 - w * scale,
-    y,
-    width: w,
-    height: h,
-    scale,
-    angle: flat ? 0 : place === "left" ? 13 : -13,
-    z: 5 + index,
-    hidden: win.minimized || win.workspace !== workspace || mobile,
-  };
+  const x = docked
+    ? place === "left"
+      ? 16 + column * 92
+      : width - 88 - column * 92
+    : clamp(
+        pointerX - w * scale * clamp(spatial.anchor, 0, 1),
+        14,
+        Math.max(14, width - w * scale - 14),
+      );
+  const y = docked
+    ? 150 + Math.max(0, (height - 280 - dockCount * 90) / 2) + row * 90
+    : wingTop + clamp(spatial.y, 0, 1) * Math.max(0, wingH - h * scale);
+  return fitHorizonDrawer(
+    {
+      x,
+      y,
+      width: w,
+      height: h,
+      scale,
+      angle: flat ? 0 : (place === "left" ? 1 : -1) * (depth * 22),
+      z: 5 + win.zIndex,
+      hidden: win.minimized || win.workspace !== workspace || mobile,
+      depth,
+      docked,
+    },
+    win,
+    width,
+    height,
+  );
 }

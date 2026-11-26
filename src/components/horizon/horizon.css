@@ -1990,3 +1990,336 @@
     display: none;
   }
 }
+
+/* Spatial travel is a continuum. These are atmosphere labels, never snap areas. */
+.horizon-depth-label {
+  position: absolute;
+  top: 126px;
+  color: var(--hz-dim);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+}
+.horizon-depth-label.left {
+  left: 24px;
+}
+.horizon-depth-label.right {
+  right: 24px;
+  text-align: right;
+}
+.horizon-depth-label small {
+  font: 7px var(--font-mono);
+  letter-spacing: 0.2em;
+  opacity: 0.5;
+}
+.horizon-depth-guide {
+  position: fixed;
+  bottom: 122px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  pointer-events: none;
+  color: var(--hz-focus);
+  background: var(--hz-panel);
+  border: 1px solid var(--hz-line);
+  padding: 10px 18px;
+  border-radius: 30px;
+  font: 11px var(--font-sans);
+  box-shadow: 0 10px 35px #0004;
+}
+.horizon-window-drawer.horizon-panel {
+  position: absolute;
+  left: calc(100% - 1px);
+  right: auto;
+  top: -1px;
+  bottom: -1px;
+  width: 340px;
+  max-width: none;
+  z-index: 4;
+  padding: 18px 16px 12px;
+  border-radius: 0 var(--hz-radius) var(--hz-radius) 0;
+  border-left: 1px solid color-mix(in srgb, var(--hz-focus) 45%, transparent);
+  box-shadow: 18px 12px 45px -12px var(--hz-shadow);
+  animation: none;
+  transform-origin: left center;
+  transform: translateX(-22px);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 180ms,
+    visibility 240ms;
+  pointer-events: none;
+}
+.horizon-window-drawer[data-open="true"] {
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.horizon-window-drawer .horizon-panel-title h2 {
+  font-size: 16px;
+  margin-bottom: 0;
+}
+.horizon-window-drawer .horizon-panel-intro {
+  margin-bottom: 12px;
+}
+.horizon-window-drawer .horizon-panel-title {
+  flex-shrink: 0;
+}
+.horizon-window-drawer .horizon-panel-footer {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 8px;
+}
+.horizon-window-drawer .horizon-panel-toolbar {
+  margin-bottom: 10px;
+}
+.horizon-window[data-drawer-open="true"] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.horizon-window[data-drawer-open="true"] > .horizon-windowbar {
+  border-top-right-radius: 0;
+}
+.horizon-drawer-tab {
+  position: absolute;
+  z-index: 5;
+  right: -28px;
+  top: calc(50% - 38px);
+  height: 76px;
+  width: 28px;
+  border: 1px solid var(--hz-line);
+  border-left: 0;
+  border-radius: 0 9px 9px 0;
+  background: var(--hz-panel);
+  color: var(--hz-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 2px;
+  cursor: pointer;
+}
+.horizon-drawer-tab span {
+  writing-mode: vertical-rl;
+  font: 9px var(--font-sans);
+  letter-spacing: 0.08em;
+}
+.horizon-drawer-tab:hover,
+.horizon-drawer-tab[aria-expanded="true"] {
+  color: var(--hz-focus);
+  border-color: var(--hz-focus);
+}
+.horizon-window[data-drawer-open="true"] > .horizon-drawer-tab {
+  right: -367px;
+}
+.horizon-surface-label {
+  position: absolute;
+  left: 0;
+  display: flex;
+  height: 26px;
+  transform-origin: 0 0;
+  gap: 4px;
+}
+.horizon-surface-label button {
+  background: color-mix(in srgb, var(--hz-panel) 90%, transparent);
+  color: var(--hz-muted);
+  border: 1px solid var(--hz-line);
+  border-radius: 6px;
+  font: 10px var(--font-sans);
+  padding: 4px 7px;
+  display: flex;
+  align-items: center;
+  min-width: 26px;
+}
+.horizon-surface-label button:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  text-align: left;
+}
+.horizon-surface-label button:hover {
+  color: var(--hz-focus);
+}
+.horizon-window[data-docked="true"] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.horizon-window[data-docked="true"] > .horizon-windowbar,
+.horizon-window[data-docked="true"] > .horizon-windowbody {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.horizon-dock-face {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 72px;
+  height: 72px;
+  transform-origin: 0 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid color-mix(in srgb, var(--hz-line) 80%, var(--hz-focus) 20%);
+  border-radius: 17px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--hz-panel) 90%, var(--hz-focus) 10%),
+    var(--hz-bg)
+  );
+  color: var(--hz-ink);
+  box-shadow:
+    0 14px 32px #0005,
+    inset 0 1px 0 #ffffff12;
+}
+.horizon-dock-face button {
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.horizon-dock-primary {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 3px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 5px 4px 0;
+  border-radius: 16px 16px 0 0;
+  touch-action: none;
+}
+.horizon-dock-primary:hover {
+  background: var(--hz-soft);
+}
+.horizon-dock-primary span {
+  font: 8px var(--font-mono);
+  width: 62px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--hz-muted);
+}
+.horizon-dock-primary i {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 4px;
+  height: 4px;
+  background: var(--hz-dim);
+  border-radius: 50%;
+}
+.horizon-dock-primary i[data-status="live"] {
+  background: #86d9b7;
+  box-shadow: 0 0 7px #86d9b744;
+}
+.horizon-dock-primary i[data-status="paused"] {
+  background: #d8bd8b;
+}
+.horizon-dock-face-tools {
+  display: flex;
+  height: 24px;
+  border-top: 1px solid var(--hz-line);
+  flex-shrink: 0;
+}
+.horizon-dock-face-tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  border-radius: 0 0 10px 10px;
+  color: var(--hz-muted);
+}
+.horizon-dock-face-tools button:hover {
+  color: var(--hz-focus);
+  background: var(--hz-soft);
+}
+.horizon-dock-face-title {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: -8px;
+  right: -8px;
+  font: 9px var(--font-sans);
+  color: var(--hz-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  pointer-events: none;
+}
+.horizon-dock-face progress {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  width: 54px;
+  top: 43px;
+  height: 2px;
+  accent-color: var(--hz-focus);
+}
+.horizon-dock-face button:focus-visible,
+.horizon-drawer-tab:focus-visible,
+.horizon-surface-label button:focus-visible {
+  outline: 2px solid var(--hz-focus);
+  outline-offset: 3px;
+}
+@media (max-width: 759px) {
+  .horizon-depth-label {
+    display: none;
+  }
+  .horizon-window-drawer.horizon-panel {
+    left: 0;
+    top: 37px;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0 0 var(--hz-radius) var(--hz-radius);
+    border-left: 0;
+    transform: translateX(12px);
+  }
+  .horizon-window-drawer[data-open="true"] {
+    transform: translateX(0);
+  }
+  .horizon-drawer-tab {
+    display: none;
+  }
+  .horizon-window[data-drawer-open="true"] {
+    border-radius: 12px;
+  }
+  .horizon-depth-guide {
+    max-width: calc(100% - 20px);
+    width: max-content;
+    text-align: center;
+    font-size: 10px;
+    bottom: 110px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .horizon-window-drawer {
+    transition: none !important;
+  }
+}
+[data-horizon-motion="reduced"] .horizon-window-drawer {
+  transition: none !important;
+}
+/* Retain the captured dock button during drag; opacity preserves pointer capture. */
+.horizon-window[data-gesture] > .horizon-dock-face {
+  opacity: 0;
+  pointer-events: none;
+}
+.horizon-menu {
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

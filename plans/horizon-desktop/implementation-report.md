@@ -1,6 +1,6 @@
 # Horizon — rapport d’implémentation
 
-Horizon est intégré comme interface principale du code d’unkernelOS. Les changements sont dans le workspace local ; aucun push ni déploiement GitHub Pages n’a été effectué dans cette étape.
+Horizon est intégré comme interface principale du code d’unkernelOS. Cette première version a été commitée et poussée sur `main` sous `15ffe5a` à la demande de l’utilisateur. Le rapport ci-dessous conserve les vérifications de cette version initiale ; les évolutions de profondeur et de dock sont décrites dans `spatial-docks-report.md`.
 
 ## Livré
 

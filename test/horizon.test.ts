@@ -1,5 +1,11 @@
 import { describe, test, expect } from "bun:test";
-import { horizonPose, settleHorizon } from "../src/wm/horizon-layout.ts";
+import {
+  horizonPose,
+  settleHorizon,
+  horizonTravel,
+  horizonDepthScale,
+  isHorizonDocked,
+} from "../src/wm/horizon-layout.ts";
 import { unprojectQuad } from "../src/core/spatial-pointer.ts";
 import type { WindowInstance } from "../src/wm/wm-store.ts";
 function window(
@@ -105,4 +111,67 @@ test("side cards leave the workspace heading and dock clear", () => {
       expect(p.y + p.height * p.scale).toBeLessThanOrEqual(height! - 100);
     }
   }
+});
+
+describe("continuous spatial travel and docking", () => {
+  test("depth follows position continuously and shrinks strictly toward the edge", () => {
+    let previous = 1;
+    for (let i = 1; i <= 100; i++) {
+      const x = 1512 * 0.32 - ((1512 * 0.32 - 32) * i) / 100;
+      const t = horizonTravel(x, 1512),
+        scale = horizonDepthScale(t.depth);
+      expect(t.depth).toBeCloseTo(i / 100, 8);
+      expect(scale).toBeLessThan(previous);
+      expect(horizonTravel(1512 - x, 1512).depth).toBeCloseTo(t.depth, 8);
+      previous = scale;
+    }
+    expect(horizonTravel(756, 1512).placement).toBe("center");
+    expect(horizonTravel(85, 1512).docked).toBe(false);
+    expect(horizonTravel(24, 1512).docked).toBe(true);
+  });
+  test("different released depths retain distinct projected sizes and vertical positions", () => {
+    const a = {
+        ...window("near", "left"),
+        horizonSpatial: { depth: 0.3, y: 0.1, anchor: 0.5 },
+      },
+      b = {
+        ...window("far", "left"),
+        horizonSpatial: { depth: 0.8, y: 0.8, anchor: 0.5 },
+      };
+    const near = horizonPose(a, [a, b], 1512, 982, 1),
+      far = horizonPose(b, [a, b], 1512, 982, 1);
+    expect(near.scale).toBeGreaterThan(far.scale);
+    expect(far.y).toBeGreaterThan(near.y);
+    expect(isHorizonDocked(b)).toBe(false);
+    const boundary = {
+      ...a,
+      horizonSpatial: { ...a.horizonSpatial, depth: 0 },
+    };
+    expect(horizonPose(boundary, [boundary, b], 1512, 982, 1).angle).toBe(0);
+  });
+  test("attached drawer and owner fit in the viewport without changing logical app size", () => {
+    const w = {
+      ...window("open", "right"),
+      horizonDrawerOpen: true,
+      horizonSpatial: { depth: 1, y: 0.8, anchor: 0.5 },
+    };
+    const pose = horizonPose(w, [w], 1512, 982, 1);
+    expect(pose.width).toBe(900);
+    expect(pose.x + (pose.width + 340) * pose.scale).toBeLessThanOrEqual(1498);
+    expect(pose.y + pose.height * pose.scale).toBeLessThanOrEqual(872);
+    expect(pose.docked).toBe(false);
+    expect(isHorizonDocked(w)).toBe(true);
+  });
+  test("many docked sessions fill additional columns with distinct reachable tiles", () => {
+    const windows = Array.from({ length: 16 }, (_, i) => ({
+      ...window("dock" + i, "left", i),
+      horizonSpatial: { depth: 1, y: 0.5, anchor: 0.5 },
+    }));
+    const poses = windows.map((w) => horizonPose(w, windows, 1512, 982, 1));
+    expect(new Set(poses.map((p) => p.x + ":" + p.y)).size).toBe(16);
+    for (const pose of poses) {
+      expect(pose.x).toBeGreaterThanOrEqual(16);
+      expect(pose.y + 72).toBeLessThan(882);
+    }
+  });
 });

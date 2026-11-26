@@ -243,6 +243,11 @@ export const NotesStudioApp: React.FC = () => {
     saving,
   );
   useAppSurface({
+    dock: {
+      label: "Ouvrir " + (activeNote?.name ?? "Notes"),
+      value: content !== savedContent ? "Modifié" : "Enregistré",
+      detail: activeNote?.name,
+    },
     document: activeNote?.path,
     title: activeNote?.name,
     revision,
