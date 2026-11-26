@@ -39,7 +39,7 @@ export function parseGlossary(src: string): Glossary {
     const params = m[2] ? m[2].split(",").map((p) => p.trim()).filter(Boolean) : [];
     const body = m[3]!.replace(/\s+/g, " ").trim();
     const sep = body.search(/\s(?:—|\|)\s/);
-    const usual = (sep >= 0 ? body.slice(0, sep) : body).trim();
+    const usual = (sep >= 0 ? body.slice(0, sep) : body).trim().replace(/\\([—|])/g, "$1");
     const rigorous = sep >= 0 ? body.slice(sep + 3).trim() : null;
     out.set(key, { key, params, usual, rigorous: rigorous || null });
   }
@@ -318,9 +318,8 @@ interface Cite {
   readonly local: boolean;
 }
 
-export function narrate(theorem: PouleTheorem, source: string): Story | null {
+export function narrate(theorem: PouleTheorem, source: string, gl: Glossary = parseGlossary(source)): Story | null {
   if (!theorem.tree) return null;
-  const gl = parseGlossary(source);
   const facts = new Map(globalFacts(source).map((f) => [f.name, f.kind] as const));
   const P = new Prose(gl, facts);
   const lines: StoryLine[] = [];

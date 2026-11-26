@@ -1051,6 +1051,8 @@ export const ProofStudioApp: React.FC = () => {
                   <StoryView
                     theorem={theorem}
                     source={checkedSource ?? source}
+                    glossarySource={source}
+                    onChangeSource={updateSource}
                     selectedId={explicitNode?.id ?? null}
                     onSelect={(id) => {
                       const n = nodeById.get(id);

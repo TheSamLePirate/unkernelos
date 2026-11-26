@@ -1,5 +1,4 @@
 import {
-  BookOpen,
   BookText,
   Check,
   ClipboardCopy,
@@ -10,7 +9,8 @@ import {
   Volume2,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { narrate, type StoryLine } from "../../../core/poule-story.ts";
+import { narrate, parseGlossary, type GlossaryEntry, type StoryLine } from "../../../core/poule-story.ts";
+import { GlossaryEditor } from "./GlossaryEditor.tsx";
 import { prettyFormula, type PouleTheorem } from "../../../core/poule.ts";
 
 const plain = (t: string) => t.replace(/`/g, "");
@@ -56,11 +56,16 @@ type Speed = "normal" | "fast" | "instant";
 export const StoryView: React.FC<{
   theorem: PouleTheorem;
   source: string;
+  glossarySource: string;
+  onChangeSource: (source: string) => void;
   selectedId: number | null;
   onSelect: (nodeId: number) => void;
   onHover: (nodeId: number | null) => void;
-}> = ({ theorem, source, selectedId, onSelect, onHover }) => {
-  const story = useMemo(() => narrate(theorem, source), [theorem, source]);
+}> = ({ theorem, source, glossarySource, onChangeSource, selectedId, onSelect, onHover }) => {
+  // Unchecked code edits must not restart the last verified story. Only vocabulary
+  // edits can change its wording immediately, independently of proof verification.
+  const vocabulary = useMemo(() => JSON.stringify([...parseGlossary(glossarySource)]), [glossarySource]);
+  const story = useMemo(() => narrate(theorem, source, new Map(JSON.parse(vocabulary) as [string, GlossaryEntry][])), [theorem, source, vocabulary]);
   const total = useMemo(() => (story ? story.lines.reduce((n, l) => n + l.text.length, 0) : 0), [story]);
   const [speed, setSpeed] = useState<Speed>("normal");
   const [shown, setShown] = useState(0);
@@ -87,7 +92,8 @@ export const StoryView: React.FC<{
   }, [shown, total, speed]);
 
   useEffect(() => {
-    if (shown < total) endRef.current?.scrollIntoView({ block: "nearest" });
+    if (shown < total && !document.activeElement?.closest("[data-proof-glossary]"))
+      endRef.current?.scrollIntoView({ block: "nearest" });
   }, [shown, total]);
 
   // arrêter la lecture à voix haute si on change de théorème ou quitte la vue
@@ -272,47 +278,11 @@ export const StoryView: React.FC<{
         </div>
       </div>
 
-      {/* Glossary Card */}
-      <div className="rounded-2xl border border-white/10 bg-white/[0.025] px-4 py-3.5">
-        <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-          <BookOpen className="w-3.5 h-3.5 text-violet-300" />
-          Vocabulaire du récit
-          {story.vocabulary.length > 0 && (
-            <span className="ml-auto font-mono text-[10px] text-zinc-500">
-              {story.vocabulary.length} terme{story.vocabulary.length > 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        {story.vocabulary.length === 0 ? (
-          <div className="text-[12px] text-zinc-400 leading-relaxed">
-            Aucun mot n'est défini : le récit utilise les noms bruts. Ajoute dans le fichier des commentaires comme{" "}
-            <code className="px-1.5 py-0.5 rounded bg-black/40 border border-white/8 text-emerald-200 font-mono text-[11px]">
-              (*@ pair(n) : {"{n}"} est pair — {"{n}"} est divisible par 2 *)
-            </code>{" "}
-            pour raconter la preuve en français naturel ; la définition rigoureuse apparaît à la première mention.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {story.vocabulary.map((v) => (
-              <div
-                key={v.key}
-                className="rounded-xl bg-black/30 border border-white/8 px-3 py-2 space-y-0.5"
-              >
-                <div className="flex items-center gap-1.5">
-                  <code className="font-mono text-[11.5px] font-semibold text-violet-200">
-                    {v.key}
-                    {v.params.length ? `(${v.params.join(", ")})` : ""}
-                  </code>
-                </div>
-                <div className="text-[12px] text-zinc-100">{v.usual}</div>
-                {v.rigorous && (
-                  <div className="text-[11px] text-zinc-400 leading-snug">{v.rigorous}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <GlossaryEditor
+        source={glossarySource}
+        usedKeys={story.vocabulary.map((entry) => entry.key)}
+        onChange={onChangeSource}
+      />
     </div>
   );
 };

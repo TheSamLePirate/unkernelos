@@ -45,6 +45,8 @@ Horizon est l’interface principale : applications centrales, ailes vivantes, t
 
 Les bureaux et variantes classiques restent disponibles dans Réglages et Mod Studio, avec bascule sans fermeture des apps. Thèmes, fonds, widgets et mods CSS fonctionnent aussi dans Horizon.
 
+Dans **Studio de preuves → Récit → Vocabulaire du récit**, ajoutez ou modifiez les définitions des symboles sans écrire les commentaires à la main. La lecture usuelle et la définition rigoureuse sont conservées dans le fichier Poule ; les paramètres s’insèrent avec `{x}`, `{n}`, etc. Le récit se met à jour dès l’enregistrement. Les formules vérifiées restent inchangées.
+
 Sonora est le lecteur MP3 intégré avec dock play/pause et commandes agent. Voir [le lecteur](docs/sonora.md) et [le SDK d’applications Bun/Node/Rust](docs/app-sdk.md). Les applications compatibles partagent leur contexte et leurs actions par défaut.
 
 ## Companion macOS Rust : Wisp local, MCP et CLI
