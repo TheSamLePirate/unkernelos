@@ -44,3 +44,9 @@ bun run start                   # Serves dist/ + Range /distros/*.erofs + COOP/C
 Horizon est l’interface principale : applications centrales, ailes vivantes, tiroirs de contexte persistants et actions agent limitées à une session. Voir [le guide Horizon](docs/horizon.md) pour les gestes, la reprise, les capacités exposées et les vérifications.
 
 Sonora est le lecteur MP3 intégré avec dock play/pause et commandes agent. Voir [le lecteur](docs/sonora.md) et [le SDK d’applications Bun/Node/Rust](docs/app-sdk.md). Les applications compatibles partagent leur contexte et leurs actions par défaut.
+
+## Companion macOS Rust : Wisp local, MCP et CLI
+
+`bun run companion:build` produit `.cache/companion/unkernelOS Companion.app`, avec l’OS et Alpine/Debian embarqués. L’interface native Rune ouvre l’OS dans votre navigateur ; le service Wisp et la passerelle agents restent dans la barre de menus.
+
+Le même binaire expose toute l’API en **MCP stdio/HTTP et CLI JSON** : `sessions`, `schema`, `call <méthode> --params '<JSON>'` et `--stdin`. Les appels externes conservent les permissions et l’historique de l’OS. Voir [companion/README.md](companion/README.md) pour les commandes, la configuration MCP, les limites et la migration du stockage vers l’origine locale.

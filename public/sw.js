@@ -78,6 +78,9 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  // Authentication and control must always reach the running native service.
+  if (url.pathname.startsWith("/__companion/") || url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) return;
+
   // Never interfere with guest preview Service Worker scope (/vm/)
   if (url.pathname.startsWith(VM_PREFIX)) return;
 

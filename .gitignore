@@ -7,3 +7,4 @@ dist/
 .DS_Store
 rune-apps/*/target/
 public/rune-apps/
+companion/target/

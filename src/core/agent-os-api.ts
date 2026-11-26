@@ -1,3 +1,5 @@
+import { SKILL_MODDING_MD, SKILL_REACTIVE_MD, SKILL_OS_CONTROL_MD } from "./builtin-agent-skills.ts";
+import { listAgentSkills, readAgentSkill } from "./agent-skills-service.ts";
 import { surfaceRegistry } from './app-surface-registry.tsx';
 import { contextStore } from './context-store.ts';
 import { Effect } from "effect";
@@ -99,6 +101,106 @@ export interface AgentApiCallRecord {
 }
 
 export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
+  {
+    method: "skills.list",
+    category: "system",
+    summary:
+      "Discover built-in unkernelOS skills and SKILL.md files installed in the Linux VM. Returns descriptions and locations without loading instructions into the agent context. Never scans Mac skills.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        scope: { type: "string", enum: ["all", "builtin", "guest"] },
+        roots: { type: "array", items: { type: "string" }, maxItems: 8 },
+      },
+    },
+    example: { query: "desktop" },
+  },
+  {
+    method: "skills.read",
+    category: "system",
+    summary:
+      "Read a discovered skill by its id or unique name. Includes the complete SKILL.md and instructions for using it through the external CLI/MCP transport. Does not execute the skill.",
+    paramsSchema: {
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
+    },
+    example: { id: "builtin:unkernelos-os-control" },
+  },
+  {
+    method: "guest.exec",
+    category: "system",
+    summary:
+      "Run a command inside the browser Linux VM (not on the Mac). Use file+args or script. Bounded output, timeout 1–60 seconds; long jobs should be launched in the background and inspected later.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        file: { type: "string" },
+        args: { type: "array", items: { type: "string" } },
+        script: { type: "string" },
+        cwd: { type: "string" },
+        input: { type: "string" },
+        timeoutMs: { type: "integer", minimum: 1000, maximum: 60000 },
+      },
+    },
+    example: { script: "pwd; uname -a", timeoutMs: 15000 },
+  },
+  {
+    method: "guest.fs.list",
+    category: "system",
+    summary: "List a directory in the Linux VM (up to 1000 entries).",
+    paramsSchema: {
+      type: "object",
+      properties: { path: { type: "string" } },
+      required: ["path"],
+    },
+    example: { path: "/home/user" },
+  },
+  {
+    method: "guest.fs.read",
+    category: "system",
+    summary:
+      "Read up to 256 KiB of a Linux VM file at a byte offset. UTF-8 text or base64 for binary files.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        offset: { type: "integer", minimum: 0 },
+        length: { type: "integer", minimum: 1, maximum: 262144 },
+        encoding: { type: "string", enum: ["utf8", "base64"] },
+      },
+      required: ["path"],
+    },
+    example: { path: "/etc/os-release" },
+  },
+  {
+    method: "guest.fs.write",
+    category: "system",
+    summary:
+      "Write a Linux VM file, up to 256 KiB, as UTF-8 or base64. Overwrites the file; parents must exist.",
+    paramsSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        content: { type: "string" },
+        encoding: { type: "string", enum: ["utf8", "base64"] },
+      },
+      required: ["path", "content"],
+    },
+    example: { path: "/tmp/hello.txt", content: "Hello from the Mac agent" },
+  },
+  ...(["mkdir", "remove", "rename", "copy"] as const).map((op) => ({
+    method: `guest.fs.${op}`,
+    category: "system" as const,
+    summary: `${op} a Linux VM filesystem entry. remove is recursive.`,
+    paramsSchema: {
+      type: "object",
+      properties: { path: { type: "string" }, to: { type: "string" } },
+      required: op === "rename" || op === "copy" ? ["path", "to"] : ["path"],
+    },
+    example: { path: "/tmp/project" },
+  })),
   {method:"horizon.status",category:"wm",summary:"Read Horizon desktop mode, layout and placements. Does not expose drawer content.",paramsSchema:{type:"object",properties:{}},example:{}},
   {method:"horizon.sessions",category:"wm",summary:"Discover session capabilities and current revisions. Context and published actions are shared by default; private sessions require an explicit grant.",paramsSchema:{type:"object",properties:{}},example:{}},
   {method:"horizon.session.read",category:"wm",summary:"Read the shared session state and context. An optional grantId restricts access to a user-selected scope.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"}},required:["windowId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant"}},
@@ -1340,6 +1442,10 @@ const PERM_MODE_STORAGE_KEY = "unkernelos:agent-perm-mode:v1";
 export type AgentPermissionMode = "auto" | "supervised" | "read-only";
 
 const READ_ONLY_METHODS = new Set([
+  "skills.list",
+  "skills.read",
+  "guest.fs.list",
+  "guest.fs.read",
   "horizon.status",
   "horizon.sessions",
   "horizon.session.read",
@@ -1366,6 +1472,12 @@ const READ_ONLY_METHODS = new Set([
 ]);
 
 const SENSITIVE_METHODS = new Set([
+  "guest.exec",
+  "guest.fs.write",
+  "guest.fs.mkdir",
+  "guest.fs.remove",
+  "guest.fs.rename",
+  "guest.fs.copy",
   "github.deployPages",
   "system.vm",
   "app.install",
@@ -1519,8 +1631,141 @@ export async function executeOsAction(
   }
 }
 
+function requiredGuestPath(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("/") ||
+    value.includes("\0") ||
+    value.length > 4096
+  )
+    throw new Error("An absolute Linux path is required");
+  return value;
+}
+
 async function dispatchOsAction(method: string, p: Record<string, unknown>): Promise<unknown> {
   switch (method) {
+    case "skills.list":
+      return listAgentSkills(p);
+    case "skills.read":
+      return readAgentSkill(String(p.id ?? ""));
+    case "guest.exec": {
+      const script = typeof p.script === "string" ? p.script : undefined;
+      if ((script !== undefined) === (typeof p.file === "string"))
+        throw new Error("Supply either script or file+args");
+      if (
+        p.args !== undefined &&
+        (!Array.isArray(p.args) || !p.args.every((a) => typeof a === "string"))
+      )
+        throw new Error("args must be strings");
+      const ms = Number(p.timeoutMs ?? 15000);
+      if (!Number.isInteger(ms) || ms < 1000 || ms > 60000)
+        throw new Error("timeoutMs must be 1000–60000");
+      const options = {
+        cwd: typeof p.cwd === "string" ? p.cwd : undefined,
+        input: typeof p.input === "string" ? p.input : undefined,
+        maxBuffer: 131072,
+        signal: AbortSignal.timeout(ms),
+      };
+      return appRuntime.runPromise(
+        Effect.flatMap(VmService, (v) =>
+          script !== undefined
+            ? v.execShell(script, options)
+            : v.exec(String(p.file), p.args as string[] | undefined, options),
+        ),
+      );
+    }
+    case "guest.fs.list": {
+      const entries = await appRuntime.runPromise(
+        Effect.flatMap(GuestFsService, (f) =>
+          f.listDir(requiredGuestPath(p.path)),
+        ),
+      );
+      return {
+        entries: entries.slice(0, 1000),
+        truncated: entries.length > 1000,
+      };
+    }
+    case "guest.fs.read": {
+      const path = requiredGuestPath(p.path),
+        offset = Number(p.offset ?? 0),
+        length = Number(p.length ?? 65536);
+      if (
+        !Number.isSafeInteger(offset) ||
+        offset < 0 ||
+        !Number.isInteger(length) ||
+        length < 1 ||
+        length > 262144
+      )
+        throw new Error("Invalid byte range");
+      if (
+        p.encoding !== undefined &&
+        p.encoding !== "utf8" &&
+        p.encoding !== "base64"
+      )
+        throw new Error("Invalid encoding");
+      const q = "'" + path.replace(/'/g, "'\\''") + "'";
+      const r = await appRuntime.runPromise(
+        Effect.flatMap(VmService, (v) =>
+          v.execShell(
+            `test -f ${q} && test -r ${q} && tail -c +${offset + 1} ${q} | head -c ${length} | base64`,
+            { maxBuffer: 400000, signal: AbortSignal.timeout(15000) },
+          ),
+        ),
+      );
+      if (r.exitCode !== 0) throw new Error(r.stderr || "Cannot read file");
+      const base64 = r.stdout.replace(/\s/g, ""),
+        bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      return {
+        path,
+        offset,
+        bytes: bytes.length,
+        nextOffset: offset + bytes.length,
+        encoding: p.encoding ?? "utf8",
+        content:
+          p.encoding === "base64" ? base64 : new TextDecoder().decode(bytes),
+      };
+    }
+    case "guest.fs.write": {
+      const path = requiredGuestPath(p.path);
+      if (typeof p.content !== "string")
+        throw new Error("content must be a string");
+      if (
+        p.encoding !== undefined &&
+        p.encoding !== "utf8" &&
+        p.encoding !== "base64"
+      )
+        throw new Error("Invalid encoding");
+      if (p.content.length > 400000)
+        throw new Error("File write exceeds 256 KiB");
+      const bytes =
+        p.encoding === "base64"
+          ? Uint8Array.from(atob(p.content), (c) => c.charCodeAt(0))
+          : new TextEncoder().encode(p.content);
+      if (bytes.length > 262144) throw new Error("File write exceeds 256 KiB");
+      await appRuntime.runPromise(
+        Effect.flatMap(GuestFsService, (f) => f.writeFileBytes(path, bytes)),
+      );
+      return { path, bytes: bytes.length };
+    }
+    case "guest.fs.mkdir":
+    case "guest.fs.remove":
+    case "guest.fs.rename":
+    case "guest.fs.copy": {
+      const path = requiredGuestPath(p.path);
+      await appRuntime.runPromise(
+        Effect.flatMap(GuestFsService, (f) =>
+          method === "guest.fs.mkdir"
+            ? f.mkdir(path)
+            : method === "guest.fs.remove"
+              ? f.remove(path)
+              : method === "guest.fs.rename"
+                ? f.rename(path, requiredGuestPath(p.to))
+                : f.copy(path, requiredGuestPath(p.to)),
+        ),
+      );
+      return { ok: true, path };
+    }
+
     case "horizon.status": {const w=wmStore.getSnapshot();return {enabled:w.horizonEnabled,layout:w.horizonLayout,flat:w.horizonFlat,workspace:w.activeWorkspace,windows:w.windows.map(x=>({id:x.id,sessionId:x.sessionId,contextId:x.contextId,placement:x.placement??"center",minimized:x.minimized}))};}
     case "horizon.sessions": return surfaceRegistry.list();
     case "horizon.session.read": return surfaceRegistry.read(String(p.windowId??""),String(p.grantId??""));
@@ -3018,6 +3263,7 @@ You are running inside **unkernelOS**, a full Agent-Native, 100% Moddable WebGPU
 Beyond standard Linux commands, you have **direct, zero-latency programmatic control** over the entire host OS, window manager, 3D Spatial Desktop, Reactive Data Modding Engine, Injectable HTML/Iframe/Canvas Surfaces, WebGPU Shaders, Code IDE, File Explorer, Web Preview, Wayland/3D GL windows, host clipboard, downloads, notifications, speech, human prompts, and 1-click GitHub Pages deployment via \`osctl\` (and MCP server \`osctl mcp\`).
 
 ## Installed Agent Skills (read before advanced OS work)
+Discover descriptions: \`osctl call skills.list '{"query":"desktop"}'\`. Load one skill only when relevant: \`osctl call skills.read '{"id":"builtin:unkernelos-os-control"}'\`. External Mac agents can use \`unkernelos-companion skills list\`, \`skills search <query>\`, \`skills read <id-or-name>\`. These discover OS and guest skills, never Mac skill directories.
 - \`~/.claude/skills/unkernelos-modding/SKILL.md\` (also in \`~/.pi/agent/skills/\` & \`~/.agents/skills/\`) — Themes, 16 OS variants, 14 decorators, Window FX, Eye-Candy, 3D WebGPU worlds & 4K HDRI, widgets & CSS mods.
 - \`~/.claude/skills/unkernelos-reactive-mods/SKILL.md\` — Real-time reactive signals, \`sh\`/\`python3\`/\`bun\`/\`node\`/\`http\`/\`js\` data sources, visual bindings, unrestricted JS controllers, 20-float WGSL live uniforms, and injectable HTML/Iframe/Canvas surfaces on 7 OS slots (\`wallpaper\`, \`desktop\`, \`overlay\`, \`topbar\`, \`dock\`, \`titlebar\`, \`3d-panel\`).
 - \`~/.claude/skills/unkernelos-os-control/SKILL.md\` — Window management, 2D/3D grids, workspaces, IDE, live preview, Wayland/VirGL, clipboard & GitHub Pages deploy.
@@ -3050,138 +3296,6 @@ Beyond standard Linux commands, you have **direct, zero-latency programmatic con
 - \`osctl call mod.surface.upsert '{"id":"surf-hud","contentType":"html|iframe|canvas","slot":"wallpaper|desktop|overlay|topbar|dock|titlebar|3d-panel","enabled":true,"html":"..."}'\` — Inject live HTML/Iframe/Canvas anywhere in the OS (including 3D space!).
 - \`osctl call mod.desktop3d.set '{"enabled":true,"scene":"earth-orbit","layout":"curved-cockpit","spatialChrome3d":true}'\` — Control the 3D WebGPU Spatial Desktop.
 <!-- UNKERNELOS_AGENT_DOCS_END -->
-`;
-
-const SKILL_MODDING_MD = `---
-name: unkernelos-modding
-description: Mod everything in unkernelOS — themes, 16 OS variants (Win95..11, Linux GNOME/KDE/XFCE/Compiz/Hyprland, macOS/iOS/visionOS), 14 window decorators, Window FX, Eye-Candy, 3D WebGPU worlds & 4K HDRI, widgets, and CSS via osctl or MCP.
----
-
-# unkernelOS Full OS Modding Skill
-
-Use \`osctl call <method> '<json>'\` (or the \`unkernelos\` MCP tools) to customize any visual or structural aspect of unkernelOS live.
-
-## 1. OS Variants & Themes
-- List variants: \`osctl call mod.variants\`
-- Apply variant: \`osctl call mod.variant.apply '{"id":"variant-visionos"}'\` (also: \`variant-win95\`, \`variant-winxp\`, \`variant-win11\`, \`variant-gnome\`, \`variant-kde\`, \`variant-xfce\`, \`variant-compiz\`, \`variant-hyprland\`, \`variant-macos-aqua\`, \`variant-ios\`, \`variant-cyberpunk\`, \`variant-swiss\`)
-- Custom theme tokens: \`osctl call mod.theme.set '{"enabled":true,"accentPrimary":"#22d3ee","accentSecondary":"#f43f5e","blurPx":30,"glassOpacity":0.74}'\`
-- Ultra-HD NASA/4K Backdrops (2D & 3D): \`osctl call mod.backdrop.set '{"id":"backdrop-earth-apollo"}'\` (\`backdrop-moon-nasa\`, \`backdrop-jupiter-hubble\`, \`backdrop-saturn-cassini\`, \`backdrop-galaxy-hubble\`, \`backdrop-venice-sunset\`, or \`{"id":"custom","url":"https://..."}\`, or \`{"id":null}\` to return to WebGPU shader).
-
-## 2. 3D Spatial Desktop (Three.js WebGPU)
-- \`osctl call mod.desktop3d.set '{"enabled":true,"scene":"earth-orbit","layout":"spatial-grid","hdriPreset":"auto","spatialChrome3d":true,"showControlsHud":false,"shadowsEnabled":true,"doubleSidedWindows":true}'\`
-- Scenes: \`ocean-sunset\`, \`alpine-fjord\`, \`earth-orbit\`, \`jupiter-orbit\`, \`lunar-horizon\`, \`aurora-fjord\`
-- Layouts: \`curved-cockpit\`, \`spatial-grid\`, \`compiz-cube\`, \`studio-desk\`, \`gallery-ring\`
-- HDRI 4K presets: \`auto\`, \`venice-4k\`, \`alpine-4k\`, \`night-4k\`, \`clouds-4k\`, \`twilight-4k\`, \`clear-sky-4k\`, \`space-void\`, \`custom\`
-
-## 3. Window Decorators, FX, Shell & Eye-Candy
-- Decorators (14): \`osctl call mod.decorator.set '{"style":"compiz-emerald","radiusPx":18,"activeGlowPx":36,"buttonPosition":"left"}'\`
-- Window FX: \`osctl call mod.fx.set '{"openAnimation":"flip3d","wobblyDrag":true,"genieMinimize":true,"burnClose":true,"hoverTilt3d":true,"chromaBorder":true}'\`
-- Shell / Dock Pro / Taskbar: \`osctl call mod.shell.set '{"taskbarMode":"dock","dockStyle":"floating-glass","dockAutoHide":false,"dockMagStrength":0.5,"dockIconScale":1.0,"dockReflection":true,"topBarStyle":"glass"}'\`
-- Eye-Candy, Audio & Hot Corners: \`osctl call mod.eyecandy.set '{"cursorSpotlight":true,"cursorTrail":"aurora","clickRipples":true,"ambientParticles":"sakura","nightShiftWarmth":15,"colorProfile":"oled-vivid","soundProfile":"crystal","motionSpeed":1.0,"hotCorners":{"topLeft":"mission-control","bottomRight":"desktop-3d"}}'\`
-- Parameterize built-in CSS mods: \`osctl call mod.configure '{"id":"mod-rgb-chroma-borders","params":{"speed":3,"glow":40}}'\`
-- Global CSS injection: \`osctl call mod.css.set '{"id":"my-css","name":"Custom Look","css":".glass-dock{border-color:#22d3ee!important}"}'\`
-`;
-
-const SKILL_REACTIVE_MD = `---
-name: unkernelos-reactive-mods
-description: Build real-time data-driven mods in unkernelOS — connect sh/python3/bun/node scripts or HTTP APIs to live signals, WGSL WebGPU shader uniforms, CSS --sig-* vars, visual bindings, unrestricted JS controllers, and injectable HTML/Iframe/Canvas surfaces on 7 OS slots including 3D space.
----
-
-# unkernelOS Reactive Modding & Surfaces Skill
-
-## 1. Live Signal Bus (\`mod.signal.list\` / \`mod.signal.set\`)
-Built-in signals update every second and are mirrored to:
-- **CSS Custom Properties** on \`:root\`: \`--sig-sys-cpu\`, \`--sig-sys-ram\`, \`--sig-weather-temp\`, \`--sig-agent-tokens\`, \`--sig-cpu-n\` (0..1), etc.
-- **WebGPU WGSL Uniforms** (\`struct Uniforms\` — 20 floats, available in every custom WGSL shader via \`mod.shader.set\`):
-  - \`u.time\`, \`u.width\`, \`u.height\`, \`u.mode\`
-  - \`u.cpu\`, \`u.gpu\`, \`u.ram\`, \`u.disk\` (0..1)
-  - \`u.procs\`, \`u.tokens\`, \`u.daylight\`, \`u.temp\` (0..1)
-  - \`u.mouseX\`, \`u.mouseY\`, \`u.rain\`, \`u.agentActive\` (0..1)
-  - \`u.custom0\`, \`u.custom1\`, \`u.custom2\`, \`u.custom3\` (set via bindings or scripts)
-
-Push any custom signal instantly:
-\`\`\`bash
-osctl call mod.signal.set '{"key":"custom.buildHealth","value":1,"label":"CI"}'
-osctl call mod.signal.set '{"signals":{"custom.score":95,"custom.mode":"turbo"}}'
-\`\`\`
-
-## 2. Programmable Data Sources (\`sh\` / \`python\` / \`bun\` / \`node\` / \`http\` / \`js\`)
-Create periodic data collectors running directly inside unkernel Linux or fetching internet APIs:
-\`\`\`bash
-osctl call mod.source.upsert '{
-  "id": "src-repo-metrics",
-  "name": "Repo Metrics",
-  "kind": "python",
-  "enabled": true,
-  "intervalMs": 8000,
-  "outputPrefix": "repo",
-  "code": "import json, os; print(json.dumps({\\"files\\": len(os.listdir(\\"/home/user/workspace\\"))}))"
-}'
-osctl call mod.source.run '{"id":"src-repo-metrics"}'
-\`\`\`
-
-## 3. Reactive Bindings (Expressions -> OS Properties / Shader Uniforms / CSS Vars)
-Available expression helpers: \`sig(key, fallback)\`, \`sigRaw(key)\`, \`clamp(v, a, b)\`, \`lerp(a, b, t)\`, \`mapRange(v, i0, i1, o0, o1)\`, \`smoothstep(e0, e1, x)\`, \`lerpColor(hexA, hexB, t)\`, \`hsl(h, s, l)\`.
-Targets: \`theme.accentPrimary\`, \`theme.accentSecondary\`, \`theme.blurPx\`, \`theme.glassOpacity\`, \`eyecandy.nightShiftWarmth\`, \`eyecandy.ambientParticles\`, \`eyecandy.ambientParticleDensity\`, \`eyecandy.vignetteStrength\`, \`eyecandy.motionSpeed\`, \`desktop3d.bloomIntensity\`, \`desktop3d.cameraSpeed\`, \`desktop3d.particleDensity\`, \`shell.dockMagStrength\`, \`shell.dockIconScale\`, \`decorator.activeGlowPx\`, \`shader.custom0..3\`, \`cssVar\`.
-\`\`\`bash
-osctl call mod.binding.upsert '{
-  "id": "bind-cpu-accent",
-  "name": "CPU Thermal Accent",
-  "enabled": true,
-  "target": "theme.accentPrimary",
-  "expression": "lerpColor(\\"#22d3ee\\", \\"#f43f5e\\", clamp(sig(\\"sys.cpu\\") / 90, 0, 1))"
-}'
-\`\`\`
-
-## 4. Unrestricted JS Reactive Controllers (\`mod.script.upsert\`)
-Full access to \`signals\`, \`sig()\`, \`helpers\`, \`state\` (persisted per tick), \`document\`, \`window\`, \`fetch\`, and \`os\` (\`modStore\`, \`wmStore\`, \`reactiveEngine\`, \`execShell(cmd)\`, \`call(method, params)\`).
-\`\`\`bash
-osctl call mod.script.upsert '{
-  "id": "script-ai-aura",
-  "name": "AI Token Aura",
-  "enabled": true,
-  "intervalMs": 1500,
-  "code": "const t = clamp(sig(\\"agent.tokens\\")/25000,0,1); os.reactiveEngine.setCustomUniform(1, t); os.modStore.setDecorator({ activeGlowPx: Math.round(16 + t * 44) });"
-}'
-\`\`\`
-
-## 5. Injectable HTML / Iframe / Canvas Surfaces (7 OS Slots!)
-Mount \`html\` (with \`{{signal.key}}\` interpolation + optional \`script\`), \`iframe\` (\`iframeUrl\` or \`html\` srcDoc receiving \`unkernelos-reactive-signals\` via \`postMessage\`), or 60fps \`canvas\` (\`canvasScript(ctx, canvas, t, signals, os, helpers, sig)\`) on any slot:
-- \`wallpaper\` (full-screen behind windows)
-- \`desktop\` (positioned x/y/w/h)
-- \`overlay\` (floating HUD above windows)
-- \`topbar\` (inline capsule in OS TopBar)
-- \`dock\` (inline widget/meter in OS Dock)
-- \`titlebar\` (inline badge in focused window titlebar)
-- \`3d-panel\` (floating panel in 3D Three.js space using \`pose3d: {x,y,z,rx,ry,rz}\`)
-
-\`\`\`bash
-osctl call mod.surface.upsert '{
-  "id": "surf-topbar-ai",
-  "name": "TopBar AI Badge",
-  "enabled": true,
-  "contentType": "html",
-  "slot": "topbar",
-  "html": "<span style=\\"padding:2px 8px;border-radius:999px;background:rgba(139,92,246,0.22);color:#e9d5ff;font:10px monospace\\">AI {{agent.tokens}} tok</span>"
-}'
-\`\`\`
-`;
-
-const SKILL_OS_CONTROL_MD = `---
-name: unkernelos-os-control
-description: Control unkernelOS desktop windows, 2D/3D tiling grids, workspaces, Code IDE, live web previews, Wayland/VirGL 3D apps, clipboard, notifications, human prompts, and 1-click GitHub Pages deployments via osctl or MCP.
----
-
-# unkernelOS Core Control Skill
-
-- Discover all methods: \`osctl schema\`
-- Live OS & port status: \`osctl info\`
-- Open/focus apps: \`osctl open ide\`, \`osctl open mod-studio\`, \`osctl open settings '{"tab":"desktop3d"}'\`
-- Arrange windows: \`osctl call wm.grid '{"mode":"master-stack"}'\` (\`grid\`, \`split-2\`, \`master-stack\`, \`columns-3\`, \`cascade\`) or \`osctl tile focus-ide-preview\`
-- Open files & web servers: \`osctl edit /home/user/workspace/app.ts\`, \`osctl preview 3000 /\`, \`os-open :5173\`
-- Human interaction: \`osctl notify "Done" "Build succeeded" success\`, \`osctl ask "API endpoint?"\`, \`osctl confirm "Deploy?"\`
-- Host I/O: \`pbcopy\`, \`pbpaste\`, \`os-download ./dist/app.zip\`
-- Deploy: \`osctl deploy-pages /home/user/workspace/my-app my-app\`
 `;
 
 /**

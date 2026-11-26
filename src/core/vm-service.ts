@@ -1,3 +1,4 @@
+import { getCompanionConfig } from "./companion-config.ts";
 import { Context, Effect, Fiber, Layer, PubSub, Schedule, SubscriptionRef } from "effect";
 import {
   checkSupport,
@@ -373,7 +374,8 @@ export const VmLive = Layer.effect(
       if (cfg.gl && isDebian && !cfg.gpu) cmdParts.push("kw.gl=1");
       if (cfg.cmdlineAppend.trim()) cmdParts.push(cfg.cmdlineAppend.trim());
 
-      const wispServers = cfg.wispUrl.trim()
+      const localCompanion = getCompanionConfig();
+      const wispServers = localCompanion ? [localCompanion.wispUrl] : cfg.wispUrl.trim()
         ? cfg.wispUrl.split(",").map((s) => s.trim()).filter(Boolean)
         : [...DEFAULT_WISP_SERVERS];
 
@@ -545,7 +547,7 @@ export const VmLive = Layer.effect(
         yield* cleanupHandle;
 
         const wispDisplay = cfg.net
-          ? cfg.wispUrl.trim() || DEFAULT_WISP_SERVERS[0] || "default"
+          ? getCompanionConfig()?.wispUrl || cfg.wispUrl.trim() || DEFAULT_WISP_SERVERS[0] || "default"
           : "offline";
 
         const coi = Boolean(self.crossOriginIsolated);

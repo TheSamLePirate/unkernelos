@@ -1,3 +1,4 @@
+import { getCompanionConfig } from "../../core/companion-config.ts";
 import { Effect } from "effect";
 import {
   Box,
@@ -566,7 +567,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
   };
 
   const testWisp = async () => {
-    const url = cfg.wispUrl.trim();
+    const url = getCompanionConfig()?.wispUrl ?? cfg.wispUrl.trim();
     if (!url) {
       setWispPing("Entrez une URL wss:// Wisp d'abord");
       return;
@@ -2711,12 +2712,13 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                 </SectionCard>
 
                 <SectionCard
-                  title="Relais Wisp Personnalisé (wss://)"
-                  subtitle="Laissez vide pour le relais par défaut, ou séparez plusieurs URLs par des virgules"
+                  title={getCompanionConfig() ? "Companion Rust — relais local" : "Relais Wisp Personnalisé (wss://)"}
+                  subtitle={getCompanionConfig() ? "Le réseau utilise uniquement le relais de votre Mac. Aucun repli vers un serveur distant." : "Laissez vide pour le relais par défaut, ou séparez plusieurs URLs par des virgules"}
                 >
                   <div className="flex gap-2">
                     <input
-                      value={cfg.wispUrl}
+                      value={getCompanionConfig()?.wispUrl ?? cfg.wispUrl}
+                      disabled={!!getCompanionConfig()}
                       onChange={(e) => patchCfg({ wispUrl: e.target.value })}
                       placeholder="wss://your-wisp-server.example.com/"
                       className="flex-1 px-3 py-2 rounded-xl bg-black/50 border border-white/12 text-xs font-mono text-zinc-100 outline-none focus:border-emerald-400/50"
@@ -2738,7 +2740,7 @@ export const SettingsApp: React.FC<{ initialTab?: SettingsTab }> = ({ initialTab
                     </div>
                   )}
                   <p className="text-[11px] text-zinc-500">
-                    Configurable également via le paramètre d&apos;URL <code>?wisp=wss://...</code>.
+                    {getCompanionConfig() ? "Le relais se pilote depuis l’app native unkernelOS Companion." : <>Configurable également via le paramètre d&apos;URL <code>?wisp=wss://...</code>.</>}
                   </p>
                 </SectionCard>
               </>
