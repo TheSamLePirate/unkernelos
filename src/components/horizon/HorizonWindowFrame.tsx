@@ -10,6 +10,7 @@ import {
   Check,
   Copy,
   Maximize2,
+  Minimize2,
   Minus,
   MoreHorizontal,
   PanelRight,
@@ -186,7 +187,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
     kind = "move",
     fromDock = false,
   ) => {
-    if (wm.missionControlOpen) return;
+    if (wm.missionControlOpen || win.maximized) return;
     if (
       e.button !== 0 ||
       !e.isPrimary ||
@@ -487,6 +488,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
         data-horizon-window={win.id}
         data-placement={place}
         data-docked={!!pose.docked && !moving}
+        data-maximized={win.maximized && !wm.missionControlOpen}
         data-drawer-open={!!win.horizonDrawerOpen && !wm.missionControlOpen}
         data-depth={pose.depth ?? 0}
         data-focused={focused}
@@ -589,11 +591,12 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
               <Minus size={10} />
             </button>
             <button
-              aria-label="Agrandir ou restaurer"
-              title="Agrandir"
+              aria-label={win.maximized ? "Restaurer la fenêtre" : "Plein écran"}
+              title={win.maximized ? "Restaurer la fenêtre" : "Plein écran"}
+              aria-pressed={win.maximized}
               onClick={() => wmStore.toggleMaximize(win.id)}
             >
-              <Maximize2 size={9} />
+              {win.maximized ? <Minimize2 size={10} /> : <Maximize2 size={10} />}
             </button>
           </div>
           <span className="horizon-windowtitle">{a?.title ?? win.title}</span>
@@ -651,7 +654,7 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
           win={win}
           open={!!win.horizonDrawerOpen && !wm.missionControlOpen && !moving}
         />
-        {!pose.docked && !wm.missionControlOpen && (
+        {!pose.docked && !wm.missionControlOpen && !win.maximized && (
           <button
             className="horizon-drawer-tab"
             data-drawer-toggle
@@ -834,6 +837,13 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
                 <ArrowDownRight size={15} /> Aile droite
               </button>
               <hr />
+              <button
+                role="menuitem"
+                onClick={() => command(() => wmStore.toggleMaximize(win.id))}
+              >
+                {win.maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                {win.maximized ? "Restaurer la fenêtre" : "Plein écran"}
+              </button>
               <button
                 role="menuitem"
                 onClick={() =>

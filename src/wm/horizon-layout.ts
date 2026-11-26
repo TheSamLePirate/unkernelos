@@ -127,6 +127,20 @@ export function horizonPose(
   workspace: WorkspaceId,
   flat = false,
 ): HorizonPose {
+  // Fullscreen belongs to the viewport, independently of the central layout,
+  // remembered depth, or an open drawer. Geometry stays untouched for restore.
+  if (win.maximized)
+    return {
+      x: 0,
+      y: 0,
+      width,
+      height,
+      scale: 1,
+      angle: 0,
+      z: 20 + win.zIndex,
+      hidden: win.minimized || win.workspace !== workspace,
+      docked: false,
+    };
   const mobile = width < 760,
     top = mobile ? 78 : 100,
     bottom = mobile ? 90 : 110;

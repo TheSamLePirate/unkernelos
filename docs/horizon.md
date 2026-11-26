@@ -10,6 +10,7 @@ Horizon compose les applications réelles du bureau dans un plan de travail cent
 - Échap, annulation du pointeur ou perte de fenêtre annulent le geste. Le mode à plat conserve les tailles progressives, en supprimant la rotation.
 - Rappeler avec le titre d’une carte, le dock, Exposé ou le menu de fenêtre. Les boutons du chrome offrent aussi un placement sans drag.
 - Choisir une, deux ou trois fenêtres centrales dans la barre d’espace. Les huit bords/coins permettent le resize ; le menu offre une taille numérique.
+- Le bouton vert **Plein écran**, le double-clic sur le titre ou le menu de fenêtre couvrent toute la largeur et toute la hauteur du navigateur, au-dessus des barres et du dock. **Restaurer la fenêtre** retrouve la taille et la disposition précédentes, sans recréer l’app. Le tiroir coulisse alors à l’intérieur de l’écran. Exposé reste accessible par F3. Les agents utilisent `wm.snap` avec `zone: "maximize"`, puis `zone: "none"` pour restaurer.
 - F3 ouvre Exposé ; F4 le lanceur. Les boutons restent disponibles lorsque le système ou le navigateur réserve une touche.
 - Ctrl/⌘ + Alt + flèche gauche/droite/haut place la fenêtre active dans une aile ou au centre ; Ctrl/⌘ + Alt + Z annule le placement et Shift permet de rétablir.
 - Les raccourcis de l’app, la saisie et la composition IME ont priorité sur les raccourcis généraux non explicites. Les raccourcis ne constituent pas un keymap personnalisable dans cette version.
@@ -93,6 +94,8 @@ bun run dev
 # ouvrir http://localhost:3080/?app=notes et laisser Linux démarrer.
 bun run test:horizon-browser
 ```
+
+`PORT=3081 bun run dev`, puis `bun run test:fullscreen-browser`, vérifie le plein écran dans un Chromium isolé : bord à bord, tiroir interne, resize mobile, restauration, Exposé et shells classiques 2D/3D. Les artefacts sont dans `.cache/fullscreen-qa/`.
 
 Les captures et le rapport sont générés dans `.cache/horizon-qa/`. Les tests vérifient les vraies fenêtres, les gestes via le pointeur, la sélection, les tiroirs, la persistance, les fichiers Linux et les permissions. Les gestes tactiles sur matériel réel, les lecteurs d’écran et toutes les variantes de pilotes Wayland/GPU nécessitent une validation dédiée ; le profil émulé ne certifie pas ces appareils.
 

@@ -2313,6 +2313,36 @@
 [data-horizon-motion="reduced"] .horizon-window-drawer {
   transition: none !important;
 }
+
+/* Fullscreen keeps the live app mounted and puts its own drawer inside the
+   viewport instead of shrinking the entire window to make room for it. */
+.horizon-window[data-maximized="true"],
+.horizon-window[data-maximized="true"] > .horizon-windowbody,
+.horizon-window[data-maximized="true"] > .horizon-windowbar {
+  border-radius: 0;
+}
+.horizon-window[data-maximized="true"] {
+  border: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+.horizon-window[data-maximized="true"] > .horizon-windowbar {
+  cursor: default;
+  height: calc(42px + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+}
+.horizon-window[data-maximized="true"] > .horizon-window-drawer.horizon-panel {
+  left: auto;
+  right: 0;
+  top: calc(42px + env(safe-area-inset-top));
+  bottom: 0;
+  width: min(340px, 100%);
+  border-radius: 0;
+  transform: translateX(100%);
+}
+.horizon-window[data-maximized="true"] > .horizon-window-drawer[data-open="true"] {
+  transform: translateX(0);
+}
 /* Retain the captured dock button during drag; opacity preserves pointer capture. */
 .horizon-window[data-gesture] > .horizon-dock-face {
   opacity: 0;

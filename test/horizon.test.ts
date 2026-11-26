@@ -30,6 +30,20 @@ function window(
   };
 }
 describe("Horizon layouts", () => {
+  test("fullscreen fills every viewport regardless of layout, depth or drawer", () => {
+    for (const [width, height] of [[1512, 982], [390, 844], [1920, 1080], [844, 390]]) {
+      const a = {
+        ...window("full", "right"),
+        maximized: true,
+        horizonDrawerOpen: true,
+        horizonSpatial: { depth: 1, y: 0.8, anchor: 0.5 },
+      };
+      const pose = horizonPose(a, [a, window("b"), window("c")], width!, height!, 1);
+      expect(pose).toMatchObject({ x: 0, y: 0, width, height, scale: 1, angle: 0, docked: false, hidden: false });
+      expect(horizonPose({ ...a, minimized: true }, [a], width!, height!, 1).hidden).toBe(true);
+      expect(horizonPose(a, [a], width!, height!, 2).hidden).toBe(true);
+    }
+  });
   test("opening and recalling preserves existing session objects and enforces central capacity", () => {
     const a = window("a"),
       b = window("b", "center", 11),

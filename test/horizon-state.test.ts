@@ -8,6 +8,36 @@ afterEach(() => {
   wmStore.setHorizonLayout("focus");
 });
 describe("Horizon window state", () => {
+  test("fullscreen preserves session, geometry, drawer and snapped layout on restore", () => {
+    const id = wmStore.openApp("notes");
+    wmStore.openApp("terminal");
+    wmStore.snapWindow(id, "left");
+    wmStore.toggleHorizonDrawer(id);
+    const before = wmStore.getSnapshot().windows.find((w) => w.id === id)!;
+    wmStore.snapWindow(id, "maximize");
+    wmStore.snapWindow(id, "maximize"); // Agent calls are idempotent.
+    const full = wmStore.getSnapshot().windows.find((w) => w.id === id)!;
+    expect(full.maximized).toBe(true);
+    expect(full.sessionId).toBe(before.sessionId);
+    expect(full.horizonDrawerOpen).toBe(true);
+    wmStore.toggleMaximize(id);
+    const restored = wmStore.getSnapshot().windows.find((w) => w.id === id)!;
+    for (const key of ["x", "y", "width", "height", "snap", "sessionId", "horizonOffset", "horizonDrawerOpen"] as const)
+      expect(restored[key]).toEqual(before[key]);
+    expect(restored.maximized).toBe(false);
+    expect(wmStore.getSnapshot().horizonLayout).toBe("split");
+  });
+  test("agent fullscreen recalls a docked window and can restore it", () => {
+    const id = wmStore.openApp("notes");
+    wmStore.placeHorizonWindow(id, "right", undefined, { depth: 1, y: 0.5, anchor: 0.5 });
+    wmStore.snapWindow(id, "maximize");
+    expect(wmStore.getSnapshot().windows.find((w) => w.id === id)).toMatchObject({ maximized: true, placement: "center", minimized: false });
+    wmStore.minimizeWindow(id);
+    wmStore.snapWindow(id, "maximize");
+    expect(wmStore.getSnapshot().windows.find((w) => w.id === id)).toMatchObject({ maximized: true, minimized: false });
+    wmStore.snapWindow(id, "none");
+    expect(wmStore.getSnapshot().windows.find((w) => w.id === id)?.maximized).toBe(false);
+  });
   test("parking, recalling and undo never replace a session identity", () => {
     const a = wmStore.openApp("notes", undefined, true),
       b = wmStore.openApp("terminal", undefined, true);

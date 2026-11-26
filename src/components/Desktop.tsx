@@ -801,6 +801,14 @@ export const Desktop: React.FC = () => {
 
   const spatialChromeActive = spatialEnabled && mods.desktop3d.spatialChrome3d;
   const activeWin = wm.windows.find((w) => w.id === wm.activeWindowId);
+  const fullscreenWindowId =
+    activeWin?.maximized &&
+    !activeWin.minimized &&
+    activeWin.workspace === wm.activeWorkspace &&
+    !wm.missionControlOpen &&
+    !wm.locked
+      ? activeWin.id
+      : null;
 
   return (
     <div
@@ -882,7 +890,9 @@ export const Desktop: React.FC = () => {
       {/* Floating Glass Window Layer (in 3D mode, windows live inside the exact Three.js CSS3D camera stage with ZERO unmounting!) */}
       <main
         style={
-          !spatialEnabled && mods.shell.compizCube
+          fullscreenWindowId
+            ? { zIndex: 70 }
+            : !spatialEnabled && mods.shell.compizCube
             ? {
                 perspective: "1600px",
                 transformStyle: "preserve-3d",
@@ -919,11 +929,12 @@ export const Desktop: React.FC = () => {
         >
           {wm.windows.map((win) => {
             const visible =
-              spatialEnabled &&
+              (!fullscreenWindowId || fullscreenWindowId === win.id) &&
+              (spatialEnabled &&
               (mods.desktop3d.layout === "compiz-cube" ||
                 mods.desktop3d.layout === "gallery-ring")
                 ? true
-                : win.workspace === wm.activeWorkspace;
+                : win.workspace === wm.activeWorkspace);
             const focused =
               win.workspace === wm.activeWorkspace &&
               win.id === wm.activeWindowId &&

@@ -403,7 +403,7 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
   {
     method: "wm.snap",
     category: "wm",
-    summary: "Snap a window to left, right, top-left, top-right, bottom-left, bottom-right, maximize, or none.",
+    summary: "Snap a window to left, right or a corner. 'maximize' fills the entire browser viewport; 'none' restores a fullscreen window's previous layout.",
     paramsSchema: {
       type: "object",
       required: ["windowId", "zone"],

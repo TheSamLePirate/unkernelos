@@ -5,7 +5,7 @@ const TOP_BAR_H = 38;
 const DOCK_H = 82;
 
 export function getSnapZoneStyle(zone: SnapZone): React.CSSProperties | null {
-  // Use 100dvh + safe-area-inset so iPad Safari & desktop maximize/snap never clip under the Dock
+  // Tiled zones reserve desktop chrome; fullscreen covers the entire viewport.
   const topExpr = `calc(${TOP_BAR_H + 6}px + env(safe-area-inset-top))`;
   const usableH = `calc(100dvh - ${TOP_BAR_H + DOCK_H + 14}px - env(safe-area-inset-top) - env(safe-area-inset-bottom))`;
   const halfH = `calc((100dvh - ${TOP_BAR_H + DOCK_H + 22}px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2)`;
@@ -13,7 +13,7 @@ export function getSnapZoneStyle(zone: SnapZone): React.CSSProperties | null {
 
   switch (zone) {
     case "maximize":
-      return { left: 8, top: topExpr, width: "calc(100vw - 16px)", height: usableH };
+      return { left: 0, top: 0, width: "100vw", height: "100dvh" };
     case "left":
       return { left: 8, top: topExpr, width: "calc(50vw - 12px)", height: usableH };
     case "right":

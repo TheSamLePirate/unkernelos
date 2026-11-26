@@ -518,6 +518,7 @@ export interface WindowInstance {
   readonly zIndex: number;
   readonly minimized: boolean;
   readonly maximized: boolean;
+  readonly restoreSnap?: SnapZone;
   readonly pinned?: boolean;
   readonly shaded?: boolean;
   readonly opacity?: number; // 0.35..1
@@ -1389,12 +1390,15 @@ class WindowManagerStore {
     }));
   }
 
-  public toggleMaximize(id: string): void {
-    if (
-      this.state.horizonEnabled &&
-      this.state.windows.find((w) => w.id === id)?.placement !== "center"
-    )
-      this.focusWindow(id);
+  public toggleMaximize(id: string, maximized?: boolean): void {
+    const target = this.state.windows.find((w) => w.id === id);
+    if (!target) return;
+    const next = maximized ?? !target.maximized;
+    if (next === target.maximized) {
+      if (next) this.focusWindow(id);
+      return;
+    }
+    this.focusWindow(id);
     uiSounds.playSnap();
     const zIndex = ++this.zCounter;
     this.setState((s) => ({
@@ -1402,7 +1406,15 @@ class WindowManagerStore {
       activeWindowId: id,
       windows: s.windows.map((w) =>
         w.id === id
-          ? { ...w, maximized: !w.maximized, snap: "none", zIndex }
+          ? {
+              ...w,
+              maximized: next,
+              minimized: false,
+              shaded: false,
+              snap: next ? "none" : (w.restoreSnap ?? "none"),
+              restoreSnap: next ? w.snap : undefined,
+              zIndex,
+            }
           : w,
       ),
     }));
@@ -1457,7 +1469,15 @@ class WindowManagerStore {
   }
 
   public snapWindow(id: string, snap: SnapZone): void {
-    if (this.state.horizonEnabled && snap !== "maximize" && snap !== "none") {
+    if (
+      snap === "maximize" ||
+      (snap === "none" && this.state.windows.find((w) => w.id === id)?.maximized)
+    ) {
+      this.toggleMaximize(id, snap === "maximize");
+      this.setDragSnapPreview(null);
+      return;
+    }
+    if (this.state.horizonEnabled && snap !== "none") {
       this.setHorizonLayout("split");
       this.focusWindow(id);
       const order = snap.includes("left") ? 0 : 1;
@@ -1475,14 +1495,13 @@ class WindowManagerStore {
     }
     uiSounds.playSnap();
     const zIndex = ++this.zCounter;
-    const isMax = snap === "maximize";
     this.setState((s) => ({
       ...s,
       activeWindowId: id,
       dragSnapPreview: null,
       windows: s.windows.map((w) =>
         w.id === id
-          ? { ...w, snap: isMax ? "none" : snap, maximized: isMax, zIndex }
+          ? { ...w, snap, maximized: false, restoreSnap: undefined, zIndex }
           : w,
       ),
     }));

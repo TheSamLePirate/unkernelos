@@ -1662,9 +1662,16 @@ export const ThreeDesktop3d: React.FC = () => {
 
           // Exact CSS3D Camera Stage Transform
           const stage = spatial3dBridge.cameraStageEl;
+          const fullscreen = curWm.windows.find((win) =>
+            win.id === curWm.activeWindowId &&
+            win.maximized && !win.minimized &&
+            win.workspace === curWm.activeWorkspace &&
+            !curWm.missionControlOpen && !curWm.locked
+          );
           if (stage) {
             const fovPx = camera.projectionMatrix.elements[5]! * (h / 2);
-            stage.style.transform =
+            stage.style.transformStyle = fullscreen ? "flat" : "preserve-3d";
+            stage.style.transform = fullscreen ? "none" :
               `perspective(${fovPx.toFixed(2)}px) translateZ(${fovPx.toFixed(2)}px) ` +
               `${toCameraCSSMatrix(camera.matrixWorldInverse)} ` +
               `translate(${(w / 2).toFixed(2)}px, ${(h / 2).toFixed(2)}px)`;
@@ -1676,6 +1683,17 @@ export const ThreeDesktop3d: React.FC = () => {
             spatial3dBridge.poses.set(p.id, p);
             const el = spatial3dBridge.getWindowEl(p.id);
             if (!el) continue;
+            if (fullscreen) {
+              el.style.display = p.id === fullscreen.id ? "flex" : "none";
+              if (p.id === fullscreen.id) {
+                el.style.left = "0px";
+                el.style.top = "0px";
+                el.style.width = `${w}px`;
+                el.style.height = `${window.visualViewport?.height ?? h}px`;
+                el.style.transform = "none";
+              }
+              continue;
+            }
             if (!p.visible) {
               el.style.display = "none";
               continue;

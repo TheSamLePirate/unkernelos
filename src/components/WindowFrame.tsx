@@ -73,7 +73,9 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
   const mods = useMods();
   const dec = mods.decorator;
   const fx = mods.fx;
-  const { isMobile, isTouch, keyboardInset } = useViewport();
+  const {
+    isMobile, isTouch, keyboardInset, width: viewportWidth, visualHeight,
+  } = useViewport();
   const is3dSpace = mods.desktop3d.enabled && !isMobile;
   const wobblyEnabled =
     (mods.shell.compizWobbly || fx.wobblyDrag) && !is3dSpace;
@@ -151,6 +153,7 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
   // Unified Pointer Events for Mouse, iPad Touch & Apple Pencil dragging (with RAF throttle & magnetic snap!)
   const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button")) return;
+    if (win.maximized) return;
 
     // On Mobile: track horizontal swipe on titlebar to cycle open windows smoothly!
     if (isMobile) {
@@ -413,7 +416,21 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
             ? "fx-open-fade"
             : "fx-open-spring";
 
-  const style: React.CSSProperties = is3dSpace
+  const style: React.CSSProperties = win.maximized
+    ? {
+        position: is3dSpace ? "absolute" : "fixed",
+        left: 0,
+        top: 0,
+        width: viewportWidth,
+        height: visualHeight,
+        borderRadius: 0,
+        borderWidth: 0,
+        boxShadow: "none",
+        transform: "none",
+        zIndex: win.pinned ? win.zIndex + 5000 : win.zIndex,
+        display: !visible || win.minimized ? "none" : "flex",
+      }
+    : is3dSpace
     ? {
         position: "absolute",
         left: 0,
@@ -797,6 +814,7 @@ const LegacyWindowFrame: React.FC<WindowFrameProps> = ({
       ref={frameElRef}
       style={style}
       data-window-surface="true"
+      data-maximized={win.maximized}
       onPointerDown={() => {
         if (win.workspace !== wm.activeWorkspace) {
           wmStore.switchWorkspace(win.workspace);

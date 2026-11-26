@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test test",
     "test:horizon-browser": "bun scripts/test-horizon-browser.mjs",
+    "test:fullscreen-browser": "bun scripts/test-fullscreen-browser.mjs",
     "test:sonora-browser": "bun scripts/test-sonora-browser.mjs",
     "companion:build": "scripts/build-companion.sh",
     "companion:dev": "cargo run --manifest-path companion/Cargo.toml",
