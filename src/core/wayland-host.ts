@@ -1,3 +1,4 @@
+import { screenToElement } from "./spatial-pointer.ts";
 import { useSyncExternalStore } from "react";
 import type { KernelHandle, ShmFile } from "unkernel";
 import {
@@ -32,12 +33,14 @@ export interface WaylandDesktopCallbacks {
  */
 class WaylandDesktopManager {
   private wl: Wland | null = null;
+  private projectedInputCleanup: (() => void) | null = null;
   private listenerClose: (() => void) | null = null;
   private viewWindows = new Map<string, ViewWindow>();
-  private snapshot: { ready: boolean; windows: readonly WaylandWindowInfo[] } = {
-    ready: false,
-    windows: [],
-  };
+  private snapshot: { ready: boolean; windows: readonly WaylandWindowInfo[] } =
+    {
+      ready: false,
+      windows: [],
+    };
   private listeners = new Set<() => void>();
   private callbacks: WaylandDesktopCallbacks | null = null;
 
@@ -49,7 +52,9 @@ class WaylandDesktopManager {
   public getSnapshot = () => this.snapshot;
 
   private emit(): void {
-    const windows: WaylandWindowInfo[] = Array.from(this.viewWindows.values()).map((w) => ({
+    const windows: WaylandWindowInfo[] = Array.from(
+      this.viewWindows.values(),
+    ).map((w) => ({
       key: w.key,
       conn: w.conn,
       surface: w.surface,
@@ -68,7 +73,7 @@ class WaylandDesktopManager {
   public async attach(
     vm: KernelHandle,
     container: HTMLElement,
-    callbacks: WaylandDesktopCallbacks
+    callbacks: WaylandDesktopCallbacks,
   ): Promise<boolean> {
     this.dispose();
     if (!vm.vsock) return false;
@@ -81,7 +86,8 @@ class WaylandDesktopManager {
     const buffers: HandleSource<ShmFile> | undefined = shm
       ? {
           open: async (h: BufferHandle) => {
-            if (h.kind !== "kwshm") throw new Error(`Unsupported buffer kind ${h.kind}`);
+            if (h.kind !== "kwshm")
+              throw new Error(`Unsupported buffer kind ${h.kind}`);
             return shm.openId(h.id);
           },
           read: async (file: ShmFile, offset: number, dst: Uint8Array) => {
@@ -93,7 +99,7 @@ class WaylandDesktopManager {
               reads.map(async (r) => {
                 const bytes = await file.read(r.offset, r.dst.length);
                 r.dst.set(bytes);
-              })
+              }),
             );
           },
           view: shm.inPlace
@@ -119,9 +125,13 @@ class WaylandDesktopManager {
 
     const gpu = vm.gl?.gpu
       ? {
-          resolve: (ref: { resource: number }) => vm.gl!.gpu!.image(ref.resource),
+          resolve: (ref: { resource: number }) =>
+            vm.gl!.gpu!.image(ref.resource),
           release: (img: CanvasImageSource) => {
-            if (typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap) {
+            if (
+              typeof ImageBitmap !== "undefined" &&
+              img instanceof ImageBitmap
+            ) {
               img.close();
             }
           },
@@ -176,13 +186,96 @@ class WaylandDesktopManager {
           this.emit();
         },
       });
+      this.attachProjectedInput();
       this.emit();
       return true;
     } catch (err) {
-      console.warn("[unkernelOS] Desktop wland Wayland compositor init skipped:", err);
+      console.warn(
+        "[unkernelOS] Desktop wland Wayland compositor init skipped:",
+        err,
+      );
       this.dispose();
       return false;
     }
+  }
+
+  /** Correct the public input engine's surface coordinates for projected DOM planes.
+   * wland currently derives local coordinates from an axis-aligned bounding rect.
+   * Its routing, capture, clipboard, IME and popup lifecycle remain owned by wland.
+   */
+  private attachProjectedInput(): void {
+    const wl = this.wl;
+    if (!wl) return;
+    let last: { x: number; y: number; target: HTMLElement } | null = null;
+    const entered = new Map<number, number>(),
+      touchSurfaces = new Map<string, number>();
+    const track = (e: PointerEvent) => {
+      if (e.target instanceof HTMLElement)
+        last = { x: e.clientX, y: e.clientY, target: e.target };
+    };
+    window.addEventListener("pointermove", track, true);
+    window.addEventListener("pointerdown", track, true);
+    const local = (
+      conn: number,
+      surface: number,
+      fallback: { x: number; y: number },
+    ) => {
+      const el =
+        wl.view.hitTarget(conn, surface) ?? wl.view.canvas(conn, surface);
+      if (
+        !last ||
+        !el?.closest("[data-horizon-window]") ||
+        document.pointerLockElement
+      )
+        return fallback;
+      return screenToElement(el, last.x, last.y);
+    };
+    const enter = wl.engine.pointerEnter.bind(wl.engine),
+      motion = wl.engine.pointerMotion.bind(wl.engine),
+      down = wl.engine.touchDown.bind(wl.engine),
+      touch = wl.engine.touchMotion.bind(wl.engine),
+      up = wl.engine.touchUp.bind(wl.engine);
+    wl.engine.pointerEnter = (conn, surface, x, y) => {
+      entered.set(conn, surface);
+      const p = local(conn, surface, { x, y });
+      enter(conn, surface, p.x, p.y);
+    };
+    wl.engine.pointerMotion = (conn, time, x, y, relative) => {
+      const surface = entered.get(conn);
+      const p =
+        surface === undefined ? { x, y } : local(conn, surface, { x, y });
+      motion(conn, time, p.x, p.y, relative);
+    };
+    wl.engine.touchDown = (conn, time, surface, id, x, y) => {
+      touchSurfaces.set(conn + ":" + id, surface);
+      const p = local(conn, surface, { x, y });
+      down(conn, time, surface, id, p.x, p.y);
+    };
+    wl.engine.touchMotion = (conn, time, id, x, y) => {
+      const surface = touchSurfaces.get(conn + ":" + id);
+      const p =
+        surface === undefined ? { x, y } : local(conn, surface, { x, y });
+      touch(conn, time, id, p.x, p.y);
+    };
+    wl.engine.touchUp = (conn, time, id) => {
+      touchSurfaces.delete(conn + ":" + id);
+      up(conn, time, id);
+    };
+    const at = wl.view.surfaceAt.bind(wl.view);
+    wl.view.surfaceAt = (x, y) => {
+      const result = at(x, y);
+      if (!result) return null;
+      const el =
+        wl.view.hitTarget(result.conn, result.surface) ??
+        wl.view.canvas(result.conn, result.surface);
+      if (!el?.closest("[data-horizon-window]")) return result;
+      const p = screenToElement(el, x, y);
+      return { ...result, x: p.x, y: p.y };
+    };
+    this.projectedInputCleanup = () => {
+      window.removeEventListener("pointermove", track, true);
+      window.removeEventListener("pointerdown", track, true);
+    };
   }
 
   public focusWindow(key: string): void {
@@ -219,7 +312,12 @@ class WaylandDesktopManager {
     const win = this.viewWindows.get(key);
     if (!win || !this.wl) return;
     try {
-      this.wl.engine.setWindowPosition(win.conn, win.surface, Math.round(x), Math.round(y));
+      this.wl.engine.setWindowPosition(
+        win.conn,
+        win.surface,
+        Math.round(x),
+        Math.round(y),
+      );
     } catch {
       // ignore
     }
@@ -246,6 +344,8 @@ class WaylandDesktopManager {
   }
 
   public dispose(): void {
+    this.projectedInputCleanup?.();
+    this.projectedInputCleanup = null;
     for (const w of this.viewWindows.values()) {
       try {
         w.element.remove();
@@ -274,5 +374,8 @@ class WaylandDesktopManager {
 export const waylandDesktopManager = new WaylandDesktopManager();
 
 export function useWaylandDesktop() {
-  return useSyncExternalStore(waylandDesktopManager.subscribe, waylandDesktopManager.getSnapshot);
+  return useSyncExternalStore(
+    waylandDesktopManager.subscribe,
+    waylandDesktopManager.getSnapshot,
+  );
 }

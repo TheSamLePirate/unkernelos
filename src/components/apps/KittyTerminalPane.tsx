@@ -1,12 +1,33 @@
+import { screenToElement } from "../../core/spatial-pointer.ts";
+import {
+  WindowSessionContext,
+  useAppSurface,
+  useSurfaceRevision,
+} from "../../core/app-surface-registry.tsx";
+import { contextStore } from "../../core/context-store.ts";
+import { createPortal } from "react-dom";
 import { Terminal as HeadlessTerminal } from "@xterm/headless";
 import { Effect } from "effect";
-import { ClipboardPaste, ExternalLink, Keyboard, Sparkles, X } from "lucide-react";
+import {
+  ClipboardPaste,
+  ExternalLink,
+  Keyboard,
+  Sparkles,
+  X,
+} from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import type { Pty } from "unkernel";
-import { appRuntime, GithubAuthService, VmService } from "../../core/runtime.ts";
+import {
+  appRuntime,
+  GithubAuthService,
+  VmService,
+} from "../../core/runtime.ts";
 import type { KittyThemeId } from "../../core/schema.ts";
 import { useViewport } from "../../core/use-viewport.ts";
-import { KITTY_THEMES, KittyWebGpuRenderer } from "../../gpu/webgpu-terminal.ts";
+import {
+  KITTY_THEMES,
+  KittyWebGpuRenderer,
+} from "../../gpu/webgpu-terminal.ts";
 import { wmStore } from "../../wm/wm-store.ts";
 
 export interface KittyTerminalHandle {
@@ -19,6 +40,8 @@ export interface KittyTerminalHandle {
 }
 
 interface KittyTerminalPaneProps {
+  surfaceActive?: boolean;
+  surfaceId?: string;
   themeId: KittyThemeId;
   fontSize: number;
   preferWebGpu: boolean;
@@ -31,7 +54,10 @@ interface KittyTerminalPaneProps {
   onTitleChange?: (title: string) => void;
 }
 
-function keyEventToAnsi(e: KeyboardEvent, appCursorMode: boolean): string | null {
+function keyEventToAnsi(
+  e: KeyboardEvent,
+  appCursorMode: boolean,
+): string | null {
   if (e.metaKey) return null; // keep macOS Cmd+C / Cmd+V / Cmd+K for browser/OS
 
   // On Windows/Linux, AltGr sends ctrlKey && altKey with a printable character (e.g. @, #, {, }, [, ], \, |, ~, €)
@@ -44,7 +70,8 @@ function keyEventToAnsi(e: KeyboardEvent, appCursorMode: boolean): string | null
   if (e.altKey && !e.ctrlKey && e.key.length === 1) {
     const isAsciiLetterOrDigit = /^[a-zA-Z0-9]$/.test(e.key);
     const matchesPhysicalKey =
-      (e.code.startsWith("Key") && e.code.slice(3).toLowerCase() === e.key.toLowerCase()) ||
+      (e.code.startsWith("Key") &&
+        e.code.slice(3).toLowerCase() === e.key.toLowerCase()) ||
       (e.code.startsWith("Digit") && e.code.slice(5) === e.key);
     // If the OS composed a different symbol (AZERTY/macOS {, }, |, ~, \, [, ], €, etc.), send that symbol verbatim!
     if (!isAsciiLetterOrDigit && !matchesPhysicalKey) {
@@ -53,7 +80,8 @@ function keyEventToAnsi(e: KeyboardEvent, appCursorMode: boolean): string | null
     return `\x1b${e.key}`;
   }
 
-  const mod = 1 + (e.shiftKey ? 1 : 0) + (e.altKey ? 2 : 0) + (e.ctrlKey ? 4 : 0);
+  const mod =
+    1 + (e.shiftKey ? 1 : 0) + (e.altKey ? 2 : 0) + (e.ctrlKey ? 4 : 0);
 
   if (e.ctrlKey && !e.altKey) {
     const k = e.key.toLowerCase();
@@ -79,32 +107,58 @@ function keyEventToAnsi(e: KeyboardEvent, appCursorMode: boolean): string | null
     mod > 1 ? `\x1b[${num};${mod}~` : `\x1b[${num}~`;
 
   switch (e.key) {
-    case "Enter": return e.altKey ? "\x1b\r" : "\r";
-    case "Backspace": return e.altKey ? "\x1b\x7f" : "\x7f";
-    case "Tab": return e.shiftKey ? "\x1b[Z" : "\t";
-    case "Escape": return "\x1b";
-    case "ArrowUp": return csiMod("A", appCursorMode);
-    case "ArrowDown": return csiMod("B", appCursorMode);
-    case "ArrowRight": return csiMod("C", appCursorMode);
-    case "ArrowLeft": return csiMod("D", appCursorMode);
-    case "Home": return csiMod("H", appCursorMode);
-    case "End": return csiMod("F", appCursorMode);
-    case "Insert": return tildeMod(2);
-    case "Delete": return tildeMod(3);
-    case "PageUp": return tildeMod(5);
-    case "PageDown": return tildeMod(6);
-    case "F1": return csiMod("P", true);
-    case "F2": return csiMod("Q", true);
-    case "F3": return csiMod("R", true);
-    case "F4": return csiMod("S", true);
-    case "F5": return tildeMod(15);
-    case "F6": return tildeMod(17);
-    case "F7": return tildeMod(18);
-    case "F8": return tildeMod(19);
-    case "F9": return tildeMod(20);
-    case "F10": return tildeMod(21);
-    case "F11": return tildeMod(23);
-    case "F12": return tildeMod(24);
+    case "Enter":
+      return e.altKey ? "\x1b\r" : "\r";
+    case "Backspace":
+      return e.altKey ? "\x1b\x7f" : "\x7f";
+    case "Tab":
+      return e.shiftKey ? "\x1b[Z" : "\t";
+    case "Escape":
+      return "\x1b";
+    case "ArrowUp":
+      return csiMod("A", appCursorMode);
+    case "ArrowDown":
+      return csiMod("B", appCursorMode);
+    case "ArrowRight":
+      return csiMod("C", appCursorMode);
+    case "ArrowLeft":
+      return csiMod("D", appCursorMode);
+    case "Home":
+      return csiMod("H", appCursorMode);
+    case "End":
+      return csiMod("F", appCursorMode);
+    case "Insert":
+      return tildeMod(2);
+    case "Delete":
+      return tildeMod(3);
+    case "PageUp":
+      return tildeMod(5);
+    case "PageDown":
+      return tildeMod(6);
+    case "F1":
+      return csiMod("P", true);
+    case "F2":
+      return csiMod("Q", true);
+    case "F3":
+      return csiMod("R", true);
+    case "F4":
+      return csiMod("S", true);
+    case "F5":
+      return tildeMod(15);
+    case "F6":
+      return tildeMod(17);
+    case "F7":
+      return tildeMod(18);
+    case "F8":
+      return tildeMod(19);
+    case "F9":
+      return tildeMod(20);
+    case "F10":
+      return tildeMod(21);
+    case "F11":
+      return tildeMod(23);
+    case "F12":
+      return tildeMod(24);
   }
 
   if (e.key.length === 1) {
@@ -119,18 +173,23 @@ function encodeSgrMouse(
   col: number,
   row: number,
   pressed: boolean,
-  e: { shiftKey: boolean; altKey: boolean; ctrlKey: boolean }
+  e: { shiftKey: boolean; altKey: boolean; ctrlKey: boolean },
 ): string {
   const mods = (e.shiftKey ? 4 : 0) + (e.altKey ? 8 : 0) + (e.ctrlKey ? 16 : 0);
   return `\x1b[<${btnCode | mods};${col + 1};${row + 1}${pressed ? "M" : "m"}`;
 }
 
-const LOCAL_URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})(\/[^\s"'<>)]*)?/i;
-const EXTERNAL_AUTH_URL_RE = /https:\/\/(?:github\.com\/login\/device|claude\.ai\/[^\s"'<>)]+|console\.anthropic\.com\/[^\s"'<>)]+|accounts\.google\.com\/[^\s"'<>)]+|auth\.openai\.com\/[^\s"'<>)]+)[^\s"'<>)]*/i;
+const LOCAL_URL_RE =
+  /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})(\/[^\s"'<>)]*)?/i;
+const EXTERNAL_AUTH_URL_RE =
+  /https:\/\/(?:github\.com\/login\/device|claude\.ai\/[^\s"'<>)]+|console\.anthropic\.com\/[^\s"'<>)]+|accounts\.google\.com\/[^\s"'<>)]+|auth\.openai\.com\/[^\s"'<>)]+)[^\s"'<>)]*/i;
 const DEVICE_CODE_RE = /\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/;
-const ANSI_STRIP_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
+const ANSI_STRIP_RE =
+  /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
 
 export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
+  surfaceActive = true,
+  surfaceId = "pane",
   themeId,
   fontSize,
   preferWebGpu,
@@ -150,17 +209,100 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   const ptyRef = useRef<Pty | null>(null);
 
   const [backend, setBackend] = useState<"webgpu" | "canvas2d">("canvas2d");
-  const [status, setStatus] = useState<"connecting" | "connected" | "exited">("connecting");
-  const [detectedUrl, setDetectedUrl] = useState<{ port: number; path: string } | null>(null);
-  const [externalLink, setExternalLink] = useState<{ url: string; code?: string } | null>(null);
+  const [status, setStatus] = useState<"connecting" | "connected" | "exited">(
+    "connecting",
+  );
+  const session = React.useContext(WindowSessionContext);
+  const [touchSelecting, setTouchSelecting] = useState(false);
+  const [terminalMenu, setTerminalMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [outputTail, setOutputTail] = useState("");
+  const revision =
+    surfaceId + ":" + useSurfaceRevision(status, cwd, outputTail);
+  useAppSurface(
+    {
+      revision,
+      status:
+        status === "connected"
+          ? "live"
+          : status === "connecting"
+            ? "loading"
+            : "disconnected",
+      state: {
+        cwd,
+        status,
+        outputTail,
+        contentAccess: "terminal buffer via selection",
+      },
+      actions: {
+        clear: {
+          label: "Effacer l’affichage du terminal",
+          run: () => {
+            termRef.current?.clear();
+            rendererRef.current?.markDirty();
+            return { cleared: true };
+          },
+        },
+      },
+    },
+    session?.appId === "terminal" && surfaceActive,
+  );
+  const copySelection = async () => {
+    const text = extractSelectedText();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      if (session)
+        contextStore.add({
+          contextId:
+            wmStore.getSnapshot().windows.find((w) => w.id === session.id)
+              ?.contextId ?? session.id,
+          kind: "text",
+          text,
+          source: {
+            windowId: session.id,
+            appId: session.appId,
+            title: "Terminal",
+            confidence: "app",
+          },
+        });
+    } catch {
+      wmStore.pushToast(
+        "Copie refusée",
+        "Le navigateur a refusé l’accès au presse-papiers.",
+        "warn",
+      );
+    }
+  };
+
+  const [detectedUrl, setDetectedUrl] = useState<{
+    port: number;
+    path: string;
+  } | null>(null);
+  const [externalLink, setExternalLink] = useState<{
+    url: string;
+    code?: string;
+  } | null>(null);
   const [hasDomFocus, setHasDomFocus] = useState(false);
   const [ctrlArmed, setCtrlArmed] = useState(false);
   const { isMobile, isTouch } = useViewport();
   const showTouchBar = forceTouchBar || isMobile || isTouch;
   const recentDeviceCodeRef = useRef<string | null>(null);
   const recentTextRef = useRef<string>("");
+  useEffect(() => {
+    const timer = setInterval(
+      () => setOutputTail(recentTextRef.current.slice(-1000)),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, []);
   const touchScrollYRef = useRef<number | null>(null);
-  const searchStateRef = useRef<{ query: string; index: number }>({ query: "", index: -1 });
+  const searchStateRef = useRef<{ query: string; index: number }>({
+    query: "",
+    index: -1,
+  });
 
   const focusInput = () => {
     const el = inputRef.current;
@@ -192,7 +334,10 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     const term = termRef.current;
     if (!r || !container || !term) return;
     r.setFontSize(fontSize);
-    const { cols, rows } = r.computeGrid(container.clientWidth, container.clientHeight);
+    const { cols, rows } = r.computeGrid(
+      container.clientWidth,
+      container.clientHeight,
+    );
     term.resize(cols, rows);
     ptyRef.current?.resize(cols, rows);
     r.markDirty();
@@ -246,7 +391,7 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
               label: code ? `Copy ${code} & Open` : "Open Link",
               url,
               copyText: code,
-            }
+            },
           );
         }
       }
@@ -289,16 +434,21 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
           return { total: 0, current: 0 };
         }
         let nextIdx =
-          searchStateRef.current.query === q && searchStateRef.current.index >= 0
-            ? (searchStateRef.current.index + dir + matches.length) % matches.length
+          searchStateRef.current.query === q &&
+          searchStateRef.current.index >= 0
+            ? (searchStateRef.current.index + dir + matches.length) %
+              matches.length
             : dir < 0
-            ? matches.length - 1
-            : 0;
+              ? matches.length - 1
+              : 0;
         searchStateRef.current = { query: q, index: nextIdx };
         const m = matches[nextIdx]!;
         const targetTop = Math.max(0, m.absRow - Math.floor(term.rows / 2));
         term.scrollToLine(targetTop);
-        const viewRow = Math.max(0, Math.min(term.rows - 1, m.absRow - buf.viewportY));
+        const viewRow = Math.max(
+          0,
+          Math.min(term.rows - 1, m.absRow - buf.viewportY),
+        );
         renderer.selection = {
           startCol: m.col,
           startRow: viewRow,
@@ -334,7 +484,10 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
       }
       setBackend(used);
 
-      const { cols, rows } = renderer.computeGrid(container.clientWidth, container.clientHeight);
+      const { cols, rows } = renderer.computeGrid(
+        container.clientWidth,
+        container.clientHeight,
+      );
       renderer.resizeCanvas(container.clientWidth, container.clientHeight);
       term.resize(cols, rows);
       renderer.markDirty();
@@ -354,8 +507,8 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
                 BROWSER: "/tmp/unkernel-open",
               },
             });
-          })
-        )
+          }),
+        ),
       );
 
       if (disposed) {
@@ -365,7 +518,9 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
 
       if (spawnRes._tag === "Left") {
         setStatus("exited");
-        term.write(`\r\n\x1b[31m[unkernelOS] Waiting for Linux kernel to finish booting...\x1b[0m\r\n`);
+        term.write(
+          `\r\n\x1b[31m[unkernelOS] Waiting for Linux kernel to finish booting...\x1b[0m\r\n`,
+        );
         renderer.markDirty();
         return;
       }
@@ -391,7 +546,9 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
           if (value && value.byteLength > 0) {
             const text = decoder.decode(value, { stream: true });
             const cleanText = text.replace(ANSI_STRIP_RE, "");
-            recentTextRef.current = (recentTextRef.current + cleanText).slice(-512);
+            recentTextRef.current = (recentTextRef.current + cleanText).slice(
+              -512,
+            );
             const rolling = recentTextRef.current;
 
             const urlMatch = LOCAL_URL_RE.exec(cleanText);
@@ -409,16 +566,23 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
             if (extMatch) {
               const url = extMatch[0]!.replace(/[.,;:]+$/, "");
               setExternalLink((prev) =>
-                prev?.url === url && prev?.code === (recentDeviceCodeRef.current ?? undefined)
+                prev?.url === url &&
+                prev?.code === (recentDeviceCodeRef.current ?? undefined)
                   ? prev
-                  : { url, code: recentDeviceCodeRef.current ?? undefined }
+                  : { url, code: recentDeviceCodeRef.current ?? undefined },
               );
             }
-            if (/Authentication complete|Logged in as|Logged in to github\.com/i.test(rolling)) {
+            if (
+              /Authentication complete|Logged in as|Logged in to github\.com/i.test(
+                rolling,
+              )
+            ) {
               recentDeviceCodeRef.current = null;
               recentTextRef.current = "";
               setExternalLink(null);
-              appRuntime.runFork(Effect.flatMap(GithubAuthService, (g) => g.checkAuth()));
+              appRuntime.runFork(
+                Effect.flatMap(GithubAuthService, (g) => g.checkAuth()),
+              );
             }
             term.write(value, () => renderer.markDirty());
           }
@@ -429,7 +593,9 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
         reader.cancel().catch(() => {});
         if (!disposed) {
           setStatus("exited");
-          term.write("\r\n\x1b[90m[Process exited]\x1b[0m\r\n", () => renderer.markDirty());
+          term.write("\r\n\x1b[90m[Process exited]\x1b[0m\r\n", () =>
+            renderer.markDirty(),
+          );
         }
       }
     };
@@ -474,33 +640,53 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   const composingRef = useRef(false);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (composingRef.current || e.nativeEvent.isComposing || e.key === "Process" || e.key === "Dead") {
+    if (
+      composingRef.current ||
+      e.nativeEvent.isComposing ||
+      e.key === "Process" ||
+      e.key === "Dead"
+    ) {
       return;
     }
-    if ((e.metaKey || (e.ctrlKey && e.shiftKey)) && e.key.toLowerCase() === "c") {
+    if (
+      (e.metaKey || (e.ctrlKey && e.shiftKey)) &&
+      e.key.toLowerCase() === "c"
+    ) {
       const text = extractSelectedText();
       if (text) {
-        navigator.clipboard.writeText(text).catch(() => {});
+        void copySelection();
         e.preventDefault();
         return;
       }
     }
-    if ((e.metaKey || (e.ctrlKey && e.shiftKey)) && e.key.toLowerCase() === "v") {
-      navigator.clipboard.readText().then((t) => {
-        if (t) ptyRef.current?.write(t).catch(() => {});
-      }).catch(() => {});
+    if (
+      (e.metaKey || (e.ctrlKey && e.shiftKey)) &&
+      e.key.toLowerCase() === "v"
+    ) {
+      navigator.clipboard
+        .readText()
+        .then((t) => {
+          if (t) ptyRef.current?.write(t).catch(() => {});
+        })
+        .catch(() => {});
       e.preventDefault();
       return;
     }
 
-    const seq = keyEventToAnsi(e.nativeEvent, Boolean(termRef.current?.modes.applicationCursorKeysMode));
+    const seq = keyEventToAnsi(
+      e.nativeEvent,
+      Boolean(termRef.current?.modes.applicationCursorKeysMode),
+    );
     if (seq !== null) {
       e.preventDefault();
       e.stopPropagation();
       termRef.current?.scrollToBottom();
       if (ctrlArmed && seq.length === 1) {
         const ch = seq.toLowerCase();
-        const ctrlSeq = ch >= "a" && ch <= "z" ? String.fromCharCode(ch.charCodeAt(0) - 96) : seq;
+        const ctrlSeq =
+          ch >= "a" && ch <= "z"
+            ? String.fromCharCode(ch.charCodeAt(0) - 96)
+            : seq;
         setCtrlArmed(false);
         ptyRef.current?.write(ctrlSeq).catch(() => {});
       } else {
@@ -525,7 +711,10 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
       termRef.current?.scrollToBottom();
       if (ctrlArmed && val.length === 1) {
         const ch = val.toLowerCase();
-        const ctrlSeq = ch >= "a" && ch <= "z" ? String.fromCharCode(ch.charCodeAt(0) - 96) : val;
+        const ctrlSeq =
+          ch >= "a" && ch <= "z"
+            ? String.fromCharCode(ch.charCodeAt(0) - 96)
+            : val;
         setCtrlArmed(false);
         ptyRef.current?.write(ctrlSeq).catch(() => {});
       } else {
@@ -539,7 +728,9 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     composingRef.current = true;
   };
 
-  const handleCompositionEnd = (e: React.CompositionEvent<HTMLTextAreaElement>) => {
+  const handleCompositionEnd = (
+    e: React.CompositionEvent<HTMLTextAreaElement>,
+  ) => {
     composingRef.current = false;
     const val = e.currentTarget.value || e.data;
     e.currentTarget.value = "";
@@ -560,12 +751,20 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
 
   const handleWheel = (e: React.WheelEvent) => {
     const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
-    if (mode !== "none" && !e.shiftKey && canvasRef.current && rendererRef.current) {
+    if (
+      mode !== "none" &&
+      !e.shiftKey &&
+      canvasRef.current &&
+      rendererRef.current
+    ) {
       e.preventDefault();
       const rect = canvasRef.current.getBoundingClientRect();
-      const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+      const point = screenToElement(canvasRef.current!, e.clientX, e.clientY);
+      const cell = rendererRef.current.pixelToCell(point.x, point.y);
       const btn = e.deltaY < 0 ? 64 : 65;
-      ptyRef.current?.write(encodeSgrMouse(btn, cell.col, cell.row, true, e)).catch(() => {});
+      ptyRef.current
+        ?.write(encodeSgrMouse(btn, cell.col, cell.row, true, e))
+        .catch(() => {});
       return;
     }
     const lines = Math.round(e.deltaY / 28);
@@ -600,7 +799,11 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     return lines.join("\n").trimEnd();
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "touch" && !touchSelecting) return;
+    const tracking = termRef.current?.modes.mouseTrackingMode ?? "none";
+    if (e.button === 2 && tracking === "none") return;
+    e.currentTarget.setPointerCapture(e.pointerId);
     // Prevent default browser focus-steal/text-selection on the non-editable canvas wrapper
     // so the hidden textarea retains focus reliably when returning from another window.
     e.preventDefault();
@@ -608,20 +811,26 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     focusInput();
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect || !rendererRef.current) return;
-    const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+    const point = screenToElement(canvasRef.current!, e.clientX, e.clientY);
+    const cell = rendererRef.current.pixelToCell(point.x, point.y);
 
     const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
     if (mode !== "none" && !e.shiftKey) {
       const btn = e.button === 1 ? 1 : e.button === 2 ? 2 : 0;
       mouseDownBtn.current = btn;
       lastMouseCell.current = cell;
-      ptyRef.current?.write(encodeSgrMouse(btn, cell.col, cell.row, true, e)).catch(() => {});
+      ptyRef.current
+        ?.write(encodeSgrMouse(btn, cell.col, cell.row, true, e))
+        .catch(() => {});
       return;
     }
 
     // Middle-click paste when not in mouse tracking mode
     if (e.button === 1) {
-      navigator.clipboard.readText().then((t) => writePaste(t)).catch(() => {});
+      navigator.clipboard
+        .readText()
+        .then((t) => writePaste(t))
+        .catch(() => {});
       return;
     }
 
@@ -635,10 +844,12 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     rendererRef.current.markDirty();
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "touch" && !touchSelecting) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect || !rendererRef.current) return;
-    const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+    const point = screenToElement(canvasRef.current!, e.clientX, e.clientY);
+    const cell = rendererRef.current.pixelToCell(point.x, point.y);
 
     const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
     if (mode !== "none" && !e.shiftKey) {
@@ -648,9 +859,15 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
         lastMouseCell.current.row !== cell.row;
       if (!moved) return;
       lastMouseCell.current = cell;
-      if (mode === "any" || (mode === "drag" && mouseDownBtn.current !== null)) {
-        const baseBtn = mouseDownBtn.current !== null ? mouseDownBtn.current : 3;
-        ptyRef.current?.write(encodeSgrMouse(baseBtn | 32, cell.col, cell.row, true, e)).catch(() => {});
+      if (
+        mode === "any" ||
+        (mode === "drag" && mouseDownBtn.current !== null)
+      ) {
+        const baseBtn =
+          mouseDownBtn.current !== null ? mouseDownBtn.current : 3;
+        ptyRef.current
+          ?.write(encodeSgrMouse(baseBtn | 32, cell.col, cell.row, true, e))
+          .catch(() => {});
       }
       return;
     }
@@ -661,15 +878,26 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
     rendererRef.current.markDirty();
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
+  const handleMouseUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
     const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
-    if (mode !== "none" && !e.shiftKey && mouseDownBtn.current !== null && canvasRef.current && rendererRef.current) {
+    if (
+      mode !== "none" &&
+      !e.shiftKey &&
+      mouseDownBtn.current !== null &&
+      canvasRef.current &&
+      rendererRef.current
+    ) {
       const rect = canvasRef.current.getBoundingClientRect();
-      const cell = rendererRef.current.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+      const point = screenToElement(canvasRef.current!, e.clientX, e.clientY);
+      const cell = rendererRef.current.pixelToCell(point.x, point.y);
       const btn = mouseDownBtn.current;
       mouseDownBtn.current = null;
       if (mode !== "x10") {
-        ptyRef.current?.write(encodeSgrMouse(btn, cell.col, cell.row, false, e)).catch(() => {});
+        ptyRef.current
+          ?.write(encodeSgrMouse(btn, cell.col, cell.row, false, e))
+          .catch(() => {});
       }
       return;
     }
@@ -686,9 +914,12 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
 
   const handleContextMenu = (e: React.MouseEvent) => {
     const mode = termRef.current?.modes.mouseTrackingMode ?? "none";
-    if (mode !== "none" && !e.shiftKey) {
-      e.preventDefault();
-    }
+    e.preventDefault();
+    if (mode === "none" || e.shiftKey)
+      setTerminalMenu({
+        x: Math.min(e.clientX, window.innerWidth - 210),
+        y: Math.min(e.clientY, window.innerHeight - 200),
+      });
   };
 
   const sendVirtualKey = (seq: string) => {
@@ -706,7 +937,13 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1 || touchScrollYRef.current === null || !termRef.current) return;
+    if (
+      touchSelecting ||
+      e.touches.length !== 1 ||
+      touchScrollYRef.current === null ||
+      !termRef.current
+    )
+      return;
     const y = e.touches[0]!.clientY;
     const dy = touchScrollYRef.current - y;
     if (Math.abs(dy) >= 18) {
@@ -722,7 +959,87 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
   };
 
   return (
-    <div style={{ backgroundColor: theme.bg }} className="flex flex-col w-full h-full overflow-hidden">
+    <div
+      style={{ backgroundColor: theme.bg }}
+      className="flex flex-col w-full h-full overflow-hidden"
+    >
+      {showTouchBar && (
+        <div className="flex items-center gap-2 px-2 py-1 text-[10px] border-b border-white/10">
+          <button
+            type="button"
+            aria-pressed={touchSelecting}
+            onClick={() => setTouchSelecting((v) => !v)}
+            className="px-2 py-1 rounded bg-white/10"
+          >
+            {touchSelecting
+              ? "Sélection tactile active"
+              : "Sélectionner du texte"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void copySelection()}
+            className="px-2 py-1 rounded bg-white/10"
+          >
+            Copier la sélection
+          </button>
+        </div>
+      )}
+      {terminalMenu &&
+        createPortal(
+          <div
+            className="horizon-menu-scrim"
+            onPointerDown={(e) => {
+              if (e.target === e.currentTarget) setTerminalMenu(null);
+            }}
+          >
+            <div
+              role="menu"
+              className="horizon-menu"
+              style={{ left: terminalMenu.x, top: terminalMenu.y }}
+            >
+              <button
+                role="menuitem"
+                onClick={() => {
+                  void copySelection();
+                  setTerminalMenu(null);
+                }}
+              >
+                Copier la sélection
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  navigator.clipboard
+                    .readText()
+                    .then(writePaste)
+                    .catch(() =>
+                      wmStore.pushToast(
+                        "Collage refusé",
+                        "Utilisez le raccourci de collage du navigateur.",
+                        "warn",
+                      ),
+                    );
+                  setTerminalMenu(null);
+                }}
+              >
+                Coller
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setTerminalMenu(null);
+                  setTouchSelecting((v) => !v);
+                }}
+              >
+                Sélection tactile
+              </button>
+              <button role="menuitem" onClick={() => setTerminalMenu(null)}>
+                Fermer
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
       <div
         ref={containerRef}
         tabIndex={0}
@@ -734,16 +1051,29 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
           onFocus?.();
           inputRef.current?.focus({ preventScroll: true });
         }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        onPointerDown={handleMouseDown}
+        onPointerMove={handleMouseMove}
+        onPointerUp={handleMouseUp}
+        onPointerCancel={() => {
+          dragSelect.current = false;
+          mouseDownBtn.current = null;
+        }}
+        onLostPointerCapture={() => {
+          dragSelect.current = false;
+          mouseDownBtn.current = null;
+        }}
+        style={{ touchAction: touchSelecting ? "none" : "pan-y" }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onContextMenu={handleContextMenu}
         onWheel={handleWheel}
         className={`relative flex-1 min-h-0 w-full overflow-hidden cursor-text outline-none transition-shadow ${
-          hasDomFocus ? "ring-1 ring-inset ring-violet-400/35" : focused ? "ring-1 ring-inset ring-white/10" : "opacity-90"
+          hasDomFocus
+            ? "ring-1 ring-inset ring-violet-400/35"
+            : focused
+              ? "ring-1 ring-inset ring-white/10"
+              : "opacity-90"
         }`}
       >
         <canvas ref={canvasRef} className="block w-full h-full" />
@@ -776,9 +1106,15 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (externalLink.code) {
-                    navigator.clipboard.writeText(externalLink.code).catch(() => {});
+                    navigator.clipboard
+                      .writeText(externalLink.code)
+                      .catch(() => {});
                   }
-                  window.open(externalLink.url, "_blank", "noopener,noreferrer");
+                  window.open(
+                    externalLink.url,
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
                 }}
                 className="flex items-center gap-1 hover:underline cursor-pointer"
               >
@@ -903,7 +1239,10 @@ export const KittyTerminalPane: React.FC<KittyTerminalPaneProps> = ({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
-              navigator.clipboard.readText().then((t) => writePaste(t)).catch(() => {});
+              navigator.clipboard
+                .readText()
+                .then((t) => writePaste(t))
+                .catch(() => {});
             }}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/10 active:bg-white/25 text-[11px] font-mono text-zinc-200 shrink-0"
             title="Paste Clipboard"

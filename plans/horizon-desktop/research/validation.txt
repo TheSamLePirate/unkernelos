@@ -1,0 +1,10 @@
+Vérifications du 26 novembre 2026
+
+- JavaScript du prototype : node --check, réussi.
+- Rendus inspectés : bureau à 728 et 390 px, Exposé et Contexte à 728 px. Aucun message d’erreur de console sur les rendus vérifiés après correction des chemins d’images.
+- 7 scénarios DOM locaux réussis dans le moteur html_preview : identité des nœuds après rappel ; tiroir latéral sans rappel au centre ; journal autonome pendant pause ; simulation reprise ; restauration placement/hauteur ; extrait au tiroir source ; périmètre préparé sans envoi.
+- Les intervalles du scénario de vérification sont déclenchés manuellement : ce contrôle valide la séparation des états, pas la cadence réelle ni les performances.
+- plan local check : lint MDX local réussi. Ce contrôle n’est pas une validation du schéma complet du renderer Agent-Native Plan. Le rendu de revue livré utilise review.html, vérifié séparément.
+- Aucune modification de src/, aucun déploiement. Les artefacts ajoutés sont dans plans/horizon-desktop/.
+
+Restent à vérifier lors de l’implémentation : vrais gestes matériels souris/touch/stylet, sélection projetée canvas/terminal/Wayland, huit bords de resize, animation continue de BUR-03, partage du centre, focus/IME/lecteur d’écran, persistance et reprise après rechargement, applications Linux et mesures de performance sur appareils réels.

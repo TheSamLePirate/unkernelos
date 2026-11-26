@@ -1,0 +1,65 @@
+# Horizon — interface principale d’unkernelOS
+
+Horizon compose les applications réelles du bureau dans un plan de travail central et deux ailes en perspective. Chaque fenêtre reste montée avec sa session React, son terminal ou sa surface Linux. Les vues latérales ne sont pas des captures recréées.
+
+## Utilisation
+
+- Ouvrir une app dans le dock ou le lanceur ; une nouvelle fenêtre prend sa place au centre et les autres restent accessibles dans les ailes.
+- Glisser l’en-tête vers un côté. L’aperçu indique la destination avant le relâchement. Échap, annulation du pointeur ou perte de fenêtre annulent le geste.
+- Rappeler avec le titre d’une carte, le dock, Exposé ou le menu de fenêtre. Les boutons du chrome offrent aussi un placement sans drag.
+- Choisir une, deux ou trois fenêtres centrales dans la barre d’espace. Les huit bords/coins permettent le resize ; le menu offre une taille numérique.
+- F3 ouvre Exposé ; F4 le lanceur. Les boutons restent disponibles lorsque le système ou le navigateur réserve une touche.
+- Ctrl/⌘ + Alt + flèche gauche/droite/haut place la fenêtre active dans une aile ou au centre ; Ctrl/⌘ + Alt + Z annule le placement et Shift permet de rétablir.
+- Les raccourcis de l’app, la saisie et la composition IME ont priorité sur les raccourcis généraux non explicites. Les raccourcis ne constituent pas un keymap personnalisable dans cette version.
+- Sélectionner du texte, puis ouvrir le tiroir de cette fenêtre et choisir **Garder la sélection**. Les copies attribuables dans les apps intégrées alimentent aussi le tiroir.
+- Déposer des textes, images, fichiers hôtes ou références de fichiers Linux. Les fichiers Linux restent des références au fichier courant ; leur téléchargement peut échouer si la source a disparu.
+- Dans l’explorateur, glisser un fichier vers un autre dossier le copie ; Shift demande un déplacement. Les collisions de noms créent une destination distincte.
+- Le menu **Votre Horizon** propose une apparence claire/sombre, les surfaces à plat, les mouvements réduits et le mode privé. Le shell classique est accessible lorsque les fenêtres sont fermées afin de préserver les sessions en cours.
+
+Sur téléphone, une seule surface centrale est présentée ; les autres sessions restent dans le ruban de rappel. Sur tablette, les contrôles et les zones de resize sont agrandis. La sélection tactile du terminal possède un mode explicite pour la distinguer du défilement.
+
+## Tiroirs et reprise
+
+Les métadonnées, extraits, événements et dispositions sont dans IndexedDB `unkernelos-horizon`. Les blobs sont stockés séparément afin qu’un changement de disposition ne réécrive pas tous les fichiers joints. Le statut distingue l’enregistrement en cours et les erreurs de conservation. Les éléments épinglés et fichiers restent conservés ; l’historique de texte non épinglé est limité à 100 éléments par contexte.
+
+Deux fenêtres ont des tiroirs distincts. Notes, l’éditeur et l’explorateur associent leur contexte au document/dossier et à la vue. Une réouverture peut retrouver un contexte non utilisé de ce document, avec priorité au plus récent. La reprise d’un espace conserve les identifiants et les placements. Les documents Notes et IDE ainsi que le dossier de l’explorateur sont réouverts depuis leurs références.
+
+Une disposition enregistrée ne constitue pas un snapshot de la mémoire Linux : un terminal fermé rouvre un processus ; une app Wayland disparue doit être relancée. Un document non enregistré est protégé par le dialogue de fermeture de sa fenêtre intégrée. La fermeture de l’onglet reste soumise au cycle de vie du navigateur et de la VM.
+
+Le mode privé empêche les nouveaux ajouts et événements. Il ne supprime pas les données déjà conservées. Les exports du tiroir contiennent les références et extraits ; les blobs se téléchargent individuellement.
+
+## Agents
+
+Notes, IDE, Explorer, terminal, Preview et Shader/Synth publient des capacités adaptées à ce qu’ils savent réellement exposer. Une prévisualisation iframe reste opaque : son URL et sa commande de rechargement sont disponibles, pas un accès fictif à son DOM.
+
+Dans le tiroir, choisir les éléments, la lecture éventuelle de l’état et les actions autorisées, puis accorder le périmètre. Un grant est limité à la fenêtre/contexte et expire après 15 minutes. Il est révocable depuis le tiroir. Le partage reste explicite : copie, téléchargement ou préparation du prompt dans Agent Studio, sans lancement automatique de la mission.
+
+Méthodes disponibles via `window.unkernelOS.call`, `osctl` et MCP :
+
+- `horizon.status` : mode, disposition et placements.
+- `horizon.sessions` : cibles, capacités et révisions, sans contenu des tiroirs.
+- `horizon.session.read` avec `windowId` et `grantId` : uniquement les éléments et l’état accordés.
+- `horizon.session.action` avec `windowId`, `grantId`, `action`, `expectedRevision`, `requestId`, `args` : action autorisée et révision vérifiée ; un même requestId est dédupliqué.
+
+Les nouveaux grants complètent le pare-feu OS existant ; ils ne remplacent pas ses permissions globales pour les anciennes méthodes. La révocation interdit les nouvelles commandes, mais ne promet pas d’annuler une opération déjà engagée lorsque l’application n’a pas de mécanisme d’annulation.
+
+## Vérification
+
+```sh
+bun run typecheck
+bun test test
+bun run build
+```
+
+La vérification du navigateur utilise un profil Chromium séparé et le protocole CDP, sans dépendance de production ni endpoint de test dans l’application :
+
+```sh
+bun run dev
+# Lancer un Chromium isolé avec --remote-debugging-port=9333,
+# ouvrir http://localhost:3080/?app=notes et laisser Linux démarrer.
+bun run test:horizon-browser
+```
+
+Les captures et le rapport sont générés dans `.cache/horizon-qa/`. Les tests vérifient les vraies fenêtres, les gestes via le pointeur, la sélection, les tiroirs, la persistance, les fichiers Linux et les permissions. Les gestes tactiles sur matériel réel, les lecteurs d’écran et toutes les variantes de pilotes Wayland/GPU nécessitent une validation dédiée ; le profil émulé ne certifie pas ces appareils.
+
+La projection des pointeurs du terminal, de GL et de l’adaptateur d’entrée Wayland utilise les coordonnées locales du plan transformé. Les menus de shell et de l’explorateur sont rendus dans le repère écran. Les popups natifs complexes des clients Wayland dépendent aussi du comportement du compositor wland et doivent être vérifiés client par client.

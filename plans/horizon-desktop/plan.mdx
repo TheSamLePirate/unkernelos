@@ -1,0 +1,159 @@
+---
+title: "Horizon — bureau spatial unkernelOS"
+brief: "Scène centrale, ailes vivantes, mémoire de contexte par session. Nouveau shell par défaut."
+kind: "plan"
+localOnly: true
+---
+
+# Horizon — bureau spatial unkernelOS
+
+L’utilisateur écrit au centre, surveille son terminal à gauche et manipule une simulation à droite. Il pousse une fenêtre dans une aile sans perdre sa session, rappelle son document et retrouve les extraits rassemblés. Un agent intervient sur les mêmes objets, avec un périmètre choisi et un résultat visible.
+
+La proposition couvre le shell par défaut : fenêtres, navigation, menus, focus, gestes, tiroirs et reprise. Le prototype joint fait ressentir l’organisation et quelques interactions avec des données simulées. Horizon est intégré au système comme shell par défaut ; le guide dans `docs/horizon.md` décrit le comportement livré et ses limites de validation. « AAA » décrit une ambition de finition ; sa qualité devra être démontrée sur les tâches d’acceptation et les appareils réels.
+
+## Identité visuelle
+
+Une scène centrale orthogonale et deux ailes à faible perspective. Le centre conserve une typographie nette, un pointeur stable et une taille de travail réelle. Les ailes suggèrent la profondeur par leur angle, leur distance et une ombre commune. Le centre accueille une fenêtre ou un partage ajustable de deux ou trois fenêtres. Le lanceur, le dock et la barre de session existants sont réunis autour de cette scène.
+
+Graphite, surfaces opaques de lecture, accent ambre pour le focus et teinte froide pour les signaux de direct. Le thème clair reçoit le même soin. Le verre reste dans le chrome ; code et texte gardent leur contraste. Grille d’espacement 4/8 px, rayons cohérents, icônes Lucide déjà installées. Aucun état essentiel ne dépend uniquement d’une couleur.
+
+Le décor reste calme. Les mondes 3D, le cube et les dispositions circulaires existants demeurent des variantes explicites. La caméra est stable pendant l’écriture. Les effets accompagnent une intention : passage vers une aile, Exposé, ouverture d’espace. Une étiquette, une poignée et une destination compréhensible priment sur l’effet graphique.
+
+## Apports de la conférence
+
+Le transcript automatique anglais et cinq captures horodatées sont dans `research/`. Source : Scott Jenson, Akademy 2026, KDE/c3voc, CC BY-SA 4.0. La transcription automatique comporte des erreurs ; elle permet de retrouver les passages, sans constituer un texte éditorial vérifié.
+
+- **29:19–30:56** : Exposé perd sa lisibilité quand les fenêtres se multiplient ; la périphérie peut accueillir des fenêtres encore utiles. Jenson explique qu’une déformation expérimentée rendait le contenu illisible. Proposition : borner angle et échelle, proposer des commandes compactes et un rappel immédiat au centre.
+- **31:19–32:40** : un lecteur compact reste utilisable dans une aile. Proposition : vue compacte déclarée par l’app, attachée à la même session.
+- **32:44–34:04** : le scrapbook associe documents, extraits et liens à un travail durable. Proposition : tiroir par contexte de document/session, distinct du presse-papiers global.
+- **34:12–36:17** : l’historique relie activité et provenance. Proposition : événements explicites locaux, suppression accessible et partage choisi.
+- **36:31–37:27** : mémoire spatiale, associative et épisodique. Horizon en fait la disposition, les tiroirs et la reprise. C’est une interprétation pour unkernelOS.
+
+La proposition ajoute un modèle partagé avec les agents et une adaptation aux petits écrans. Ces choix ne sont pas présentés comme des conclusions de la conférence. Les captures fournies par l’utilisateur et ses spécifications ont été consultées ; le fichier de spécifications est conservé à l’identique.
+
+## Contrat des interactions
+
+Chaque geste a une destination visible, une annulation et une commande sans drag. Souris, doigt, stylet et clavier coexistent dans la même session. Les seuils proposés ci-dessous sont des points de départ à tester.
+
+<Table id="interaction-contract" columns={["Action", "Comportement", "Alternative et protection"]} rows={[
+ ["Activer", "Appui dans le contenu destiné à l’app ; focus clavier annoncé dans le chrome. Aucun focus au survol.", "Tab/F6 et liste de fenêtres ; retour du focus après menu et Exposé."],
+ ["Déplacer", "En-tête uniquement. Seuil initial 5 px souris / 10 px tactile ; point saisi maintenu sous le pointeur.", "Menu de placement et position au clavier. Un simple clic ne désnappe jamais."],
+ ["Repousser", "Zone d’accueil progressive, aperçu avant relâchement, aimantation avec hystérésis et ordre latéral choisi.", "Boutons explicites ; annuler restaure position, taille, ordre et focus."],
+ ["Rappeler", "En-tête ou bouton de rappel. Une commande compacte agit sur place.", "Lanceur, liste des sessions et clavier. Pause ne ramène pas l’app au centre."],
+ ["Redimensionner", "Huit bords/coins, curseurs précis, minimum applicatif et limites d’écran.", "Commande Taille et position avec dimensions numériques et flèches ; grandes zones tactiles."],
+ ["Sélectionner", "Sélection native ; double clic mot, Shift-clic, sélection étendue selon l’éditeur.", "Le shell ne capture pas le contenu ; IME, diacritiques, RTL et lecteur d’écran préservés."],
+ ["Déplacer le texte", "Prise sur une sélection existante, fantôme et cible ; suppression source après confirmation de destination.", "Copier / Couper / Coller et Garder au tiroir. La modification appartient à l’éditeur."],
+ ["Clic droit", "Menu de l’app dans le contenu ; menu du shell sur le chrome/fond, rendu dans un portail écran.", "Bouton ⋯, touche Menu / Shift-F10, flèches, Échap et retour de focus."],
+ ["Touch / stylet", "Scroll et sélection dans le contenu ; placement depuis la poignée ; appui long selon contexte.", "Aucune action indispensable au hover. Cibles tactiles visées à 44×44 px."],
+ ["Swipe / zoom", "Navigation depuis une bande du shell ; pinch de l’app dans son contenu ; zoom navigateur préservé.", "Boutons et raccourcis remappables. Aucun geste réservé par l’OS supposé disponible."],
+ ["Exposé", "Dézoom vers groupes lisibles, recherche, flèches, Entrée, Échap ; liste de sessions accessible.", "Regroupement et liste à forte densité ; aucune mosaïque infiniment réduite."],
+ ["Coller", "Résultat effectif, provenance connue et MIME compatible avec la cible.", "Permission refusée affichée avec action manuelle ; aucun faux succès."],
+ ["Annuler", "Échap, pointercancel, lostpointercapture et perte de fenêtre restaurent le snapshot initial.", "Aucune validation de snap/dépôt sur annulation ; undo/redo des changements de disposition."],
+ ["Raccourcis", "Routeur par portée ; respect de defaultPrevented, composition IME et saisie en cours.", "Carte et remappage ; conflits OS/navigateur documentés avec alternative visible."]
+]} />
+
+La sélection prime dans les zones d’édition. Une caméra ne bouge jamais à cause d’une sélection ou d’une molette utilisée dans le terminal. Les événements DOM transformés restent gérés par le navigateur. Les surfaces canvas, terminal et Wayland reçoivent des coordonnées locales par intersection du rayon écran avec leur plan puis transformation inverse. Soustraire le rectangle écran ne suffit pas.
+
+Menus, tooltips et popovers sont rendus dans une couche écran indépendante des transformations de fenêtre. Ils suivent leur ancre, restent dans l’écran et restaurent le focus. La navigation spatiale doit être explicite. En travail normal, cliquer le fond ne déclenche pas une orbite libre.
+
+Pour un drag de fichier ou de sélection, le ghost indique l’objet, le nombre et l’opération Copier/Déplacer/Lier. Les cibles incompatibles sont signalées. Le dépôt ne détruit la source qu’après succès de la cible ; une erreur garde l’objet et affiche une récupération. Les données riches sont validées et le HTML non fiable est assaini.
+
+## Ailes vivantes
+
+Une fenêtre change de placement sans démontage de contenu. Composants, terminal, processus et navigation gardent leur identité. Chaque carte expose document/session, état du direct, rappel, tiroir et commandes compactes éventuelles. Les deux côtés restent libres d’organisation.
+
+La représentation suit les capacités : DOM direct, canvas projeté ou vue compacte fournie par l’app. Compact et détail utilisent le même modèle de session. L’app peut déclarer une taille en dessous de laquelle le rappel au centre devient nécessaire pour la précision. Le bouton de rappel reste utilisable quelle que soit l’échelle du contenu.
+
+États distincts : **Direct**, **En pause**, **Dernière image — direct interrompu**, **Déconnecté**, **Reprise nécessaire**. La fraîcheur provient d’une vraie mise à jour ou d’un heartbeat applicatif ; un point vert ne prouve rien. Activité métier et fréquence de rendu sont séparées. Vidéos et simulations visibles restent animées selon le budget ; une image figée n’est jamais annoncée comme directe. Hors champ, on peut réduire le rendu sans arrêter serveur ou tâche. En cas de saturation, alléger et afficher l’état effectif.
+
+Un navigateur peut suspendre son onglet. Le produit ne garantit donc pas un direct permanent en arrière-plan ni la survie d’un processus VM après fermeture/rechargement sans sauvegarde dédiée. La reprise distingue session restaurée et opération relancée. Une app externe opaque ne bénéficie que des capacités réellement disponibles.
+
+## Tiroirs et mémoire
+
+Chaque fenêtre possède un tiroir indépendant. Son `contextId` durable associe le document ou la session identifié par l’adaptateur à l’identité de cette vue. Deux documents ou deux sessions de la même app gardent leurs tiroirs distincts. Une vue regroupée permet de retrouver les éléments de plusieurs fenêtres sans fusionner leurs historiques. Fermer une fenêtre ne supprime pas le contexte ; l’adaptateur réassocie le tiroir lors de la réouverture. Sans identifiant durable, l’interface indique une session temporaire.
+
+Une entrée porte identifiant, représentations MIME, références de blobs/fichiers, provenance typée, date, épinglage et politique de conservation. La provenance distingue donnée de l’app, copie observée, ajout explicite et source inconnue. Une référence indisponible reste identifiable. Le retour à la source ne promet pas de restaurer une sélection d’une ancienne révision.
+
+Réutiliser épinglage et suppression de `clipboard-store.ts` ; ajouter un magasin de contexte distinct avec migration explicite. Métadonnées versionnées dans IndexedDB, blobs volumineux dans un stockage adapté. Prévoir quota, erreurs, export/import et effacement. Les copies effectuées dans les apps intégrées et attribuables à une fenêtre rejoignent automatiquement son historique. Les ajouts manuels et épinglés sont conservés ; l’observation du presse-papiers système hors de ces copies reste désactivée jusqu’à activation de l’utilisateur. Les champs secrets sont exclus. Une limite configurable gouverne les éléments non épinglés.
+
+Le journal de reprise enregistre des événements intégrés utiles : ouverture de document, ajout au tiroir, action d’agent, sauvegarde d’espace. Pas de collecte des frappes ni de suivi universel de l’attention. Un mode privé coupe la conservation. L’utilisateur voit, efface et choisit les événements qu’il transmet.
+
+Le presse-papiers système dépend du contexte sécurisé, des permissions et de l’activation utilisateur. Les iframes d’autres origines et la capture inter-app exigent une intégration coopérative. Signaler « source inconnue » lorsque nécessaire. Les échanges `postMessage` vérifient origine attendue, source, schéma et capacité de session. Les apps opaques ne livrent pas magiquement leur sélection ou leurs documents.
+
+## Actions communes à l’humain et l’agent
+
+L’API OS existante transporte les commandes de fenêtre et les actions applicatives. L’adaptateur expose capacités disponibles, cible exacte et révision. Une capture d’écran complète éventuellement le contexte ; elle ne vaut pas description structurée fiable d’une app opaque.
+
+<AnnotatedCode id="surface-contract" filename="src/core/app-surface-registry.ts (proposé)" language="ts" code={"type Placement = 'center' | 'left' | 'right';\ninterface SessionTarget {\n  appId: string; sessionId: string; contextId: string;\n  windowId: string; revision: string;\n}\ninterface SurfaceActionRequest {\n  requestId: string; target: SessionTarget; action: string;\n  expectedRevision: string; args: unknown; grantId: string;\n}\n// Valider grant, schéma et révision avant mutation.\n// Résultat : accepted | running | completed | failed | denied.\n// Une révision périmée retourne un conflit explicite.\n// Le registre expose snapshot, subscribe, actions et compactView.\n"} annotations={[
+ {lines:"2-5",label:"Identité",note:"Session et contexte survivent au placement ; la révision protège l’état lu."},
+ {lines:"6-9",label:"Commande",note:"Cible et grant explicites ; requestId déduplique les demandes rejouées."},
+ {lines:"10-13",label:"Contrat proposé",note:"Encore absent du code. Cancel et undo ne sont disponibles que si l’app les déclare."}
+]} />
+
+Avant partage : session, éléments choisis, actions accordées et durée visibles. Lectures et écritures séparées. Révocation immédiate des futures commandes ; opération engagée interrompue si l’adaptateur le permet. Les données de document et de tiroir sont non fiables : elles ne peuvent pas élargir les permissions de l’agent.
+
+L’agent ne vole pas le focus et ne réorganise pas le bureau pendant la saisie. Il prépare une disposition ou demande une intervention sans activation automatique. Une action dépendant d’une ancienne sélection échoue avec conflit et permet de relire l’état. L’interface affiche auteur, cible, progression et résultat concret. Les permissions déjà accordées restent valides sans confirmations répétées.
+
+## Réutilisation et points d’intégration
+
+La base comprend `wmStore.openApp/focusWindow`, les identités de fenêtre, le snapping, la capture pointeur, les matrices du pont spatial, le dock, les apps React, l’API OS et le terminal existant.
+
+<Table id="file-map" columns={["Zone", "Réutiliser", "Ajouter ou corriger"]} rows={[
+ ["src/wm/wm-store.ts", "WindowInstance et commandes", "Placement, ordre des ailes, session/contexte et restauration versionnée."],
+ ["src/components/WindowFrame.tsx", "Chrome, capture, RAF", "Machine de gestes, huit bords, seuil de drag, annulation distincte et portail des menus."],
+ ["src/gpu/spatial-3d-bridge.ts", "Poses et matrices", "Disposition Horizon et projection inverse cohérente avec le DOM."],
+ ["src/gpu/ThreeDesktop3d.tsx", "WebGPU et décors", "Caméra de travail stable, transitions explicites et qualité adaptative."],
+ ["src/components/Desktop.tsx", "Composition et apps stables", "Orchestration, routeur de commandes et focus/IME."],
+ ["src/components/MissionControlOverlay.tsx", "Liste et workspaces", "Sessions identifiables, clavier, regroupement et retour de focus."],
+ ["src/components/apps/KittyTerminalPane.tsx", "IME, terminal et TUI", "Coordonnées locales, sélection capturée et sélection tactile."],
+ ["src/core/clipboard-store.ts", "Historique et épinglage", "Résultats honnêtes et passerelle vers les tiroirs."],
+ ["src/core/agent-os-api.ts", "Transport osctl/MCP et permissions", "Capacités par session, révisions, grants et résultats."],
+ ["src/core/app-surface-registry.ts + context-store.ts (nouveaux)", "Style des magasins réactifs", "Contrats partagés, tiroirs persistants et adaptateurs applicatifs."]
+]} />
+
+Audit statique : `WindowFrame.tsx` confond fin et annulation de geste ; `KittyTerminalPane.tsx` soustrait le rectangle écran pour viser ses cellules ; les raccourcis de `Desktop.tsx` ne protègent pas tous la saisie ; le presse-papiers global n’a ni document ni session. Confirmer ces défauts par reproductions ciblées avant correction. Mission Control utilise actuellement des fiches descriptives, ce qui demande une évolution pour représenter les sessions réellement ouvertes.
+
+## Adaptation et accessibilité
+
+Grand écran : deux ailes visibles et proportions ajustées à la largeur utile. Portable : ailes resserrées, taille de lecture du centre conservée. Tablette : poignées et commandes agrandies ; aile déployable comme panneau temporaire. Téléphone : feuille active à plat et liste/ruban des sessions. Clavier virtuel, zones sûres et zoom à 200 % pris en compte.
+
+Objectifs : clavier intégral, alternatives au drag à pointeur unique, ordre de lecture cohérent, contraste WCAG AA et annonces utiles. « AAA » visuel ne vaut pas certification WCAG AAA. Le lecteur d’écran parcourt une liste avec placement et état, sans interpréter la scène 3D. Le contenu caché sort du parcours clavier. Texte agrandi, contraste renforcé et `prefers-reduced-motion` conservent les commandes. Les animations de contenu ont leur propre pause.
+
+Pointer Events, Clipboard API, isolation d’origine et réduction de mouvement ont été vérifiés dans MDN ; les alternatives au drag et dimensions de cibles dans WCAG 2.2. Sources exactes dans `research/sources.md`.
+
+## Performance et limites
+
+Conserver le DOM donne sélection native et accessibilité. WebGPU assure scène et effets, avec repli CSS/2D si indisponible ou perdu. Une même session ne doit pas être dupliquée en rendus complets pour créer une miniature. Les changements de représentation gardent l’app montée. Pas de promesse de GPU « gratuit » : le rendu DOM, la VM, le terminal et les apps partagent les ressources.
+
+Sur appareils de référence identifiés, viser 60 Hz pour les gestes (16,7 ms/image), avec 120 Hz quand le budget le permet. Mesurer médiane et p95 des images et de la latence entrée→présentation. Cible initiale p95 sous 50 ms en charge normale : objectif à mesurer, pas résultat obtenu. Tester portable à GPU intégré, machine WebGPU et tablette tactile ; documenter les dégradations.
+
+Priorité à l’app active, textures plafonnées, DPR adapté, rendu à la demande de la scène immobile, cadence latérale adaptée. Aucun enregistrement persistant du store à chaque mouvement. Une transition n’entraîne pas de rerendu React global des apps. Les médias et Wayland ont leurs limites propres ; publier les capacités réelles. Une charge élevée réduit les effets avant de compromettre la précision ou d’annoncer un faux direct.
+
+## Mise en œuvre
+
+1. **Précision des entrées.** Réutiliser WindowFrame et les commandes WM ; ajouter machine de gestes/focus, projection locale, annulation réelle, clavier et sélection tactile du terminal. Jalon : sélectionner/copier dans une fenêtre inclinée, annuler un drag sans snap, éditer avec IME sans raccourci parasite.
+2. **Shell Horizon.** Réutiliser pont spatial, dock et renderer ; ajouter centre/ailes persistants, rappel, partage du centre, Exposé et modes adaptés. Migration de disposition versionnée, repli plat et retour réversible. Garder les réglages de thème migrables.
+3. **Contexte et actions.** Réutiliser presse-papiers et API OS ; ajouter registre, tiroirs typés, stockage, provenance et adaptateurs Notes, Terminal, Explorer, Preview et Simulation. Prouver les grants, conflits de révision et révocation avant d’étendre aux apps opaques.
+4. **Finition et défaut.** Réutiliser paramètres et restauration ; ajouter historique choisi, erreurs, qualité adaptative et validation appareil. Activer Horizon pour les nouvelles sessions après acceptation, proposer une migration réversible des sessions existantes. Le shell par défaut est l’objectif de livraison.
+
+## Critères de livraison
+
+<Checklist id="acceptance" items={[
+ {id:"live",label:"Éditeur central, journal animé à gauche et simulation à droite ; rappel sans interruption ni nouvelle session."},
+ {id:"compact",label:"Pause depuis l’aile ; reprise au même instant au centre ; états compact et structuré concordants."},
+ {id:"drawers",label:"Deux documents, deux tiroirs ; copie/dépôt et restauration après fermeture réelle du document."},
+ {id:"agent",label:"Agent limité à une simulation et un extrait ; action visible, autre session inaccessible et conflit sur révision périmée."},
+ {id:"disconnect",label:"Couper le flux : dernière image identifiée ; reconnecter : retour réel du direct et fraîcheur mise à jour."},
+ {id:"restore",label:"Fermer puis restaurer l’espace ; disposition/tiroirs réassociés et éléments non restaurables signalés."},
+ {id:"precision",label:"Cellules et sélection exactes en perspective, huit bords de resize, cancel sans validation et menus sans décalage."},
+ {id:"accessibility",label:"Clavier seul, lecteur d’écran, IME, RTL, zoom 200 %, tactile/stylet et animations réduites sur les mêmes tâches."},
+ {id:"density",label:"1, 6, 20 et 50 fenêtres : identification par liste/recherche sans cibles minuscules ni perte de focus."},
+ {id:"performance",label:"Mesures sur appareils identifiés avec VM, vidéo et build simultanés ; p95, mémoire et état du direct publiés."},
+ {id:"checks",label:"bun run typecheck et bun run build ; tests ciblés gestes/projection/migration/conflits, puis parcours réels de bout en bout."}
+]} />
+
+Les tests vérifient les conséquences : même session/processus avant et après placement ; sélection et scroll conservés ; état réellement changé par l’action ; tiroirs séparés sur disque après réouverture. Gestes et focus nécessitent un navigateur réel et une passe tactile sur appareil. La maquette ne constitue pas cette preuve.
+
+## Direction retenue
+
+Horizon définit le nouveau shell par défaut : profondeur modérée au repos, continuité des fenêtres, contexte attaché aux sessions et actions partagées avec les agents. Les réglages recommandés sont définis ci-dessus. Le prototype conserve la direction de conception ; les captures et les vérifications de l’implémentation sont décrites dans `implementation-report.md`.

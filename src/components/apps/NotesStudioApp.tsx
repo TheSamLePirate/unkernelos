@@ -1,3 +1,8 @@
+import {
+  useAppSurface,
+  useSurfaceRevision,
+  WindowSessionContext,
+} from "../../core/app-surface-registry.tsx";
 import { Effect } from "effect";
 import {
   Bold,
@@ -50,11 +55,16 @@ console.log(\`Running on \${os}\`);
 `;
 
 function renderInline(text: string): React.ReactNode {
-  const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|\[[^\]]+\]\([^)]+\))/g);
+  const tokens = text.split(
+    /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|\[[^\]]+\]\([^)]+\))/g,
+  );
   return tokens.map((tok, i) => {
     if (tok.startsWith("`") && tok.endsWith("`")) {
       return (
-        <code key={i} className="px-1.5 py-0.5 rounded bg-white/10 text-cyan-300 font-mono text-[11px]">
+        <code
+          key={i}
+          className="px-1.5 py-0.5 rounded bg-white/10 text-cyan-300 font-mono text-[11px]"
+        >
           {tok.slice(1, -1)}
         </code>
       );
@@ -119,7 +129,10 @@ const MarkdownPreview: React.FC<{
         i++;
       }
       blocks.push(
-        <div key={`code-${i}`} className="my-3 rounded-xl bg-black/55 border border-white/10 overflow-hidden">
+        <div
+          key={`code-${i}`}
+          className="my-3 rounded-xl bg-black/55 border border-white/10 overflow-hidden"
+        >
           {lang && (
             <div className="px-3 py-1 bg-white/[0.04] border-b border-white/8 text-[10px] font-mono uppercase text-zinc-400">
               {lang}
@@ -128,7 +141,7 @@ const MarkdownPreview: React.FC<{
           <pre className="p-3 text-xs font-mono text-cyan-200 overflow-x-auto leading-relaxed">
             {codeLines.join("\n")}
           </pre>
-        </div>
+        </div>,
       );
       i++;
       continue;
@@ -138,19 +151,25 @@ const MarkdownPreview: React.FC<{
       blocks.push(
         <h3 key={i} className="text-sm font-semibold text-white mt-4 mb-1.5">
           {renderInline(line.replace(/^###\s+/, ""))}
-        </h3>
+        </h3>,
       );
     } else if (/^##\s+/.test(line)) {
       blocks.push(
-        <h2 key={i} className="text-base font-semibold text-white mt-5 mb-2 pb-1 border-b border-white/10">
+        <h2
+          key={i}
+          className="text-base font-semibold text-white mt-5 mb-2 pb-1 border-b border-white/10"
+        >
           {renderInline(line.replace(/^##\s+/, ""))}
-        </h2>
+        </h2>,
       );
     } else if (/^#\s+/.test(line)) {
       blocks.push(
-        <h1 key={i} className="text-xl font-bold text-white mt-2 mb-3 tracking-tight">
+        <h1
+          key={i}
+          className="text-xl font-bold text-white mt-2 mb-3 tracking-tight"
+        >
           {renderInline(line.replace(/^#\s+/, ""))}
-        </h1>
+        </h1>,
       );
     } else if (/^>\s?/.test(line)) {
       blocks.push(
@@ -159,29 +178,37 @@ const MarkdownPreview: React.FC<{
           className="my-2 pl-3 border-l-2 border-violet-400/70 text-xs text-zinc-300 italic bg-violet-500/8 py-1.5 pr-2 rounded-r-lg"
         >
           {renderInline(line.replace(/^>\s?/, ""))}
-        </blockquote>
+        </blockquote>,
       );
     } else if (/^[-*]\s+\[([ xX])\]\s+/.test(line)) {
       const checked = /^[-*]\s+\[[xX]\]/.test(line);
       const lineIdx = i;
       const text = line.replace(/^[-*]\s+\[[ xX]\]\s+/, "");
       blocks.push(
-        <label key={i} className="flex items-start gap-2 my-1 text-xs text-zinc-200 cursor-pointer">
+        <label
+          key={i}
+          className="flex items-start gap-2 my-1 text-xs text-zinc-200 cursor-pointer"
+        >
           <input
             type="checkbox"
             checked={checked}
             onChange={() => onToggleCheckbox(lineIdx)}
             className="mt-0.5 accent-violet-500"
           />
-          <span className={checked ? "line-through text-zinc-500" : ""}>{renderInline(text)}</span>
-        </label>
+          <span className={checked ? "line-through text-zinc-500" : ""}>
+            {renderInline(text)}
+          </span>
+        </label>,
       );
     } else if (/^[-*]\s+/.test(line)) {
       blocks.push(
-        <div key={i} className="flex items-start gap-2 my-1 text-xs text-zinc-300 pl-1">
+        <div
+          key={i}
+          className="flex items-start gap-2 my-1 text-xs text-zinc-300 pl-1"
+        >
           <span className="text-violet-400">•</span>
           <span>{renderInline(line.replace(/^[-*]\s+/, ""))}</span>
-        </div>
+        </div>,
       );
     } else if (/^---+$/.test(line.trim())) {
       blocks.push(<hr key={i} className="my-4 border-white/10" />);
@@ -189,7 +216,7 @@ const MarkdownPreview: React.FC<{
       blocks.push(
         <p key={i} className="my-1.5 text-xs text-zinc-300 leading-relaxed">
           {renderInline(line)}
-        </p>
+        </p>,
       );
     }
     i++;
@@ -208,6 +235,35 @@ export const NotesStudioApp: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const session = React.useContext(WindowSessionContext);
+  const revision = useSurfaceRevision(
+    activeNote?.path,
+    content,
+    savedContent,
+    saving,
+  );
+  useAppSurface({
+    document: activeNote?.path,
+    title: activeNote?.name,
+    revision,
+    status: "live",
+    state: {
+      document: activeNote?.path,
+      content,
+      dirty: content !== savedContent,
+      saving,
+    },
+    actions: {
+      save: {
+        label: "Enregistrer cette note",
+        run: async () => {
+          if (!(await saveNote()))
+            throw new Error("Échec de sauvegarde de la note");
+          return { document: activeNote?.path };
+        },
+      },
+    },
+  });
 
   const loadNotes = useCallback(async () => {
     const res = await appRuntime.runPromise(
@@ -216,7 +272,9 @@ export const NotesStudioApp: React.FC = () => {
           const fs = yield* GuestFsService;
           yield* fs.mkdir(NOTES_DIR);
           let entries = yield* fs.listDir(NOTES_DIR);
-          const mdFiles = entries.filter((e) => !e.isDir && e.name.endsWith(".md"));
+          const mdFiles = entries.filter(
+            (e) => !e.isDir && e.name.endsWith(".md"),
+          );
           if (mdFiles.length === 0) {
             yield* fs.writeFileText(`${NOTES_DIR}/welcome.md`, WELCOME_NOTE);
             entries = yield* fs.listDir(NOTES_DIR);
@@ -224,22 +282,29 @@ export const NotesStudioApp: React.FC = () => {
           return entries
             .filter((e) => !e.isDir && e.name.endsWith(".md"))
             .map((e) => ({ name: e.name, path: e.path, mtime: e.mtime }));
-        })
-      )
+        }),
+      ),
     );
     if (res._tag === "Right") {
       setNotes(res.right);
       if (!activeNote && res.right[0]) {
-        void openNote(res.right[0]);
+        void openNote(
+          res.right.find((n) => n.path === session?.props?.documentPath) ??
+            res.right[0],
+        );
       }
     }
   }, [activeNote]);
 
   const openNote = async (n: NoteEntry) => {
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.readFileText(n.path)))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) => fs.readFileText(n.path)),
+      ),
     );
     if (res._tag === "Right") {
+      if (session)
+        wmStore.updateWindowProps(session.id, { documentPath: n.path });
       setActiveNote(n);
       setContent(res.right);
       setSavedContent(res.right);
@@ -260,8 +325,8 @@ export const NotesStudioApp: React.FC = () => {
           const vm = yield* VmService;
           yield* fs.writeFileText(activeNote.path, content);
           yield* vm.syncDisk();
-        })
-      )
+        }),
+      ),
     );
     setSaving(false);
     if (res._tag === "Right") {
@@ -270,10 +335,14 @@ export const NotesStudioApp: React.FC = () => {
     } else {
       wmStore.pushToast("Save Failed", res.left.message, "error");
     }
+    return res._tag === "Right";
   };
 
   const createNote = async () => {
-    const raw = window.prompt("New note filename:", `note-${new Date().toISOString().slice(0, 10)}.md`);
+    const raw = window.prompt(
+      "New note filename:",
+      `note-${new Date().toISOString().slice(0, 10)}.md`,
+    );
     if (!raw?.trim()) return;
     const name = raw.trim().endsWith(".md") ? raw.trim() : `${raw.trim()}.md`;
     const path = `${NOTES_DIR}/${name}`;
@@ -284,8 +353,8 @@ export const NotesStudioApp: React.FC = () => {
           const fs = yield* GuestFsService;
           yield* fs.mkdir(NOTES_DIR);
           yield* fs.writeFileText(path, initial);
-        })
-      )
+        }),
+      ),
     );
     await loadNotes();
     const entry: NoteEntry = { name, path, mtime: "just now" };
@@ -297,7 +366,7 @@ export const NotesStudioApp: React.FC = () => {
   const deleteNote = async (n: NoteEntry) => {
     if (!window.confirm(`Delete ${n.name}?`)) return;
     await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.remove(n.path)))
+      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.remove(n.path))),
     );
     if (activeNote?.path === n.path) {
       setActiveNote(null);
@@ -313,7 +382,8 @@ export const NotesStudioApp: React.FC = () => {
     const s = ta.selectionStart;
     const e = ta.selectionEnd;
     const selected = content.slice(s, e);
-    const next = content.slice(0, s) + before + selected + after + content.slice(e);
+    const next =
+      content.slice(0, s) + before + selected + after + content.slice(e);
     setContent(next);
     requestAnimationFrame(() => {
       ta.focus();
@@ -343,11 +413,16 @@ export const NotesStudioApp: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const filteredNotes = notes.filter((n) => n.name.toLowerCase().includes(filter.trim().toLowerCase()));
+  const filteredNotes = notes.filter((n) =>
+    n.name.toLowerCase().includes(filter.trim().toLowerCase()),
+  );
   const dirty = content !== savedContent;
 
   return (
-    <div className="flex w-full h-full bg-[#090b12]/96 overflow-hidden">
+    <div
+      data-horizon-app="notes"
+      className="flex w-full h-full bg-[#090b12]/96 overflow-hidden"
+    >
       {/* Left Notes List */}
       <aside className="w-56 shrink-0 bg-black/35 border-r border-white/10 p-3 flex flex-col gap-2.5">
         <div className="flex items-center justify-between">
@@ -399,8 +474,12 @@ export const NotesStudioApp: React.FC = () => {
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="text-xs font-medium truncate">{n.name.replace(/\.md$/, "")}</div>
-                  <div className="text-[10px] text-zinc-500 font-mono">{n.mtime || n.name}</div>
+                  <div className="text-xs font-medium truncate">
+                    {n.name.replace(/\.md$/, "")}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 font-mono">
+                    {n.mtime || n.name}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -423,14 +502,70 @@ export const NotesStudioApp: React.FC = () => {
         {/* Markdown Toolbar */}
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-black/40 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-0.5">
-            <button type="button" onClick={() => insertSnippet("# ")} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white" title="Heading 1"><Heading1 className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={() => insertSnippet("## ")} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white" title="Heading 2"><Heading2 className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={() => insertSnippet("**", "**")} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white" title="Bold"><Bold className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={() => insertSnippet("*", "*")} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white" title="Italic"><Italic className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={() => insertSnippet("```\n", "\n```")} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white" title="Code Block"><Code className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={() => insertSnippet("- ")} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white" title="List"><List className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={() => insertSnippet("- [ ] ")} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white" title="Checklist"><CheckSquare className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={() => insertSnippet("> ")} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white" title="Quote"><Quote className="w-3.5 h-3.5" /></button>
+            <button
+              type="button"
+              onClick={() => insertSnippet("# ")}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"
+              title="Heading 1"
+            >
+              <Heading1 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertSnippet("## ")}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"
+              title="Heading 2"
+            >
+              <Heading2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertSnippet("**", "**")}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"
+              title="Bold"
+            >
+              <Bold className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertSnippet("*", "*")}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"
+              title="Italic"
+            >
+              <Italic className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertSnippet("```\n", "\n```")}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"
+              title="Code Block"
+            >
+              <Code className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertSnippet("- ")}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"
+              title="List"
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertSnippet("- [ ] ")}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"
+              title="Checklist"
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertSnippet("> ")}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"
+              title="Quote"
+            >
+              <Quote className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -485,8 +620,10 @@ export const NotesStudioApp: React.FC = () => {
 
         {/* Content Area */}
         <div
-          className={`flex-1 min-h-0 grid ${
-            view === "split" ? "grid-cols-2 divide-x divide-white/10" : "grid-cols-1"
+          className={`hz-notes-content flex-1 min-h-0 grid ${
+            view === "split"
+              ? "grid-cols-2 divide-x divide-white/10"
+              : "grid-cols-1"
           }`}
         >
           {(view === "edit" || view === "split") && (
@@ -506,7 +643,10 @@ export const NotesStudioApp: React.FC = () => {
           )}
           {(view === "preview" || view === "split") && (
             <div className="min-h-0 overflow-hidden bg-[#080a12]">
-              <MarkdownPreview content={content} onToggleCheckbox={toggleCheckboxLine} />
+              <MarkdownPreview
+                content={content}
+                onToggleCheckbox={toggleCheckboxLine}
+              />
             </div>
           )}
         </div>

@@ -1,3 +1,8 @@
+import {
+  useAppSurface,
+  useSurfaceRevision,
+  WindowSessionContext,
+} from "../../core/app-surface-registry.tsx";
 import { Effect } from "effect";
 import {
   Bot,
@@ -27,7 +32,13 @@ import {
   WrapText,
   X,
 } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { FsEntry } from "../../core/fs-service.ts";
 import {
   appRuntime,
@@ -39,7 +50,10 @@ import {
 import { DEFAULT_UNKERNEL_CONFIG } from "../../core/schema.ts";
 import { useIsMobile } from "../../core/use-viewport.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
-import { KittyTerminalPane, type KittyTerminalHandle } from "./KittyTerminalPane.tsx";
+import {
+  KittyTerminalPane,
+  type KittyTerminalHandle,
+} from "./KittyTerminalPane.tsx";
 
 interface OpenTab {
   readonly path: string;
@@ -94,19 +108,107 @@ function detectLanguage(path: string): string {
 }
 
 const KEYWORDS = new Set([
-  "import", "export", "from", "default", "const", "let", "var", "function", "return",
-  "if", "else", "for", "while", "switch", "case", "break", "continue", "async", "await",
-  "try", "catch", "finally", "throw", "new", "class", "extends", "interface", "type",
-  "enum", "readonly", "public", "private", "protected", "true", "false", "null", "undefined",
-  "def", "lambda", "with", "as", "pass", "elif", "yield",
+  "import",
+  "export",
+  "from",
+  "default",
+  "const",
+  "let",
+  "var",
+  "function",
+  "return",
+  "if",
+  "else",
+  "for",
+  "while",
+  "switch",
+  "case",
+  "break",
+  "continue",
+  "async",
+  "await",
+  "try",
+  "catch",
+  "finally",
+  "throw",
+  "new",
+  "class",
+  "extends",
+  "interface",
+  "type",
+  "enum",
+  "readonly",
+  "public",
+  "private",
+  "protected",
+  "true",
+  "false",
+  "null",
+  "undefined",
+  "def",
+  "lambda",
+  "with",
+  "as",
+  "pass",
+  "elif",
+  "yield",
   // Rust
-  "fn", "pub", "struct", "impl", "trait", "where", "match", "use", "mod", "mut", "ref",
-  "move", "loop", "crate", "self", "Self", "unsafe", "dyn", "extern", "in",
+  "fn",
+  "pub",
+  "struct",
+  "impl",
+  "trait",
+  "where",
+  "match",
+  "use",
+  "mod",
+  "mut",
+  "ref",
+  "move",
+  "loop",
+  "crate",
+  "self",
+  "Self",
+  "unsafe",
+  "dyn",
+  "extern",
+  "in",
   // OCaml
-  "rec", "fun", "of", "then", "begin", "end", "module", "sig", "open", "val", "and",
-  "or", "not", "exception", "raise", "when", "do", "done", "to", "downto", "functor", "include",
+  "rec",
+  "fun",
+  "of",
+  "then",
+  "begin",
+  "end",
+  "module",
+  "sig",
+  "open",
+  "val",
+  "and",
+  "or",
+  "not",
+  "exception",
+  "raise",
+  "when",
+  "do",
+  "done",
+  "to",
+  "downto",
+  "functor",
+  "include",
   // Go / SQL
-  "package", "func", "defer", "go", "select", "chan", "SELECT", "FROM", "WHERE", "INSERT", "CREATE", "TABLE",
+  "package",
+  "func",
+  "defer",
+  "go",
+  "select",
+  "chan",
+  "SELECT",
+  "FROM",
+  "WHERE",
+  "INSERT",
+  "CREATE",
+  "TABLE",
 ]);
 
 function escapeHtml(s: string): string {
@@ -119,7 +221,10 @@ function highlightCode(code: string, lang: string): string {
   return lines
     .map((line) => {
       // Comments first
-      if ((lang === "python" || lang === "bash" || lang === "yaml") && /^\s*#/.test(line)) {
+      if (
+        (lang === "python" || lang === "bash" || lang === "yaml") &&
+        /^\s*#/.test(line)
+      ) {
         return `<span class="text-zinc-500 italic">${escapeHtml(line)}</span>`;
       }
       if (lang === "ocaml" && /^\s*\(\*.*\*\)?\s*$/.test(line)) {
@@ -134,7 +239,12 @@ function highlightCode(code: string, lang: string): string {
       while (i < line.length) {
         const ch = line[i]!;
         // Inline // comment
-        if (ch === "/" && line[i + 1] === "/" && lang !== "html" && lang !== "css") {
+        if (
+          ch === "/" &&
+          line[i + 1] === "/" &&
+          lang !== "html" &&
+          lang !== "css"
+        ) {
           out += `<span class="text-zinc-500 italic">${escapeHtml(line.slice(i))}</span>`;
           break;
         }
@@ -154,7 +264,10 @@ function highlightCode(code: string, lang: string): string {
           continue;
         }
         // Numbers
-        if (/[0-9]/.test(ch) && (i === 0 || !/[a-zA-Z0-9_$]/.test(line[i - 1]!))) {
+        if (
+          /[0-9]/.test(ch) &&
+          (i === 0 || !/[a-zA-Z0-9_$]/.test(line[i - 1]!))
+        ) {
           let j = i;
           while (j < line.length && /[0-9._xXa-fA-F]/.test(line[j]!)) j++;
           out += `<span class="text-amber-300">${escapeHtml(line.slice(i, j))}</span>`;
@@ -179,7 +292,10 @@ function highlightCode(code: string, lang: string): string {
           continue;
         }
         // HTML tags
-        if (ch === "<" && (lang === "html" || lang === "tsx" || lang === "jsx")) {
+        if (
+          ch === "<" &&
+          (lang === "html" || lang === "tsx" || lang === "jsx")
+        ) {
           const m = /^<\/?[a-zA-Z][a-zA-Z0-9.-]*/.exec(line.slice(i));
           if (m) {
             out += `<span class="text-rose-400">${escapeHtml(m[0])}</span>`;
@@ -198,7 +314,12 @@ function highlightCode(code: string, lang: string): string {
 function fileDotColor(name: string): string {
   const lower = name.toLowerCase();
   if (lower === "cargo.toml" || lower.endsWith(".rs")) return "bg-orange-500";
-  if (lower === "dune" || lower === "dune-project" || lower.endsWith(".ml") || lower.endsWith(".mli")) {
+  if (
+    lower === "dune" ||
+    lower === "dune-project" ||
+    lower.endsWith(".ml") ||
+    lower.endsWith(".mli")
+  ) {
     return "bg-amber-500";
   }
   const ext = lower.split(".").pop() ?? "";
@@ -213,15 +334,20 @@ function fileDotColor(name: string): string {
   return "bg-zinc-400";
 }
 
-export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocused = true }) => {
+export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({
+  windowFocused = true,
+}) => {
   const wm = useWm();
+  const session = React.useContext(WindowSessionContext);
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
-    DEFAULT_UNKERNEL_CONFIG
+    DEFAULT_UNKERNEL_CONFIG,
   );
 
   const isMobile = useIsMobile();
-  const [rootDir, setRootDir] = useState(wm.activeWorkspaceDir || "/home/user/workspace");
+  const [rootDir, setRootDir] = useState(
+    wm.activeWorkspaceDir || "/home/user/workspace",
+  );
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [sidebarMode, setSidebarMode] = useState<"tree" | "search">("tree");
   const [dirMap, setDirMap] = useState<Record<string, readonly FsEntry[]>>({});
@@ -250,6 +376,42 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
   const termRef = useRef<KittyTerminalHandle | null>(null);
 
   const activeTab = tabs.find((t) => t.path === activePath) ?? null;
+  useEffect(() => {
+    const path = session?.props?.documentPath;
+    if (typeof path === "string" && path !== activePath) void openFile(path);
+  }, [session?.props?.documentPath]);
+  useEffect(() => {
+    if (session && activePath && session.props?.documentPath !== activePath)
+      wmStore.updateWindowProps(session.id, { documentPath: activePath });
+  }, [activePath]);
+  const revision = useSurfaceRevision(
+    activePath,
+    activeTab?.content,
+    activeTab?.savedContent,
+    saving,
+  );
+  useAppSurface({
+    document: activePath ?? rootDir,
+    title: activeTab?.name,
+    revision,
+    status: "live",
+    state: {
+      document: activePath,
+      content: activeTab?.content,
+      dirty: activeTab?.content !== activeTab?.savedContent,
+      cursor: cursorInfo,
+    },
+    actions: {
+      save: {
+        label: "Enregistrer le fichier actif",
+        run: async () => {
+          if (!(await saveActiveTab()))
+            throw new Error("Échec de sauvegarde du fichier");
+          return { path: activePath };
+        },
+      },
+    },
+  });
 
   const commitRootDir = (nextDir: string) => {
     const clean = nextDir.trim().replace(/\/+/g, "/") || "/home/user/workspace";
@@ -289,13 +451,18 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
       Effect.either(
         Effect.flatMap(VmService, (vm) =>
           vm.execShell(
-            `cd ${sq(rootDir)} && find . -maxdepth 4 -type f ! -path '*/.git/*' ! -path '*/node_modules/*' 2>/dev/null | sed 's|^\\./||' | sort | head -n 300`
-          )
-        )
-      )
+            `cd ${sq(rootDir)} && find . -maxdepth 4 -type f ! -path '*/.git/*' ! -path '*/node_modules/*' 2>/dev/null | sed 's|^\\./||' | sort | head -n 300`,
+          ),
+        ),
+      ),
     );
     if (res._tag === "Right") {
-      setAllProjectFiles(res.right.stdout.split("\n").map((l) => l.trim()).filter(Boolean));
+      setAllProjectFiles(
+        res.right.stdout
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean),
+      );
     }
   };
 
@@ -305,13 +472,23 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     setSaving(true);
     for (const t of dirtyTabs) {
       await appRuntime.runPromise(
-        Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.writeFileText(t.path, t.content)))
+        Effect.either(
+          Effect.flatMap(GuestFsService, (fs) =>
+            fs.writeFileText(t.path, t.content),
+          ),
+        ),
       );
     }
-    await appRuntime.runPromise(Effect.either(Effect.flatMap(VmService, (vm) => vm.syncDisk())));
+    await appRuntime.runPromise(
+      Effect.either(Effect.flatMap(VmService, (vm) => vm.syncDisk())),
+    );
     setSaving(false);
     setTabs((prev) => prev.map((t) => ({ ...t, savedContent: t.content })));
-    wmStore.pushToast("Saved All", `${dirtyTabs.length} file(s) saved`, "success");
+    wmStore.pushToast(
+      "Saved All",
+      `${dirtyTabs.length} file(s) saved`,
+      "success",
+    );
   };
 
   const findMatches = useMemo(() => {
@@ -329,7 +506,8 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
 
   const jumpToMatch = (idx: number) => {
     if (!findMatches.length || !textareaRef.current) return;
-    const safe = ((idx % findMatches.length) + findMatches.length) % findMatches.length;
+    const safe =
+      ((idx % findMatches.length) + findMatches.length) % findMatches.length;
     setFindIdx(safe);
     const start = findMatches[safe]!;
     const ta = textareaRef.current;
@@ -342,7 +520,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
 
   const replaceOne = () => {
     if (!activeTab || !findMatches.length) return;
-    const safe = ((findIdx % findMatches.length) + findMatches.length) % findMatches.length;
+    const safe =
+      ((findIdx % findMatches.length) + findMatches.length) %
+      findMatches.length;
     const start = findMatches[safe]!;
     const next =
       activeTab.content.slice(0, start) +
@@ -354,13 +534,16 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
   const replaceAll = () => {
     if (!activeTab || !findQuery) return;
     const escaped = findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const next = activeTab.content.replace(new RegExp(escaped, "gi"), replaceText);
+    const next = activeTab.content.replace(
+      new RegExp(escaped, "gi"),
+      replaceText,
+    );
     updateActiveContent(next);
   };
 
   const loadDirectory = useCallback(async (dir: string) => {
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.listDir(dir)))
+      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.listDir(dir))),
     );
     if (res._tag === "Right") {
       setDirMap((prev) => ({ ...prev, [dir]: res.right }));
@@ -399,7 +582,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
       return;
     }
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.readFileText(filePath)))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) => fs.readFileText(filePath)),
+      ),
     );
     if (res._tag === "Right") {
       const tab: OpenTab = {
@@ -418,7 +603,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
 
   const updateActiveContent = (next: string) => {
     if (!activePath) return;
-    setTabs((prev) => prev.map((t) => (t.path === activePath ? { ...t, content: next } : t)));
+    setTabs((prev) =>
+      prev.map((t) => (t.path === activePath ? { ...t, content: next } : t)),
+    );
   };
 
   const saveActiveTab = useCallback(async () => {
@@ -431,18 +618,23 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
           const vm = yield* VmService;
           yield* fs.writeFileText(activeTab.path, activeTab.content);
           yield* vm.syncDisk();
-        })
-      )
+        }),
+      ),
     );
     setSaving(false);
     if (res._tag === "Right") {
       setTabs((prev) =>
-        prev.map((t) => (t.path === activeTab.path ? { ...t, savedContent: activeTab.content } : t))
+        prev.map((t) =>
+          t.path === activeTab.path
+            ? { ...t, savedContent: activeTab.content }
+            : t,
+        ),
       );
       wmStore.pushToast("Saved", activeTab.path, "success");
     } else {
       wmStore.pushToast("Save Error", res.left.message, "error");
     }
+    return res._tag === "Right";
   }, [activeTab]);
 
   const closeTab = (path: string) => {
@@ -466,8 +658,8 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
           const fs = yield* GuestFsService;
           yield* fs.mkdir(parent);
           yield* fs.writeFileText(fullPath, "");
-        })
-      )
+        }),
+      ),
     );
     await loadDirectory(baseDir);
     if (baseDir !== rootDir) await loadDirectory(rootDir);
@@ -475,11 +667,14 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
   };
 
   const createNewFolder = async (baseDir = rootDir) => {
-    const rel = window.prompt(`New folder name inside ${baseDir}:`, "components");
+    const rel = window.prompt(
+      `New folder name inside ${baseDir}:`,
+      "components",
+    );
     if (!rel?.trim()) return;
     const fullPath = `${baseDir}/${rel.trim()}`.replace(/\/+/g, "/");
     await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.mkdir(fullPath)))
+      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.mkdir(fullPath))),
     );
     await loadDirectory(baseDir);
     if (baseDir !== rootDir) await loadDirectory(rootDir);
@@ -491,13 +686,17 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     const parent = entry.path.split("/").slice(0, -1).join("/") || "/";
     const toPath = `${parent}/${nextName.trim()}`.replace(/\/+/g, "/");
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.rename(entry.path, toPath)))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) => fs.rename(entry.path, toPath)),
+      ),
     );
     if (res._tag === "Right") {
       setTabs((prev) =>
         prev.map((t) =>
-          t.path === entry.path ? { ...t, path: toPath, name: nextName.trim() } : t
-        )
+          t.path === entry.path
+            ? { ...t, path: toPath, name: nextName.trim() }
+            : t,
+        ),
       );
       if (activePath === entry.path) setActivePath(toPath);
       await loadDirectory(parent);
@@ -510,7 +709,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     if (!window.confirm(`Delete ${entry.name}?`)) return;
     const parent = entry.path.split("/").slice(0, -1).join("/") || "/";
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.remove(entry.path)))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) => fs.remove(entry.path)),
+      ),
     );
     if (res._tag === "Right") {
       closeTab(entry.path);
@@ -539,7 +740,11 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     } else if (ext === "sh") {
       cmd = `sh ${sq(activeTab.path)}`;
     } else {
-      wmStore.pushToast("Run Hint", `Open terminal to run ${activeTab.name}`, "info");
+      wmStore.pushToast(
+        "Run Hint",
+        `Open terminal to run ${activeTab.name}`,
+        "info",
+      );
       return;
     }
     setTimeout(() => {
@@ -557,10 +762,10 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
       Effect.either(
         Effect.flatMap(VmService, (vm) =>
           vm.execShell(
-            `cd ${sq(rootDir)} && (command -v rg >/dev/null 2>&1 && rg -n --max-count 5 --max-filesize 256K -- ${sq(q)} . || grep -rn --exclude-dir=node_modules --exclude-dir=.git -- ${sq(q)} .) | head -n 60`
-          )
-        )
-      )
+            `cd ${sq(rootDir)} && (command -v rg >/dev/null 2>&1 && rg -n --max-count 5 --max-filesize 256K -- ${sq(q)} . || grep -rn --exclude-dir=node_modules --exclude-dir=.git -- ${sq(q)} .) | head -n 60`,
+          ),
+        ),
+      ),
     );
     setSearching(false);
     if (res._tag === "Right") {
@@ -582,12 +787,14 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
 
   const highlightedHtml = useMemo(() => {
     if (!activeTab) return "";
-    return highlightCode(activeTab.content, detectLanguage(activeTab.path)) + "\n";
+    return (
+      highlightCode(activeTab.content, detectLanguage(activeTab.path)) + "\n"
+    );
   }, [activeTab?.content, activeTab?.path]);
 
   const lineCount = useMemo(
     () => (activeTab ? activeTab.content.split("\n").length : 0),
-    [activeTab?.content]
+    [activeTab?.content],
   );
 
   const syncScroll = () => {
@@ -607,11 +814,16 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
     if (!ta) return;
     const before = ta.value.slice(0, ta.selectionStart);
     const lines = before.split("\n");
-    setCursorInfo({ line: lines.length, col: (lines[lines.length - 1]?.length ?? 0) + 1 });
+    setCursorInfo({
+      line: lines.length,
+      col: (lines[lines.length - 1]?.length ?? 0) + 1,
+    });
   };
 
   const renderTree = (dir: string, depth = 0): React.ReactNode => {
-    const entries = (dirMap[dir] ?? []).filter((e) => e.name !== "node_modules" && e.name !== ".git");
+    const entries = (dirMap[dir] ?? []).filter(
+      (e) => e.name !== "node_modules" && e.name !== ".git",
+    );
     return entries.map((entry) => {
       const expanded = Boolean(expandedDirs[entry.path]);
       const isSelected = activePath === entry.path;
@@ -619,7 +831,11 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
         <div key={entry.path}>
           <div
             style={{ paddingLeft: `${8 + depth * 12}px` }}
-            onClick={() => (entry.isDir ? toggleDir(entry.path) : void openFile(entry.path, entry.name))}
+            onClick={() =>
+              entry.isDir
+                ? toggleDir(entry.path)
+                : void openFile(entry.path, entry.name)
+            }
             className={`group w-full flex items-center justify-between gap-1 pr-1.5 py-1 text-left text-xs rounded-md cursor-pointer transition ${
               isSelected
                 ? "bg-violet-500/25 text-white"
@@ -643,10 +859,14 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
               ) : (
                 <>
                   <span className="w-3 shrink-0" />
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${fileDotColor(entry.name)}`} />
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${fileDotColor(entry.name)}`}
+                  />
                 </>
               )}
-              <span className="truncate font-mono text-[11px]">{entry.name}</span>
+              <span className="truncate font-mono text-[11px]">
+                {entry.name}
+              </span>
             </div>
             <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
               {entry.isDir && (
@@ -809,13 +1029,17 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
               </button>
               <button
                 type="button"
-                disabled={saving || activeTab.content === activeTab.savedContent}
+                disabled={
+                  saving || activeTab.content === activeTab.savedContent
+                }
                 onClick={() => void saveActiveTab()}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-violet-600/85 hover:bg-violet-500 text-white disabled:opacity-40 transition"
                 title="Save (⌘S) · Save All (⌘⇧S)"
               >
                 <Save className="w-3 h-3" />
-                <span className="hidden sm:inline">{saving ? "..." : "Save"}</span>
+                <span className="hidden sm:inline">
+                  {saving ? "..." : "Save"}
+                </span>
               </button>
             </>
           )}
@@ -865,67 +1089,83 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
         {/* Left Sidebar (Collapsible Drawer on Mobile) */}
         {sidebarOpen && (
           <aside className="absolute md:relative inset-y-0 left-0 z-20 w-56 shrink-0 bg-[#0b0e17]/98 md:bg-black/35 border-r border-white/10 flex flex-col min-h-0 shadow-2xl md:shadow-none">
-          <div className="grid grid-cols-2 p-1 gap-1 border-b border-white/8 text-[11px]">
-            <button
-              type="button"
-              onClick={() => setSidebarMode("tree")}
-              className={`py-1 rounded-lg font-medium transition ${
-                sidebarMode === "tree" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              Explorer
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarMode("search")}
-              className={`py-1 rounded-lg font-medium transition ${
-                sidebarMode === "search" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              Search (rg)
-            </button>
-          </div>
-
-          {sidebarMode === "tree" ? (
-            <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">{renderTree(rootDir)}</div>
-          ) : (
-            <div className="flex-1 flex flex-col min-h-0 p-2 space-y-2">
-              <div className="flex gap-1">
-                <input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && void runProjectSearch()}
-                  placeholder="Search in project..."
-                  className="flex-1 px-2 py-1 rounded-lg bg-black/50 border border-white/12 text-[11px] font-mono text-zinc-100 outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => void runProjectSearch()}
-                  className="p-1.5 rounded-lg bg-violet-600/80 hover:bg-violet-500 text-white"
-                >
-                  <Search className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-1">
-                {searching && <p className="text-[11px] text-zinc-500 px-1">Searching...</p>}
-                {searchHits.map((h, i) => (
-                  <button
-                    key={`${h.file}:${h.line}:${i}`}
-                    type="button"
-                    onClick={() => void openFile(h.file)}
-                    className="w-full text-left p-1.5 rounded-lg bg-white/[0.03] hover:bg-white/10 transition"
-                  >
-                    <div className="flex items-center justify-between text-[10px] font-mono text-cyan-300">
-                      <span className="truncate">{h.file.replace(rootDir, "").replace(/^\//, "")}</span>
-                      <span className="text-zinc-500 ml-1">:{h.line}</span>
-                    </div>
-                    <div className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">{h.text}</div>
-                  </button>
-                ))}
-              </div>
+            <div className="grid grid-cols-2 p-1 gap-1 border-b border-white/8 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setSidebarMode("tree")}
+                className={`py-1 rounded-lg font-medium transition ${
+                  sidebarMode === "tree"
+                    ? "bg-white/12 text-white"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                Explorer
+              </button>
+              <button
+                type="button"
+                onClick={() => setSidebarMode("search")}
+                className={`py-1 rounded-lg font-medium transition ${
+                  sidebarMode === "search"
+                    ? "bg-white/12 text-white"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                Search (rg)
+              </button>
             </div>
-          )}
-        </aside>
+
+            {sidebarMode === "tree" ? (
+              <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+                {renderTree(rootDir)}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col min-h-0 p-2 space-y-2">
+                <div className="flex gap-1">
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && void runProjectSearch()
+                    }
+                    placeholder="Search in project..."
+                    className="flex-1 px-2 py-1 rounded-lg bg-black/50 border border-white/12 text-[11px] font-mono text-zinc-100 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void runProjectSearch()}
+                    className="p-1.5 rounded-lg bg-violet-600/80 hover:bg-violet-500 text-white"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-1">
+                  {searching && (
+                    <p className="text-[11px] text-zinc-500 px-1">
+                      Searching...
+                    </p>
+                  )}
+                  {searchHits.map((h, i) => (
+                    <button
+                      key={`${h.file}:${h.line}:${i}`}
+                      type="button"
+                      onClick={() => void openFile(h.file)}
+                      className="w-full text-left p-1.5 rounded-lg bg-white/[0.03] hover:bg-white/10 transition"
+                    >
+                      <div className="flex items-center justify-between text-[10px] font-mono text-cyan-300">
+                        <span className="truncate">
+                          {h.file.replace(rootDir, "").replace(/^\//, "")}
+                        </span>
+                        <span className="text-zinc-500 ml-1">:{h.line}</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">
+                        {h.text}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </aside>
         )}
 
         {/* Right: Tabs + Code Editor + Integrated Terminal */}
@@ -945,7 +1185,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                       : "text-zinc-400 hover:bg-white/6 hover:text-zinc-200"
                   }`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${fileDotColor(t.name)}`} />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${fileDotColor(t.name)}`}
+                  />
                   <span>{t.name}</span>
                   {dirty && <span className="text-amber-400">●</span>}
                   <button
@@ -962,7 +1204,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
               );
             })}
             {tabs.length === 0 && (
-              <span className="text-[11px] text-zinc-500 px-2">Select a file from Explorer to start coding</span>
+              <span className="text-[11px] text-zinc-500 px-2">
+                Select a file from Explorer to start coding
+              </span>
             )}
           </div>
 
@@ -978,14 +1222,17 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                   setFindIdx(0);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") jumpToMatch(e.shiftKey ? findIdx - 1 : findIdx + 1);
+                  if (e.key === "Enter")
+                    jumpToMatch(e.shiftKey ? findIdx - 1 : findIdx + 1);
                   if (e.key === "Escape") setFindOpen(false);
                 }}
                 placeholder="Find..."
                 className="w-36 px-2 py-0.5 rounded bg-black/60 border border-white/12 text-[11px] font-mono text-white outline-none"
               />
               <span className="text-[10px] font-mono text-zinc-400 min-w-[44px]">
-                {findMatches.length > 0 ? `${(findIdx % findMatches.length) + 1}/${findMatches.length}` : "0/0"}
+                {findMatches.length > 0
+                  ? `${(findIdx % findMatches.length) + 1}/${findMatches.length}`
+                  : "0/0"}
               </span>
               <button
                 type="button"
@@ -1055,7 +1302,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                     aria-hidden="true"
                     style={{ fontSize: `${editorFontSize}px` }}
                     className={`absolute inset-0 m-0 p-3 font-mono leading-[1.6] overflow-hidden pointer-events-none text-zinc-100 ${
-                      wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre"
+                      wordWrap
+                        ? "whitespace-pre-wrap break-words"
+                        : "whitespace-pre"
                     }`}
                     dangerouslySetInnerHTML={{ __html: highlightedHtml }}
                   />
@@ -1070,7 +1319,10 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                     onKeyUp={updateCursor}
                     onClick={updateCursor}
                     onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+                      if (
+                        (e.metaKey || e.ctrlKey) &&
+                        e.key.toLowerCase() === "s"
+                      ) {
                         e.preventDefault();
                         void saveActiveTab();
                         return;
@@ -1080,7 +1332,8 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                         const ta = e.currentTarget;
                         const s = ta.selectionStart;
                         const end = ta.selectionEnd;
-                        const next = ta.value.slice(0, s) + "  " + ta.value.slice(end);
+                        const next =
+                          ta.value.slice(0, s) + "  " + ta.value.slice(end);
                         updateActiveContent(next);
                         requestAnimationFrame(() => {
                           ta.selectionStart = ta.selectionEnd = s + 2;
@@ -1093,7 +1346,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                     autoCorrect="off"
                     style={{ fontSize: `${editorFontSize}px` }}
                     className={`relative w-full h-full m-0 p-3 bg-transparent text-transparent caret-cyan-400 font-mono leading-[1.6] overflow-auto outline-none resize-none select-text ${
-                      wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre"
+                      wordWrap
+                        ? "whitespace-pre-wrap break-words"
+                        : "whitespace-pre"
                     }`}
                   />
                 </div>
@@ -1104,9 +1359,14 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                   <FileCode2 className="w-6 h-6 text-sky-400" />
                 </div>
                 <div className="space-y-1 max-w-xs">
-                  <div className="text-sm font-medium text-zinc-200">unkernelOS Code IDE</div>
+                  <div className="text-sm font-medium text-zinc-200">
+                    unkernelOS Code IDE
+                  </div>
                   <p className="text-xs text-zinc-400">
-                    Edit files directly on your persistent Linux filesystem with syntax highlighting, project-wide <code className="text-cyan-300">rg</code> search, and integrated WebGPU terminal.
+                    Edit files directly on your persistent Linux filesystem with
+                    syntax highlighting, project-wide{" "}
+                    <code className="text-cyan-300">rg</code> search, and
+                    integrated WebGPU terminal.
                   </p>
                 </div>
               </div>
@@ -1152,7 +1412,9 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                   <span>
                     Ln {cursorInfo.line}, Col {cursorInfo.col}
                   </span>
-                  <span className="uppercase text-cyan-300">{detectLanguage(activeTab.path)}</span>
+                  <span className="uppercase text-cyan-300">
+                    {detectLanguage(activeTab.path)}
+                  </span>
                   <span>UTF-8</span>
                 </>
               )}
@@ -1181,7 +1443,7 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                   if (e.key === "Escape") setQuickOpen(false);
                   if (e.key === "Enter") {
                     const first = allProjectFiles.find((f) =>
-                      f.toLowerCase().includes(quickQuery.trim().toLowerCase())
+                      f.toLowerCase().includes(quickQuery.trim().toLowerCase()),
                     );
                     if (first) {
                       setQuickOpen(false);
@@ -1195,7 +1457,11 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
             </div>
             <div className="max-h-64 overflow-y-auto p-1.5 space-y-0.5">
               {allProjectFiles
-                .filter((f) => !quickQuery.trim() || f.toLowerCase().includes(quickQuery.trim().toLowerCase()))
+                .filter(
+                  (f) =>
+                    !quickQuery.trim() ||
+                    f.toLowerCase().includes(quickQuery.trim().toLowerCase()),
+                )
                 .slice(0, 40)
                 .map((rel) => (
                   <button
@@ -1207,12 +1473,16 @@ export const CodeIdeApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocuse
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left text-xs font-mono text-zinc-200 transition"
                   >
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${fileDotColor(rel)}`} />
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${fileDotColor(rel)}`}
+                    />
                     <span className="truncate">{rel}</span>
                   </button>
                 ))}
               {allProjectFiles.length === 0 && (
-                <div className="p-4 text-center text-xs text-zinc-500">No files found in {rootDir}</div>
+                <div className="p-4 text-center text-xs text-zinc-500">
+                  No files found in {rootDir}
+                </div>
               )}
             </div>
           </div>

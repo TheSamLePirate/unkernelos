@@ -1,3 +1,9 @@
+import {
+  centerSlots,
+  settleHorizon,
+  type HorizonLayout,
+  type HorizonPlacement,
+} from "./horizon-layout.ts";
 import { useSyncExternalStore } from "react";
 import type { DynamicAppDef } from "../core/dynamic-apps-store.ts";
 import { uiSounds } from "../core/ui-sounds.ts";
@@ -51,11 +57,7 @@ export type SnapZone =
   | "maximize";
 
 export type GridLayoutMode =
-  | "grid"
-  | "split-2"
-  | "master-stack"
-  | "columns-3"
-  | "cascade";
+  "grid" | "split-2" | "master-stack" | "columns-3" | "cascade";
 
 export interface AppDefinition {
   readonly id: AppId;
@@ -75,7 +77,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "t3-code",
     title: "T3 Code — Multi-Agent Harness",
     shortTitle: "T3 Code",
-    description: "Unified pingdotgg/t3code control plane for Claude, Pi, Codex & Antigravity (threads, subagents, worktrees, usage, cost & limits)",
+    description:
+      "Unified pingdotgg/t3code control plane for Claude, Pi, Codex & Antigravity (threads, subagents, worktrees, usage, cost & limits)",
     defaultWidth: 1220,
     defaultHeight: 740,
     minWidth: 740,
@@ -87,7 +90,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "agent-studio",
     title: "Agent Studio",
     shortTitle: "Studio",
-    description: "Prompt an app → Claude Code / Pi builds, tests, previews & deploys to GitHub Pages",
+    description:
+      "Prompt an app → Claude Code / Pi builds, tests, previews & deploys to GitHub Pages",
     defaultWidth: 1120,
     defaultHeight: 700,
     minWidth: 740,
@@ -99,7 +103,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "agent-swarm",
     title: "Multi-Agent Swarm Ops",
     shortTitle: "Swarm",
-    description: "Run parallel Claude Code & Pi agents in a live PTY grid with Kanban & inter-agent bus",
+    description:
+      "Run parallel Claude Code & Pi agents in a live PTY grid with Kanban & inter-agent bus",
     defaultWidth: 1140,
     defaultHeight: 700,
     minWidth: 700,
@@ -110,7 +115,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "agent-api",
     title: "Agent OS API & Bridge",
     shortTitle: "OS API",
-    description: "Full Agent-Native OS control bridge (osctl, MCP server, 43+ host APIs & live audit log)",
+    description:
+      "Full Agent-Native OS control bridge (osctl, MCP server, 43+ host APIs & live audit log)",
     defaultWidth: 1020,
     defaultHeight: 650,
     minWidth: 620,
@@ -121,7 +127,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "ide",
     title: "Code IDE",
     shortTitle: "Code",
-    description: "Multi-tab code editor (TS, Python, Rust, OCaml) with ripgrep search & integrated terminal",
+    description:
+      "Multi-tab code editor (TS, Python, Rust, OCaml) with ripgrep search & integrated terminal",
     defaultWidth: 1100,
     defaultHeight: 680,
     minWidth: 680,
@@ -133,7 +140,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "notebook",
     title: "Polyglot Science Notebook",
     shortTitle: "Notebook",
-    description: "Jupyter-style Python (Matplotlib/NumPy), Rust, OCaml, Bun, SQL, Bash & osctl cells + .ipynb",
+    description:
+      "Jupyter-style Python (Matplotlib/NumPy), Rust, OCaml, Bun, SQL, Bash & osctl cells + .ipynb",
     defaultWidth: 1080,
     defaultHeight: 690,
     minWidth: 640,
@@ -144,7 +152,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "microml",
     title: "microML Compiler Explorer",
     shortTitle: "microML",
-    description: "coucou747's mini-OCaml compiler: every pass, types vs real OCaml, generated C & native run",
+    description:
+      "coucou747's mini-OCaml compiler: every pass, types vs real OCaml, generated C & native run",
     defaultWidth: 1180,
     defaultHeight: 720,
     minWidth: 680,
@@ -155,7 +164,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "proof-studio",
     title: "Studio de preuves",
     shortTitle: "Preuves",
-    description: "Preuves en déduction naturelle avec Poule : vérification en direct, but, arbre de preuve, guide pas à pas",
+    description:
+      "Preuves en déduction naturelle avec Poule : vérification en direct, but, arbre de preuve, guide pas à pas",
     defaultWidth: 1280,
     defaultHeight: 780,
     minWidth: 720,
@@ -166,7 +176,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "terminal",
     title: "Kitty Terminal (WebGPU)",
     shortTitle: "Terminal",
-    description: "GPU-accelerated Kitty-style terminal with tabs, splits & truecolor",
+    description:
+      "GPU-accelerated Kitty-style terminal with tabs, splits & truecolor",
     defaultWidth: 920,
     defaultHeight: 580,
     minWidth: 460,
@@ -178,7 +189,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "explorer",
     title: "File Explorer",
     shortTitle: "Files",
-    description: "Browse, edit, upload & download files on the live Linux filesystem",
+    description:
+      "Browse, edit, upload & download files on the live Linux filesystem",
     defaultWidth: 960,
     defaultHeight: 620,
     minWidth: 560,
@@ -190,7 +202,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "api-client",
     title: "HTTP / API Client",
     shortTitle: "API",
-    description: "Bruno/Insomnia-style REST client for guest VM servers (vsock) & external APIs",
+    description:
+      "Bruno/Insomnia-style REST client for guest VM servers (vsock) & external APIs",
     defaultWidth: 1020,
     defaultHeight: 650,
     minWidth: 620,
@@ -201,7 +214,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "network-inspector",
     title: "Live Network & HTTP Inspector",
     shortTitle: "Network",
-    description: "Capture guest vsock HTTP traffic, waterfall latency, JSON/headers, cURL export & replay",
+    description:
+      "Capture guest vsock HTTP traffic, waterfall latency, JSON/headers, cURL export & replay",
     defaultWidth: 1060,
     defaultHeight: 660,
     minWidth: 640,
@@ -212,7 +226,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "database",
     title: "SQL & Database Studio",
     shortTitle: "SQL",
-    description: "Interactive SQLite3 studio on Linux disk — schema browser, SQL editor & CSV export",
+    description:
+      "Interactive SQLite3 studio on Linux disk — schema browser, SQL editor & CSV export",
     defaultWidth: 1000,
     defaultHeight: 640,
     minWidth: 620,
@@ -223,7 +238,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "services",
     title: "Service & Daemon Runner",
     shortTitle: "Services",
-    description: "Launch, monitor & tail logs for Bun/Python/Rust/OCaml/Vite servers inside Linux",
+    description:
+      "Launch, monitor & tail logs for Bun/Python/Rust/OCaml/Vite servers inside Linux",
     defaultWidth: 940,
     defaultHeight: 600,
     minWidth: 580,
@@ -234,7 +250,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "app-store",
     title: "App Store & Project Starters",
     shortTitle: "Store",
-    description: "1-click WebOS apps, Rust/OCaml/Python/Bun project starters & Linux science toolchains",
+    description:
+      "1-click WebOS apps, Rust/OCaml/Python/Bun project starters & Linux science toolchains",
     defaultWidth: 1060,
     defaultHeight: 680,
     minWidth: 640,
@@ -245,7 +262,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "automations",
     title: "Automations & App SDK",
     shortTitle: "Automate",
-    description: "OS workflows, shortcuts & Self-Extending Agent-Built WebOS Apps (osctl app.install)",
+    description:
+      "OS workflows, shortcuts & Self-Extending Agent-Built WebOS Apps (osctl app.install)",
     defaultWidth: 980,
     defaultHeight: 640,
     minWidth: 580,
@@ -267,7 +285,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "notes",
     title: "Notes & Markdown Studio",
     shortTitle: "Notes",
-    description: "Split Markdown studio with live preview & checklists persisted in ~/notes",
+    description:
+      "Split Markdown studio with live preview & checklists persisted in ~/notes",
     defaultWidth: 960,
     defaultHeight: 620,
     minWidth: 580,
@@ -278,7 +297,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "whiteboard",
     title: "Architecture Whiteboard",
     shortTitle: "Sketch",
-    description: "Dark glass infinite-feel canvas for diagrams, UI sketches & PNG export",
+    description:
+      "Dark glass infinite-feel canvas for diagrams, UI sketches & PNG export",
     defaultWidth: 980,
     defaultHeight: 640,
     minWidth: 580,
@@ -289,7 +309,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "media-studio",
     title: "Media, PDF & Capture Studio",
     shortTitle: "Media",
-    description: "Play Video/Audio/PDF/Images from Linux, record screen/webcam to workspace & Focus Timer",
+    description:
+      "Play Video/Audio/PDF/Images from Linux, record screen/webcam to workspace & Focus Timer",
     defaultWidth: 960,
     defaultHeight: 640,
     minWidth: 560,
@@ -300,7 +321,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "dev-utils",
     title: "Dev Utilities Suite",
     shortTitle: "Utils",
-    description: "JSON, JWT, Base64/URL, Regex, UUID/SHA-256, Color Glass, Diff & Cron",
+    description:
+      "JSON, JWT, Base64/URL, Regex, UUID/SHA-256, Color Glass, Diff & Cron",
     defaultWidth: 920,
     defaultHeight: 600,
     minWidth: 560,
@@ -311,7 +333,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "processes",
     title: "Process & Network Manager",
     shortTitle: "Procs",
-    description: "Live Linux processes (SIGTERM/SIGKILL), open vsock ports, df & env inspector",
+    description:
+      "Live Linux processes (SIGTERM/SIGKILL), open vsock ports, df & env inspector",
     defaultWidth: 920,
     defaultHeight: 590,
     minWidth: 560,
@@ -322,7 +345,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "shader-synth",
     title: "WebGPU Shader & Synth Studio",
     shortTitle: "Shader",
-    description: "Live 60fps WGSL shader playground + polyphonic WebAudio synth & oscilloscope",
+    description:
+      "Live 60fps WGSL shader playground + polyphonic WebAudio synth & oscilloscope",
     defaultWidth: 1000,
     defaultHeight: 640,
     minWidth: 620,
@@ -333,7 +357,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "preview",
     title: "Web Preview",
     shortTitle: "Preview",
-    description: "Live browser preview for guest dev servers over vsock + WebSocket HMR",
+    description:
+      "Live browser preview for guest dev servers over vsock + WebSocket HMR",
     defaultWidth: 980,
     defaultHeight: 640,
     minWidth: 440,
@@ -345,7 +370,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "screen",
     title: "Graphical Display (FB0 / GL / Wayland)",
     shortTitle: "Screen",
-    description: "WebGPU /dev/fb0 framebuffer, VirGL 3D (/dev/dri) & Wayland desktop launcher",
+    description:
+      "WebGPU /dev/fb0 framebuffer, VirGL 3D (/dev/dri) & Wayland desktop launcher",
     defaultWidth: 980,
     defaultHeight: 680,
     minWidth: 540,
@@ -357,7 +383,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "gl-window",
     title: "Guest 3D GL / KMS Viewport",
     shortTitle: "3D GL",
-    description: "Floating desktop-integrated VirGL 3D & KMS hardware-accelerated window",
+    description:
+      "Floating desktop-integrated VirGL 3D & KMS hardware-accelerated window",
     defaultWidth: 860,
     defaultHeight: 580,
     minWidth: 420,
@@ -368,7 +395,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "wayland-surface",
     title: "Linux Wayland App",
     shortTitle: "Wayland",
-    description: "Native Linux Wayland window composited directly onto the unkernelOS desktop",
+    description:
+      "Native Linux Wayland window composited directly onto the unkernelOS desktop",
     defaultWidth: 820,
     defaultHeight: 540,
     minWidth: 320,
@@ -379,7 +407,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "git",
     title: "Git & GitHub Pages",
     shortTitle: "Git",
-    description: "Diff, commit, push & 1-click GitHub Pages hosting via git + gh",
+    description:
+      "Diff, commit, push & 1-click GitHub Pages hosting via git + gh",
     defaultWidth: 940,
     defaultHeight: 620,
     minWidth: 560,
@@ -391,7 +420,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "toolchain",
     title: "Toolchain Installer",
     shortTitle: "Installer",
-    description: "Install git, gh, python, pip, node, bun, claude code, pi & Mesa GL",
+    description:
+      "Install git, gh, python, pip, node, bun, claude code, pi & Mesa GL",
     defaultWidth: 880,
     defaultHeight: 620,
     minWidth: 540,
@@ -403,7 +433,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "monitor",
     title: "System Monitor",
     shortTitle: "Monitor",
-    description: "Live vCPUs, RAM, JIT compiler, IndexedDB disk, Wisp net & kernel dmesg",
+    description:
+      "Live vCPUs, RAM, JIT compiler, IndexedDB disk, Wisp net & kernel dmesg",
     defaultWidth: 860,
     defaultHeight: 580,
     minWidth: 500,
@@ -415,7 +446,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "mod-studio",
     title: "OS Mod Studio & Bureau 3D",
     shortTitle: "Mod Studio",
-    description: "Moddez tout : variantes OS, Bureau 3D WebGPU Three.js, décorateurs, shaders WGSL, widgets, CSS & API agents",
+    description:
+      "Moddez tout : variantes OS, Bureau 3D WebGPU Three.js, décorateurs, shaders WGSL, widgets, CSS & API agents",
     defaultWidth: 1080,
     defaultHeight: 690,
     minWidth: 640,
@@ -426,7 +458,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "rune-settings",
     title: "Liquid Metal Réglages (Rust Rune)",
     shortTitle: "Rune Metal",
-    description: "App native Rust Rune + rune-fx Liquid Metal GPU contrôlant en direct les réglages d'unkernelOS",
+    description:
+      "App native Rust Rune + rune-fx Liquid Metal GPU contrôlant en direct les réglages d'unkernelOS",
     defaultWidth: 980,
     defaultHeight: 660,
     minWidth: 560,
@@ -437,7 +470,8 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     id: "settings",
     title: "unkernelOS Settings",
     shortTitle: "Settings",
-    description: "Themes, WebGPU Shaders, Distro, RAM, vCPUs, Wisp URL, GL/FB0 & API Keys",
+    description:
+      "Themes, WebGPU Shaders, Distro, RAM, vCPUs, Wisp URL, GL/FB0 & API Keys",
     defaultWidth: 920,
     defaultHeight: 650,
     minWidth: 580,
@@ -450,6 +484,12 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
 export interface WindowInstance {
   readonly id: string;
   readonly appId: AppId;
+  readonly sessionId?: string;
+  readonly contextId?: string;
+  readonly placement?: HorizonPlacement;
+  readonly placementOrder?: number;
+  readonly centerOrder?: number;
+  readonly horizonOffset?: { readonly x: number; readonly y: number };
   readonly title: string;
   readonly workspace: WorkspaceId;
   readonly x: number;
@@ -510,6 +550,11 @@ export interface ApiClientDraft {
 }
 
 interface WmState {
+  readonly horizonEnabled: boolean;
+  readonly horizonLayout: HorizonLayout;
+  readonly horizonFlat: boolean;
+  readonly horizonDrawerId: string | null;
+  readonly horizonHistoryOpen: boolean;
   readonly windows: readonly WindowInstance[];
   readonly activeWindowId: string | null;
   readonly activeWorkspace: WorkspaceId;
@@ -552,17 +597,34 @@ function normalizeWorkspacePath(dir: string): string {
 
 const DEFAULT_WORKSPACE_DIR = "/home/user/workspace";
 
-function loadStoredWorkspace(): { active: string; recent: string[]; hadStored: boolean } {
-  const fallback = { active: DEFAULT_WORKSPACE_DIR, recent: [DEFAULT_WORKSPACE_DIR], hadStored: false };
+function loadStoredWorkspace(): {
+  active: string;
+  recent: string[];
+  hadStored: boolean;
+} {
+  const fallback = {
+    active: DEFAULT_WORKSPACE_DIR,
+    recent: [DEFAULT_WORKSPACE_DIR],
+    hadStored: false,
+  };
   if (typeof localStorage === "undefined") return fallback;
   try {
     const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as { active?: string; recent?: string[] };
-    const active = parsed.active ? normalizeWorkspacePath(parsed.active) : fallback.active;
-    const recent = Array.isArray(parsed.recent) && parsed.recent.length > 0
-      ? Array.from(new Set([active, ...parsed.recent.map(normalizeWorkspacePath), DEFAULT_WORKSPACE_DIR])).slice(0, 8)
-      : Array.from(new Set([active, DEFAULT_WORKSPACE_DIR]));
+    const active = parsed.active
+      ? normalizeWorkspacePath(parsed.active)
+      : fallback.active;
+    const recent =
+      Array.isArray(parsed.recent) && parsed.recent.length > 0
+        ? Array.from(
+            new Set([
+              active,
+              ...parsed.recent.map(normalizeWorkspacePath),
+              DEFAULT_WORKSPACE_DIR,
+            ]),
+          ).slice(0, 8)
+        : Array.from(new Set([active, DEFAULT_WORKSPACE_DIR]));
     return { active, recent, hadStored: Boolean(parsed.active) };
   } catch {
     return fallback;
@@ -572,7 +634,10 @@ function loadStoredWorkspace(): { active: string; recent: string[]; hadStored: b
 function saveStoredWorkspace(active: string, recent: readonly string[]): void {
   if (typeof localStorage === "undefined") return;
   try {
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ active, recent }));
+    localStorage.setItem(
+      WORKSPACE_STORAGE_KEY,
+      JSON.stringify({ active, recent }),
+    );
   } catch {
     // ignore
   }
@@ -582,6 +647,13 @@ const initialWorkspace = loadStoredWorkspace();
 
 class WindowManagerStore {
   private state: WmState = {
+    horizonEnabled:
+      typeof localStorage === "undefined" ||
+      localStorage.getItem("unkernelos:horizon:enabled:v1") !== "false",
+    horizonLayout: "focus",
+    horizonFlat: false,
+    horizonDrawerId: null,
+    horizonHistoryOpen: false,
     windows: [],
     activeWindowId: null,
     activeWorkspace: 1,
@@ -629,15 +701,295 @@ class WindowManagerStore {
   }
 
   private setState(updater: (prev: WmState) => WmState): void {
-    this.state = updater(this.state);
+    const previous = this.state;
+    let next = updater(previous);
+    if (next.windows !== previous.windows) {
+      const added = next.windows.some(
+        (w) => !previous.windows.some((p) => p.id === w.id),
+      );
+      const windows = next.windows.map((w) =>
+        w.sessionId
+          ? w
+          : {
+              ...w,
+              sessionId: w.id,
+              contextId: w.id,
+              placement: w.placement ?? ("center" as HorizonPlacement),
+            },
+      );
+      next = {
+        ...next,
+        windows:
+          added && next.horizonEnabled
+            ? settleHorizon(
+                windows,
+                centerSlots(next.horizonLayout),
+                next.activeWindowId,
+              )
+            : windows,
+      };
+    }
+    this.state = next;
     this.emit();
   }
 
-  public openApp(appId: AppId, props?: Record<string, unknown>, forceNew = false): string {
+  private horizonUndo: readonly {
+    windows: readonly WindowInstance[];
+    layout: HorizonLayout;
+  }[] = [];
+  private horizonRedo: readonly {
+    windows: readonly WindowInstance[];
+    layout: HorizonLayout;
+  }[] = [];
+  public rememberHorizon(): void {
+    this.horizonUndo = [
+      ...this.horizonUndo.slice(-29),
+      { windows: [...this.state.windows], layout: this.state.horizonLayout },
+    ];
+    this.horizonRedo = [];
+  }
+  public undoHorizon(redo = false): void {
+    const from = redo ? this.horizonRedo : this.horizonUndo;
+    const target = from.at(-1);
+    if (!target) return;
+    const current = {
+      windows: [...this.state.windows],
+      layout: this.state.horizonLayout,
+    };
+    if (redo) {
+      this.horizonRedo = from.slice(0, -1);
+      this.horizonUndo = [...this.horizonUndo, current];
+    } else {
+      this.horizonUndo = from.slice(0, -1);
+      this.horizonRedo = [...this.horizonRedo, current];
+    }
+    this.setState((s) => ({
+      ...s,
+      horizonLayout: target.layout,
+      windows: s.windows.map((w) => {
+        const old = target.windows.find((x) => x.id === w.id);
+        return old
+          ? {
+              ...w,
+              placement: old.placement,
+              placementOrder: old.placementOrder,
+              width: old.width,
+              height: old.height,
+              horizonOffset: old.horizonOffset,
+              maximized: old.maximized,
+              snap: old.snap,
+            }
+          : w;
+      }),
+    }));
+  }
+  public setHorizonEnabled(enabled: boolean): void {
+    if (
+      enabled !== this.state.horizonEnabled &&
+      this.state.windows.length > 0
+    ) {
+      this.pushToast(
+        "Changement de shell",
+        "Fermez les fenêtres avant de changer de shell. Le mode à plat reste disponible sans interrompre les sessions.",
+        "info",
+      );
+      return;
+    }
+    try {
+      localStorage.setItem("unkernelos:horizon:enabled:v1", String(enabled));
+    } catch {}
+    this.setState((s) => ({
+      ...s,
+      horizonEnabled: enabled,
+      windows: enabled
+        ? settleHorizon(
+            s.windows,
+            centerSlots(s.horizonLayout),
+            s.activeWindowId,
+          )
+        : s.windows,
+    }));
+  }
+  public setHorizonFlat(flat: boolean): void {
+    this.setState((s) => ({ ...s, horizonFlat: flat }));
+  }
+  public setHorizonLayout(layout: HorizonLayout): void {
+    this.rememberHorizon();
+    this.setState((s) => {
+      let windows = [...s.windows];
+      const candidates = windows
+        .filter((w) => w.workspace === s.activeWorkspace && !w.minimized)
+        .sort((a, b) => b.zIndex - a.zIndex);
+      for (const candidate of candidates.slice(0, centerSlots(layout)))
+        windows = windows.map((w) =>
+          w.id === candidate.id ? { ...w, placement: "center" as const } : w,
+        );
+      return {
+        ...s,
+        horizonLayout: layout,
+        windows: settleHorizon(windows, centerSlots(layout), s.activeWindowId),
+      };
+    });
+  }
+  public placeHorizonWindow(
+    id: string,
+    placement: HorizonPlacement,
+    index?: number,
+  ): void {
+    if (!this.state.windows.some((w) => w.id === id))
+      throw new Error("Window unavailable");
+    this.rememberHorizon();
+    if (placement === "center") {
+      this.focusWindow(id);
+      return;
+    }
+    this.setState((s) => {
+      let windows = s.windows.map((w) =>
+        w.id === id
+          ? {
+              ...w,
+              placement,
+              placementOrder: Date.now(),
+              minimized: false,
+              maximized: false,
+            }
+          : w,
+      );
+      if (index !== undefined) {
+        const siblings = windows
+          .filter(
+            (w) =>
+              w.placement === placement &&
+              w.workspace === s.activeWorkspace &&
+              w.id !== id,
+          )
+          .sort(
+            (a, b) =>
+              (a.placementOrder ?? a.zIndex) - (b.placementOrder ?? b.zIndex),
+          );
+        siblings.splice(
+          Math.max(0, Math.min(siblings.length, index)),
+          0,
+          windows.find((w) => w.id === id)!,
+        );
+        windows = windows.map((w) => {
+          const order = siblings.findIndex((x) => x.id === w.id);
+          return order < 0 ? w : { ...w, placementOrder: order };
+        });
+      }
+      const center = windows
+        .filter(
+          (w) =>
+            w.workspace === s.activeWorkspace &&
+            !w.minimized &&
+            w.placement === "center",
+        )
+        .sort((a, b) => b.zIndex - a.zIndex)[0];
+      return {
+        ...s,
+        windows,
+        activeWindowId:
+          s.activeWindowId === id ? (center?.id ?? null) : s.activeWindowId,
+      };
+    });
+  }
+  public setHorizonDrawer(id: string | null): void {
+    this.setState((s) => ({
+      ...s,
+      horizonDrawerId: id,
+      horizonHistoryOpen: false,
+      missionControlOpen: false,
+      commandPaletteOpen: false,
+      launcherOpen: false,
+    }));
+  }
+  public setHorizonHistory(open: boolean): void {
+    this.setState((s) => ({
+      ...s,
+      horizonHistoryOpen: open,
+      horizonDrawerId: null,
+      missionControlOpen: false,
+      commandPaletteOpen: false,
+      launcherOpen: false,
+    }));
+  }
+  public setHorizonOffset(id: string, offset: { x: number; y: number }): void {
+    this.setState((s) => ({
+      ...s,
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, horizonOffset: offset } : w,
+      ),
+    }));
+  }
+  public updateWindowProps(id: string, props: Record<string, unknown>): void {
+    this.setState((s) => ({
+      ...s,
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, props: { ...w.props, ...props } } : w,
+      ),
+    }));
+  }
+  public bindWindowContext(
+    id: string,
+    contextId: string,
+    title?: string,
+  ): void {
+    this.setState((s) => ({
+      ...s,
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, contextId, ...(title ? { title } : {}) } : w,
+      ),
+    }));
+  }
+  public restoreHorizonWindows(windows: readonly WindowInstance[]): void {
+    const live = this.state.windows;
+    const missing = windows.filter(
+      (w) =>
+        !live.some((x) => x.id === w.id) &&
+        w.appId in APP_CATALOG &&
+        w.appId !== "wayland-surface",
+    );
+    this.setState((s) => ({
+      ...s,
+      windows: settleHorizon(
+        [
+          ...s.windows.map((w) => {
+            const old = windows.find((x) => x.id === w.id);
+            return old
+              ? {
+                  ...w,
+                  width: old.width,
+                  height: old.height,
+                  placement: old.placement,
+                  placementOrder: old.placementOrder,
+                  horizonOffset: old.horizonOffset,
+                }
+              : w;
+          }),
+          ...missing,
+        ],
+        centerSlots(s.horizonLayout),
+      ),
+      activeWindowId:
+        windows.find((w) => w.placement === "center")?.id ?? s.activeWindowId,
+    }));
+  }
+
+  public openApp(
+    appId: AppId,
+    props?: Record<string, unknown>,
+    forceNew = false,
+  ): string {
     const existing = !forceNew
-      ? this.state.windows.find(
-          (w) => w.appId === appId && w.workspace === this.state.activeWorkspace
-        ) ?? this.state.windows.find((w) => w.appId === appId)
+      ? (this.state.windows
+          .filter(
+            (w) =>
+              w.appId === appId && w.workspace === this.state.activeWorkspace,
+          )
+          .sort((a, b) => b.zIndex - a.zIndex)[0] ??
+        this.state.windows
+          .filter((w) => w.appId === appId)
+          .sort((a, b) => b.zIndex - a.zIndex)[0])
       : undefined;
 
     if (existing) {
@@ -651,7 +1003,9 @@ class WindowManagerStore {
           missionControlOpen: false,
           contextMenu: null,
           windows: s.windows.map((w) =>
-            w.id === existing.id ? { ...w, minimized: false, props: { ...w.props, ...props } } : w
+            w.id === existing.id
+              ? { ...w, minimized: false, props: { ...w.props, ...props } }
+              : w,
           ),
         }));
       }
@@ -663,10 +1017,15 @@ class WindowManagerStore {
     const vh = typeof window !== "undefined" ? window.innerHeight : 900;
     const w = Math.min(def.defaultWidth, vw - 40);
     const h = Math.min(def.defaultHeight, vh - TOP_BAR_H - DOCK_RESERVE - 24);
-    const wsWins = this.state.windows.filter((win) => win.workspace === this.state.activeWorkspace);
+    const wsWins = this.state.windows.filter(
+      (win) => win.workspace === this.state.activeWorkspace,
+    );
     const offset = (wsWins.length % 6) * 26;
     const x = Math.max(20, Math.round((vw - w) / 2) + offset - 40);
-    const y = Math.max(TOP_BAR_H + 12, Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 20);
+    const y = Math.max(
+      TOP_BAR_H + 12,
+      Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 20,
+    );
     const id = `${appId}-${Math.random().toString(36).slice(2, 7)}`;
     const zIndex = ++this.zCounter;
 
@@ -698,9 +1057,14 @@ class WindowManagerStore {
     return id;
   }
 
-  public openWaylandWindow(surfaceKey: string, title: string, wlAppId: string): string {
+  public openWaylandWindow(
+    surfaceKey: string,
+    title: string,
+    wlAppId: string,
+  ): string {
     const existing = this.state.windows.find(
-      (w) => w.appId === "wayland-surface" && w.props?.surfaceKey === surfaceKey
+      (w) =>
+        w.appId === "wayland-surface" && w.props?.surfaceKey === surfaceKey,
     );
     if (existing) {
       this.focusWindow(existing.id);
@@ -712,10 +1076,15 @@ class WindowManagerStore {
     const vh = typeof window !== "undefined" ? window.innerHeight : 900;
     const w = Math.min(def.defaultWidth, vw - 40);
     const h = Math.min(def.defaultHeight, vh - TOP_BAR_H - DOCK_RESERVE - 24);
-    const wsWins = this.state.windows.filter((win) => win.workspace === this.state.activeWorkspace);
+    const wsWins = this.state.windows.filter(
+      (win) => win.workspace === this.state.activeWorkspace,
+    );
     const offset = (wsWins.length % 6) * 28;
     const x = Math.max(20, Math.round((vw - w) / 2) + offset - 30);
-    const y = Math.max(TOP_BAR_H + 12, Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 15);
+    const y = Math.max(
+      TOP_BAR_H + 12,
+      Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 15,
+    );
     const id = `wl-${surfaceKey}`;
     const zIndex = ++this.zCounter;
 
@@ -751,16 +1120,20 @@ class WindowManagerStore {
     this.setState((s) => ({
       ...s,
       windows: s.windows.map((w) =>
-        w.appId === "wayland-surface" && w.props?.surfaceKey === surfaceKey && title && w.title !== title
+        w.appId === "wayland-surface" &&
+        w.props?.surfaceKey === surfaceKey &&
+        title &&
+        w.title !== title
           ? { ...w, title }
-          : w
+          : w,
       ),
     }));
   }
 
   public closeWaylandWindowByKey(surfaceKey: string): void {
     const win = this.state.windows.find(
-      (w) => w.appId === "wayland-surface" && w.props?.surfaceKey === surfaceKey
+      (w) =>
+        w.appId === "wayland-surface" && w.props?.surfaceKey === surfaceKey,
     );
     if (!win) return;
     this.closeWindow(win.id, false);
@@ -768,7 +1141,7 @@ class WindowManagerStore {
 
   public openDynamicApp(app: DynamicAppDef): string {
     const existing = this.state.windows.find(
-      (w) => w.appId === "custom-app" && w.props?.dynamicAppId === app.id
+      (w) => w.appId === "custom-app" && w.props?.dynamicAppId === app.id,
     );
     if (existing) {
       this.focusWindow(existing.id);
@@ -778,10 +1151,15 @@ class WindowManagerStore {
     const vh = typeof window !== "undefined" ? window.innerHeight : 900;
     const w = Math.min(760, vw - 40);
     const h = Math.min(560, vh - TOP_BAR_H - DOCK_RESERVE - 24);
-    const wsWins = this.state.windows.filter((win) => win.workspace === this.state.activeWorkspace);
+    const wsWins = this.state.windows.filter(
+      (win) => win.workspace === this.state.activeWorkspace,
+    );
     const offset = (wsWins.length % 6) * 24;
     const x = Math.max(20, Math.round((vw - w) / 2) + offset - 30);
-    const y = Math.max(TOP_BAR_H + 12, Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 15);
+    const y = Math.max(
+      TOP_BAR_H + 12,
+      Math.round((vh - DOCK_RESERVE - h) / 2) + offset - 15,
+    );
     const id = `dyn-${app.id}`;
     const zIndex = ++this.zCounter;
     const win: WindowInstance = {
@@ -814,7 +1192,11 @@ class WindowManagerStore {
 
   public closeWindow(id: string, notifyWayland = true): void {
     const target = this.state.windows.find((w) => w.id === id);
-    if (notifyWayland && target?.appId === "wayland-surface" && typeof target.props?.surfaceKey === "string") {
+    if (
+      notifyWayland &&
+      target?.appId === "wayland-surface" &&
+      typeof target.props?.surfaceKey === "string"
+    ) {
       waylandDesktopManager.closeWindow(target.props.surfaceKey);
     }
     uiSounds.playWindowClose();
@@ -825,8 +1207,19 @@ class WindowManagerStore {
         .sort((a, b) => b.zIndex - a.zIndex)[0];
       return {
         ...s,
-        windows: remaining,
-        activeWindowId: s.activeWindowId === id ? (top?.id ?? null) : s.activeWindowId,
+        windows:
+          s.horizonEnabled && s.activeWindowId === id && top
+            ? settleHorizon(
+                remaining.map((w) =>
+                  w.id === top.id ? { ...w, placement: "center" as const } : w,
+                ),
+                centerSlots(s.horizonLayout),
+                top.id,
+              )
+            : remaining,
+        horizonDrawerId: s.horizonDrawerId === id ? null : s.horizonDrawerId,
+        activeWindowId:
+          s.activeWindowId === id ? (top?.id ?? null) : s.activeWindowId,
       };
     });
   }
@@ -849,7 +1242,8 @@ class WindowManagerStore {
     });
   }
 
-  public focusWindow(id: string): void {
+  public focusWindow(id: string, recall = true): void {
+    if (!this.state.windows.some((w) => w.id === id)) return;
     const zIndex = ++this.zCounter;
     this.setState((s) => {
       const target = s.windows.find((w) => w.id === id);
@@ -860,7 +1254,25 @@ class WindowManagerStore {
         activeWindowId: id,
         contextMenu: null,
         controlCenterOpen: false,
-        windows: s.windows.map((w) => (w.id === id ? { ...w, minimized: false, zIndex } : w)),
+        windows:
+          s.horizonEnabled && recall
+            ? settleHorizon(
+                s.windows.map((w) =>
+                  w.id === id
+                    ? {
+                        ...w,
+                        minimized: false,
+                        zIndex,
+                        placement: "center" as const,
+                      }
+                    : w,
+                ),
+                centerSlots(s.horizonLayout),
+                id,
+              )
+            : s.windows.map((w) =>
+                w.id === id ? { ...w, minimized: false, zIndex } : w,
+              ),
       };
     });
   }
@@ -868,14 +1280,26 @@ class WindowManagerStore {
   public minimizeWindow(id: string): void {
     uiSounds.playClick();
     this.setState((s) => {
-      const next = s.windows.map((w) => (w.id === id ? { ...w, minimized: true } : w));
+      const next = s.windows.map((w) =>
+        w.id === id ? { ...w, minimized: true } : w,
+      );
       const top = next
         .filter((w) => w.workspace === s.activeWorkspace && !w.minimized)
         .sort((a, b) => b.zIndex - a.zIndex)[0];
       return {
         ...s,
-        windows: next,
-        activeWindowId: s.activeWindowId === id ? (top?.id ?? null) : s.activeWindowId,
+        windows:
+          s.horizonEnabled && s.activeWindowId === id && top
+            ? settleHorizon(
+                next.map((w) =>
+                  w.id === top.id ? { ...w, placement: "center" as const } : w,
+                ),
+                centerSlots(s.horizonLayout),
+                top.id,
+              )
+            : next,
+        activeWindowId:
+          s.activeWindowId === id ? (top?.id ?? null) : s.activeWindowId,
       };
     });
   }
@@ -887,12 +1311,17 @@ class WindowManagerStore {
       activeWindowId: null,
       contextMenu: null,
       windows: s.windows.map((w) =>
-        w.workspace === s.activeWorkspace ? { ...w, minimized: true } : w
+        w.workspace === s.activeWorkspace ? { ...w, minimized: true } : w,
       ),
     }));
   }
 
   public toggleMaximize(id: string): void {
+    if (
+      this.state.horizonEnabled &&
+      this.state.windows.find((w) => w.id === id)?.placement !== "center"
+    )
+      this.focusWindow(id);
     uiSounds.playSnap();
     const zIndex = ++this.zCounter;
     this.setState((s) => ({
@@ -901,7 +1330,7 @@ class WindowManagerStore {
       windows: s.windows.map((w) =>
         w.id === id
           ? { ...w, maximized: !w.maximized, snap: "none", zIndex }
-          : w
+          : w,
       ),
     }));
   }
@@ -912,7 +1341,7 @@ class WindowManagerStore {
     this.setState((s) => ({
       ...s,
       windows: s.windows.map((w) =>
-        w.id === id ? { ...w, pinned: pinned ?? !w.pinned, zIndex } : w
+        w.id === id ? { ...w, pinned: pinned ?? !w.pinned, zIndex } : w,
       ),
     }));
   }
@@ -922,7 +1351,9 @@ class WindowManagerStore {
     this.setState((s) => ({
       ...s,
       windows: s.windows.map((w) =>
-        w.id === id ? { ...w, shaded: shaded ?? !w.shaded, maximized: false } : w
+        w.id === id
+          ? { ...w, shaded: shaded ?? !w.shaded, maximized: false }
+          : w,
       ),
     }));
   }
@@ -931,7 +1362,9 @@ class WindowManagerStore {
     const clamped = Math.max(0.35, Math.min(1, Number(opacity.toFixed(2))));
     this.setState((s) => ({
       ...s,
-      windows: s.windows.map((w) => (w.id === id ? { ...w, opacity: clamped } : w)),
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, opacity: clamped } : w,
+      ),
     }));
   }
 
@@ -951,6 +1384,22 @@ class WindowManagerStore {
   }
 
   public snapWindow(id: string, snap: SnapZone): void {
+    if (this.state.horizonEnabled && snap !== "maximize" && snap !== "none") {
+      this.setHorizonLayout("split");
+      this.focusWindow(id);
+      const order = snap.includes("left") ? 0 : 1;
+      this.setState((s) => ({
+        ...s,
+        windows: s.windows.map((w) =>
+          w.id === id
+            ? { ...w, snap, maximized: false, centerOrder: order }
+            : w.workspace === s.activeWorkspace && w.placement === "center"
+              ? { ...w, centerOrder: 1 - order }
+              : w,
+        ),
+      }));
+      return;
+    }
     uiSounds.playSnap();
     const zIndex = ++this.zCounter;
     const isMax = snap === "maximize";
@@ -961,7 +1410,7 @@ class WindowManagerStore {
       windows: s.windows.map((w) =>
         w.id === id
           ? { ...w, snap: isMax ? "none" : snap, maximized: isMax, zIndex }
-          : w
+          : w,
       ),
     }));
   }
@@ -973,12 +1422,12 @@ class WindowManagerStore {
 
   public moveResize(
     id: string,
-    rect: Partial<Pick<WindowInstance, "x" | "y" | "width" | "height">>
+    rect: Partial<Pick<WindowInstance, "x" | "y" | "width" | "height">>,
   ): void {
     this.setState((s) => ({
       ...s,
       windows: s.windows.map((w) =>
-        w.id === id ? { ...w, ...rect, maximized: false, snap: "none" } : w
+        w.id === id ? { ...w, ...rect, maximized: false, snap: "none" } : w,
       ),
     }));
   }
@@ -988,6 +1437,19 @@ class WindowManagerStore {
    * Supports: grid (NxM auto), split-2 (50/50), master-stack (i3/Hyprland), columns-3, and cascade.
    */
   public tileWorkspace(mode: GridLayoutMode): number {
+    if (this.state.horizonEnabled) {
+      const count = this.state.windows.filter(
+        (w) => w.workspace === this.state.activeWorkspace && !w.minimized,
+      ).length;
+      this.setHorizonLayout(
+        mode === "cascade"
+          ? "focus"
+          : mode === "columns-3" || mode === "grid"
+            ? "triple"
+            : "split",
+      );
+      return count;
+    }
     const wsWins = this.state.windows
       .filter((w) => w.workspace === this.state.activeWorkspace && !w.minimized)
       .sort((a, b) => {
@@ -1006,7 +1468,10 @@ class WindowManagerStore {
     const availW = Math.max(480, vw - padX * 2);
     const availH = Math.max(360, vh - padTop - padBottom);
 
-    const rects = new Map<string, { x: number; y: number; width: number; height: number }>();
+    const rects = new Map<
+      string,
+      { x: number; y: number; width: number; height: number }
+    >();
     const n = wsWins.length;
 
     if (mode === "cascade") {
@@ -1038,13 +1503,25 @@ class WindowManagerStore {
       });
     } else if (mode === "master-stack") {
       if (n === 1) {
-        rects.set(wsWins[0]!.id, { x: padX, y: padTop, width: availW, height: availH });
+        rects.set(wsWins[0]!.id, {
+          x: padX,
+          y: padTop,
+          width: availW,
+          height: availH,
+        });
       } else {
         const masterW = Math.floor((availW - gap) * 0.58);
         const stackW = availW - gap - masterW;
-        rects.set(wsWins[0]!.id, { x: padX, y: padTop, width: masterW, height: availH });
+        rects.set(wsWins[0]!.id, {
+          x: padX,
+          y: padTop,
+          width: masterW,
+          height: availH,
+        });
         const stackCount = n - 1;
-        const stackH = Math.floor((availH - gap * (stackCount - 1)) / stackCount);
+        const stackH = Math.floor(
+          (availH - gap * (stackCount - 1)) / stackCount,
+        );
         for (let i = 1; i < n; i++) {
           rects.set(wsWins[i]!.id, {
             x: padX + masterW + gap,
@@ -1119,7 +1596,9 @@ class WindowManagerStore {
   public moveWindowToWorkspace(id: string, ws: WorkspaceId): void {
     uiSounds.playWorkspaceSwitch();
     this.setState((s) => {
-      const updated = s.windows.map((w) => (w.id === id ? { ...w, workspace: ws } : w));
+      const updated = s.windows.map((w) =>
+        w.id === id ? { ...w, workspace: ws } : w,
+      );
       const top = updated
         .filter((w) => w.workspace === s.activeWorkspace && !w.minimized)
         .sort((a, b) => b.zIndex - a.zIndex)[0];
@@ -1139,6 +1618,13 @@ class WindowManagerStore {
     this.setState((s) => ({
       ...s,
       commandPaletteOpen: open,
+      ...(open
+        ? {
+            horizonDrawerId: null,
+            horizonHistoryOpen: false,
+            missionControlOpen: false,
+          }
+        : {}),
       controlCenterOpen: false,
       contextMenu: null,
     }));
@@ -1150,7 +1636,12 @@ class WindowManagerStore {
 
   public setGithubModal(open: boolean): void {
     if (open) uiSounds.playClick();
-    this.setState((s) => ({ ...s, githubModalOpen: open, controlCenterOpen: false, contextMenu: null }));
+    this.setState((s) => ({
+      ...s,
+      githubModalOpen: open,
+      controlCenterOpen: false,
+      contextMenu: null,
+    }));
   }
 
   public setMissionControl(open: boolean): void {
@@ -1158,6 +1649,7 @@ class WindowManagerStore {
     this.setState((s) => ({
       ...s,
       missionControlOpen: open,
+      ...(open ? { horizonDrawerId: null, horizonHistoryOpen: false } : {}),
       controlCenterOpen: false,
       contextMenu: null,
     }));
@@ -1213,13 +1705,23 @@ class WindowManagerStore {
   }
 
   public clearNotifications(): void {
-    this.setState((s) => ({ ...s, notificationHistory: [], unreadNotifications: 0 }));
+    this.setState((s) => ({
+      ...s,
+      notificationHistory: [],
+      unreadNotifications: 0,
+    }));
   }
 
   public openFileInIde(filePath: string): void {
+    if (this.state.horizonEnabled) {
+      this.openApp("ide", { documentPath: filePath });
+      return;
+    }
     const parent = filePath.split("/").slice(0, -1).join("/") || "/home/user";
     const normParent = normalizeWorkspacePath(parent);
-    const nextRecent = Array.from(new Set([normParent, ...this.state.recentWorkspaces])).slice(0, 8);
+    const nextRecent = Array.from(
+      new Set([normParent, ...this.state.recentWorkspaces]),
+    ).slice(0, 8);
     saveStoredWorkspace(normParent, nextRecent);
     this.setState((s) => ({
       ...s,
@@ -1266,12 +1768,18 @@ class WindowManagerStore {
   }
 
   public openInMicroml(source: string): void {
-    this.setState((s) => ({ ...s, micromlDraft: { id: ++this.terminalReqCounter, source } }));
+    this.setState((s) => ({
+      ...s,
+      micromlDraft: { id: ++this.terminalReqCounter, source },
+    }));
     this.openApp("microml");
   }
 
   public openInProofStudio(source: string): void {
-    this.setState((s) => ({ ...s, pouleDraft: { id: ++this.terminalReqCounter, source } }));
+    this.setState((s) => ({
+      ...s,
+      pouleDraft: { id: ++this.terminalReqCounter, source },
+    }));
     this.openApp("proof-studio");
   }
 
@@ -1302,6 +1810,10 @@ class WindowManagerStore {
 
   public openDirInExplorer(dir: string): void {
     const clean = normalizeWorkspacePath(dir);
+    if (this.state.horizonEnabled) {
+      this.openApp("explorer", { directory: clean });
+      return;
+    }
     this.setState((s) => ({ ...s, explorerTargetDir: clean }));
     this.openApp("explorer");
   }
@@ -1310,7 +1822,11 @@ class WindowManagerStore {
     this.setState((s) => ({ ...s, explorerTargetDir: null }));
   }
 
-  public openTerminalInDir(dir: string, command?: string, title?: string): void {
+  public openTerminalInDir(
+    dir: string,
+    command?: string,
+    title?: string,
+  ): void {
     const clean = normalizeWorkspacePath(dir);
     const req: TerminalLaunchRequest = {
       id: ++this.terminalReqCounter,
@@ -1343,7 +1859,11 @@ class WindowManagerStore {
   }
 
   public setContextMenu(menu: ContextMenuState | null): void {
-    this.setState((s) => ({ ...s, contextMenu: menu, controlCenterOpen: false }));
+    this.setState((s) => ({
+      ...s,
+      contextMenu: menu,
+      controlCenterOpen: false,
+    }));
   }
 
   public openPreview(port: number, path = "/"): void {
@@ -1354,7 +1874,9 @@ class WindowManagerStore {
   public setWorkspaceDir(dir: string): void {
     const clean = normalizeWorkspacePath(dir);
     if (!clean) return;
-    const nextRecent = Array.from(new Set([clean, ...this.state.recentWorkspaces])).slice(0, 8);
+    const nextRecent = Array.from(
+      new Set([clean, ...this.state.recentWorkspaces]),
+    ).slice(0, 8);
     saveStoredWorkspace(clean, nextRecent);
     this.setState((s) => ({
       ...s,
@@ -1368,7 +1890,10 @@ class WindowManagerStore {
    * - If no saved/created projects exist, start cleanly in /home/user/workspace.
    * - If the saved workspace no longer exists on disk, fall back to the first created project or /home/user/workspace.
    */
-  public reconcileStartupWorkspace(existingProjects: readonly string[], activeExists: boolean): void {
+  public reconcileStartupWorkspace(
+    existingProjects: readonly string[],
+    activeExists: boolean,
+  ): void {
     const cur = this.state.activeWorkspaceDir;
     const normalizedProjects = existingProjects.map(normalizeWorkspacePath);
     const projectSet = new Set(normalizedProjects);
@@ -1376,16 +1901,34 @@ class WindowManagerStore {
     let nextActive = cur;
     if (cur !== DEFAULT_WORKSPACE_DIR && !activeExists) {
       nextActive = normalizedProjects[0] ?? DEFAULT_WORKSPACE_DIR;
-    } else if (cur === DEFAULT_WORKSPACE_DIR && !initialWorkspace.hadStored && normalizedProjects.length > 0) {
+    } else if (
+      cur === DEFAULT_WORKSPACE_DIR &&
+      !initialWorkspace.hadStored &&
+      normalizedProjects.length > 0
+    ) {
       nextActive = normalizedProjects[0]!;
     }
 
     const prunedRecent = this.state.recentWorkspaces.filter(
-      (p) => p === DEFAULT_WORKSPACE_DIR || !p.startsWith(`${DEFAULT_WORKSPACE_DIR}/`) || projectSet.has(p) || (p === cur && activeExists)
+      (p) =>
+        p === DEFAULT_WORKSPACE_DIR ||
+        !p.startsWith(`${DEFAULT_WORKSPACE_DIR}/`) ||
+        projectSet.has(p) ||
+        (p === cur && activeExists),
     );
-    const nextRecent = Array.from(new Set([nextActive, ...normalizedProjects, ...prunedRecent, DEFAULT_WORKSPACE_DIR])).slice(0, 8);
+    const nextRecent = Array.from(
+      new Set([
+        nextActive,
+        ...normalizedProjects,
+        ...prunedRecent,
+        DEFAULT_WORKSPACE_DIR,
+      ]),
+    ).slice(0, 8);
 
-    if (nextActive !== cur || nextRecent.join("|") !== this.state.recentWorkspaces.join("|")) {
+    if (
+      nextActive !== cur ||
+      nextRecent.join("|") !== this.state.recentWorkspaces.join("|")
+    ) {
       if (nextActive !== DEFAULT_WORKSPACE_DIR || initialWorkspace.hadStored) {
         saveStoredWorkspace(nextActive, nextRecent);
       }
@@ -1401,22 +1944,34 @@ class WindowManagerStore {
     title: string,
     message: string,
     level: ToastItem["level"] = "info",
-    action?: ToastAction
+    action?: ToastAction,
   ): void {
     uiSounds.playNotify();
     const id = Math.random().toString(36).slice(2, 9);
-    const toast: ToastItem = { id, title, message, level, createdAt: Date.now(), action };
+    const toast: ToastItem = {
+      id,
+      title,
+      message,
+      level,
+      createdAt: Date.now(),
+      action,
+    };
     this.setState((s) => ({
       ...s,
       toasts: [...s.toasts.slice(-4), toast],
       notificationHistory: [toast, ...s.notificationHistory].slice(0, 40),
-      unreadNotifications: s.notificationCenterOpen ? 0 : s.unreadNotifications + 1,
+      unreadNotifications: s.notificationCenterOpen
+        ? 0
+        : s.unreadNotifications + 1,
     }));
     setTimeout(() => this.dismissToast(id), action ? 15000 : 5200);
   }
 
   public dismissToast(id: string): void {
-    this.setState((s) => ({ ...s, toasts: s.toasts.filter((t) => t.id !== id) }));
+    this.setState((s) => ({
+      ...s,
+      toasts: s.toasts.filter((t) => t.id !== id),
+    }));
   }
 }
 

@@ -1,3 +1,9 @@
+import { createPortal } from "react-dom";
+import {
+  useAppSurface,
+  useSurfaceRevision,
+  WindowSessionContext,
+} from "../../core/app-surface-registry.tsx";
 import { Effect } from "effect";
 import {
   ArrowDownAZ,
@@ -38,7 +44,13 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { FsEntry } from "../../core/fs-service.ts";
 import { hostMountManager, useHostMounts } from "../../core/host-mount.ts";
 import { appRuntime, GuestFsService, VmService } from "../../core/runtime.ts";
@@ -63,8 +75,10 @@ interface ClipboardItem {
 }
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|ico|bmp)$/i;
-const MEDIA_STUDIO_RE = /\.(pdf|mp4|webm|mov|mkv|ogv|mp3|wav|ogg|flac|m4a|aac)$/i;
-const CODE_RE = /\.(ts|tsx|js|jsx|mjs|py|rs|go|sh|json|html|css|md|yml|yaml|toml|sql|c|cpp|h|wgsl|glsl)$/i;
+const MEDIA_STUDIO_RE =
+  /\.(pdf|mp4|webm|mov|mkv|ogv|mp3|wav|ogg|flac|m4a|aac)$/i;
+const CODE_RE =
+  /\.(ts|tsx|js|jsx|mjs|py|rs|go|sh|json|html|css|md|yml|yaml|toml|sql|c|cpp|h|wgsl|glsl)$/i;
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -84,11 +98,18 @@ function guessMime(name: string): string {
 
 export const FileExplorerApp: React.FC = () => {
   const wm = useWm();
+  const session = React.useContext(WindowSessionContext);
   const hostMounts = useHostMounts();
   const isMobile = useIsMobile();
 
-  const [cwd, setCwd] = useState(wm.activeWorkspaceDir || "/home/user/workspace");
-  const [history, setHistory] = useState<string[]>([wm.activeWorkspaceDir || "/home/user/workspace"]);
+  const [cwd, setCwd] = useState(
+    typeof session?.props?.directory === "string"
+      ? session.props.directory
+      : wm.activeWorkspaceDir || "/home/user/workspace",
+  );
+  const [history, setHistory] = useState<string[]>([
+    wm.activeWorkspaceDir || "/home/user/workspace",
+  ]);
   const [histIdx, setHistIdx] = useState(0);
   const [editingPath, setEditingPath] = useState(false);
   const [pathDraft, setPathDraft] = useState(cwd);
@@ -110,52 +131,117 @@ export const FileExplorerApp: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [clipboard, setClipboard] = useState<ClipboardItem | null>(null);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: FsEntry } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number;
+    y: number;
+    entry: FsEntry;
+  } | null>(null);
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ctxMenu)
+      document
+        .querySelector<HTMLElement>("[data-explorer-context-menu] button")
+        ?.focus();
+  }, [ctxMenu]);
+  useEffect(() => {
+    const dir = session?.props?.directory;
+    if (typeof dir === "string" && dir !== cwd) void loadDir(dir, true);
+  }, [session?.props?.directory]);
+  useEffect(() => {
+    if (session && session.props?.directory !== cwd)
+      wmStore.updateWindowProps(session.id, { directory: cwd });
+  }, [cwd]);
+  const revision = useSurfaceRevision(
+    cwd,
+    selectedFile?.path,
+    editorText,
+    loading,
+    entries,
+  );
+  useAppSurface({
+    document: selectedFile?.path ?? cwd,
+    title: selectedFile?.name ?? cwd.split("/").at(-1),
+    revision,
+    status: error ? "disconnected" : loading ? "loading" : "live",
+    state: {
+      directory: cwd,
+      selected: selectedFile?.path,
+      entries: entries.map((e) => ({
+        name: e.name,
+        path: e.path,
+        isDir: e.isDir,
+      })),
+      dirty,
+    },
+    actions: {
+      refresh: {
+        label: "Actualiser ce dossier",
+        run: async () => {
+          await loadDir(cwd, false);
+          return { directory: cwd };
+        },
+      },
+    },
+  });
 
   const loadProjects = useCallback(async () => {
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.listProjects("/home/user/workspace")))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) =>
+          fs.listProjects("/home/user/workspace"),
+        ),
+      ),
     );
     if (res._tag === "Right") setProjects(res.right);
   }, []);
 
-  const loadDir = useCallback(async (dir: string, pushHist = true) => {
-    setLoading(true);
-    setError(null);
-    const clean = dir.trim().replace(/\/+/g, "/") || "/";
-    const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.listDir(clean)))
-    );
-    setLoading(false);
-    if (res._tag === "Left") {
-      if (clean.startsWith("/home/user/workspace")) {
-        await appRuntime.runPromise(Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.mkdir(clean))));
-        const retry = await appRuntime.runPromise(
-          Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.listDir(clean)))
-        );
-        if (retry._tag === "Right") {
-          setCwd(clean);
-          setPathDraft(clean);
-          setEntries(retry.right);
-          return;
+  const loadDir = useCallback(
+    async (dir: string, pushHist = true) => {
+      setLoading(true);
+      setError(null);
+      const clean = dir.trim().replace(/\/+/g, "/") || "/";
+      const res = await appRuntime.runPromise(
+        Effect.either(
+          Effect.flatMap(GuestFsService, (fs) => fs.listDir(clean)),
+        ),
+      );
+      setLoading(false);
+      if (res._tag === "Left") {
+        if (clean.startsWith("/home/user/workspace")) {
+          await appRuntime.runPromise(
+            Effect.either(
+              Effect.flatMap(GuestFsService, (fs) => fs.mkdir(clean)),
+            ),
+          );
+          const retry = await appRuntime.runPromise(
+            Effect.either(
+              Effect.flatMap(GuestFsService, (fs) => fs.listDir(clean)),
+            ),
+          );
+          if (retry._tag === "Right") {
+            setCwd(clean);
+            setPathDraft(clean);
+            setEntries(retry.right);
+            return;
+          }
+        }
+        setError(res.left.message);
+      } else {
+        setCwd(clean);
+        setPathDraft(clean);
+        setEntries(res.right);
+        if (pushHist) {
+          setHistory((prev) => {
+            const next = [...prev.slice(0, histIdx + 1), clean];
+            setHistIdx(next.length - 1);
+            return next;
+          });
         }
       }
-      setError(res.left.message);
-    } else {
-      setCwd(clean);
-      setPathDraft(clean);
-      setEntries(res.right);
-      if (pushHist) {
-        setHistory((prev) => {
-          const next = [...prev.slice(0, histIdx + 1), clean];
-          setHistIdx(next.length - 1);
-          return next;
-        });
-      }
-    }
-  }, [histIdx]);
+    },
+    [histIdx],
+  );
 
   useEffect(() => {
     void loadDir(cwd, false);
@@ -226,7 +312,9 @@ export const FileExplorerApp: React.FC = () => {
 
     if (IMAGE_RE.test(entry.name)) {
       const res = await appRuntime.runPromise(
-        Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.readFileBytes(entry.path)))
+        Effect.either(
+          Effect.flatMap(GuestFsService, (fs) => fs.readFileBytes(entry.path)),
+        ),
       );
       if (res._tag === "Right") {
         const bytes = new Uint8Array(res.right);
@@ -240,7 +328,9 @@ export const FileExplorerApp: React.FC = () => {
     }
 
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.readFileText(entry.path)))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) => fs.readFileText(entry.path)),
+      ),
     );
     if (res._tag === "Right") {
       setEditorText(res.right);
@@ -259,8 +349,8 @@ export const FileExplorerApp: React.FC = () => {
           const vm = yield* VmService;
           yield* fs.writeFileText(selectedFile.path, editorText);
           yield* vm.syncDisk();
-        })
-      )
+        }),
+      ),
     );
     setSaving(false);
     if (res._tag === "Right") {
@@ -273,7 +363,9 @@ export const FileExplorerApp: React.FC = () => {
   };
 
   const handleCreate = async (kind: "file" | "dir") => {
-    const name = window.prompt(kind === "dir" ? "New folder name:" : "New file name:");
+    const name = window.prompt(
+      kind === "dir" ? "New folder name:" : "New file name:",
+    );
     if (!name || !name.trim()) return;
     const target = `${cwd.replace(/\/$/, "")}/${name.trim()}`;
     const eff =
@@ -295,11 +387,17 @@ export const FileExplorerApp: React.FC = () => {
     const parent = entry.path.split("/").slice(0, -1).join("/") || "/";
     const toPath = `${parent}/${nextName.trim()}`.replace(/\/+/g, "/");
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.rename(entry.path, toPath)))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) => fs.rename(entry.path, toPath)),
+      ),
     );
     if (res._tag === "Right") {
       if (selectedFile?.path === entry.path) setSelectedFile(null);
-      wmStore.pushToast("Renamed", `${entry.name} → ${nextName.trim()}`, "success");
+      wmStore.pushToast(
+        "Renamed",
+        `${entry.name} → ${nextName.trim()}`,
+        "success",
+      );
       await loadDir(cwd, false);
       void loadProjects();
     } else {
@@ -316,14 +414,18 @@ export const FileExplorerApp: React.FC = () => {
     }
     const eff =
       clipboard.mode === "cut"
-        ? Effect.flatMap(GuestFsService, (fs) => fs.rename(clipboard.entry.path, target))
-        : Effect.flatMap(GuestFsService, (fs) => fs.copy(clipboard.entry.path, target));
+        ? Effect.flatMap(GuestFsService, (fs) =>
+            fs.rename(clipboard.entry.path, target),
+          )
+        : Effect.flatMap(GuestFsService, (fs) =>
+            fs.copy(clipboard.entry.path, target),
+          );
     const res = await appRuntime.runPromise(Effect.either(eff));
     if (res._tag === "Right") {
       wmStore.pushToast(
         clipboard.mode === "cut" ? "Moved" : "Copied",
         `${clipboard.entry.name} → ${cwd}`,
-        "success"
+        "success",
       );
       if (clipboard.mode === "cut") setClipboard(null);
       await loadDir(cwd, false);
@@ -335,7 +437,9 @@ export const FileExplorerApp: React.FC = () => {
   const handleDelete = async (entry: FsEntry) => {
     if (!window.confirm(`Delete ${entry.name}?`)) return;
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.remove(entry.path)))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) => fs.remove(entry.path)),
+      ),
     );
     if (res._tag === "Right") {
       if (selectedFile?.path === entry.path) setSelectedFile(null);
@@ -348,7 +452,9 @@ export const FileExplorerApp: React.FC = () => {
 
   const handleDownload = async (entry: FsEntry) => {
     const res = await appRuntime.runPromise(
-      Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.readFileBytes(entry.path)))
+      Effect.either(
+        Effect.flatMap(GuestFsService, (fs) => fs.readFileBytes(entry.path)),
+      ),
     );
     if (res._tag === "Right") {
       const bytes = new Uint8Array(res.right);
@@ -368,10 +474,18 @@ export const FileExplorerApp: React.FC = () => {
       const bytes = new Uint8Array(await f.arrayBuffer());
       const target = `${cwd.replace(/\/$/, "")}/${f.name}`;
       await appRuntime.runPromise(
-        Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.writeFileBytes(target, bytes)))
+        Effect.either(
+          Effect.flatMap(GuestFsService, (fs) =>
+            fs.writeFileBytes(target, bytes),
+          ),
+        ),
       );
     }
-    wmStore.pushToast("Uploaded", `${files.length} file(s) copied into ${cwd}`, "success");
+    wmStore.pushToast(
+      "Uploaded",
+      `${files.length} file(s) copied into ${cwd}`,
+      "success",
+    );
     await loadDir(cwd, false);
   };
 
@@ -402,12 +516,72 @@ export const FileExplorerApp: React.FC = () => {
       className="flex flex-col w-full h-full bg-[#0a0c13]/94 select-none"
       onDragOver={(e) => {
         e.preventDefault();
+        e.dataTransfer.dropEffect = e.shiftKey ? "move" : "copy";
         setDragOver(true);
       }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => {
         e.preventDefault();
         setDragOver(false);
+        const payload = e.dataTransfer.getData("application/x-unkernel-file");
+        if (payload) {
+          try {
+            const item = JSON.parse(payload);
+            if (
+              typeof item.path !== "string" ||
+              !item.path.startsWith("/") ||
+              typeof item.name !== "string" ||
+              item.name.includes("/")
+            )
+              throw new Error("Référence de fichier invalide");
+            const sourcePath = item.path;
+            let target = cwd.replace(/\/$/, "") + "/" + item.name;
+            if (target === sourcePath && e.shiftKey) return;
+            if (entries.some((entry) => entry.path === target)) {
+              const dot = item.name.lastIndexOf(".");
+              const base = dot > 0 ? item.name.slice(0, dot) : item.name,
+                ext = dot > 0 ? item.name.slice(dot) : "";
+              target =
+                cwd.replace(/\/$/, "") +
+                "/" +
+                base +
+                " (copie " +
+                Date.now() +
+                ")" +
+                ext;
+            }
+            const moving = e.shiftKey;
+            void appRuntime
+              .runPromise(
+                Effect.either(
+                  Effect.flatMap(GuestFsService, (fs) =>
+                    moving
+                      ? fs.rename(sourcePath, target)
+                      : fs.copy(sourcePath, target),
+                  ),
+                ),
+              )
+              .then((result) => {
+                if (result._tag === "Left")
+                  wmStore.pushToast(
+                    "Dépôt échoué",
+                    result.left.message,
+                    "error",
+                  );
+                else {
+                  wmStore.pushToast(
+                    moving ? "Fichier déplacé" : "Fichier copié",
+                    target,
+                    "success",
+                  );
+                  void loadDir(cwd, false);
+                }
+              });
+          } catch (error) {
+            wmStore.pushToast("Dépôt impossible", String(error), "error");
+          }
+          return;
+        }
         void handleUploadFiles(e.dataTransfer.files);
       }}
     >
@@ -418,7 +592,9 @@ export const FileExplorerApp: React.FC = () => {
             type="button"
             onClick={() => setSidebarOpen((v) => !v)}
             className={`p-1.5 rounded-lg transition ${
-              sidebarOpen ? "bg-amber-500/20 text-amber-200" : "bg-white/5 text-zinc-400 hover:text-white"
+              sidebarOpen
+                ? "bg-amber-500/20 text-amber-200"
+                : "bg-white/5 text-zinc-400 hover:text-white"
             }`}
             title="Toggle Sidebar"
           >
@@ -530,14 +706,26 @@ export const FileExplorerApp: React.FC = () => {
           <button
             type="button"
             onClick={() => setViewMode((v) => (v === "list" ? "grid" : "list"))}
-            title={viewMode === "list" ? "Switch to Grid View" : "Switch to List View"}
+            title={
+              viewMode === "list"
+                ? "Switch to Grid View"
+                : "Switch to List View"
+            }
             className="p-1.5 rounded-lg bg-white/6 hover:bg-white/12 text-zinc-300"
           >
-            {viewMode === "list" ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
+            {viewMode === "list" ? (
+              <LayoutGrid className="w-3.5 h-3.5" />
+            ) : (
+              <List className="w-3.5 h-3.5" />
+            )}
           </button>
           <button
             type="button"
-            onClick={() => setSortKey((k) => (k === "name" ? "size" : k === "size" ? "type" : "name"))}
+            onClick={() =>
+              setSortKey((k) =>
+                k === "name" ? "size" : k === "size" ? "type" : "name",
+              )
+            }
             title={`Sort by: ${sortKey} (click to cycle)`}
             className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/6 hover:bg-white/12 text-[11px] text-zinc-300 capitalize"
           >
@@ -549,10 +737,16 @@ export const FileExplorerApp: React.FC = () => {
             onClick={() => setShowHidden((v) => !v)}
             title={showHidden ? "Hide dotfiles" : "Show dotfiles"}
             className={`p-1.5 rounded-lg transition ${
-              showHidden ? "bg-white/10 text-zinc-200" : "bg-white/5 text-zinc-500"
+              showHidden
+                ? "bg-white/10 text-zinc-200"
+                : "bg-white/5 text-zinc-500"
             }`}
           >
-            {showHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            {showHidden ? (
+              <Eye className="w-3.5 h-3.5" />
+            ) : (
+              <EyeOff className="w-3.5 h-3.5" />
+            )}
           </button>
           <button
             type="button"
@@ -591,7 +785,9 @@ export const FileExplorerApp: React.FC = () => {
             title="Refresh"
             className="p-1.5 rounded-lg bg-white/6 hover:bg-white/12 text-zinc-300"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
+            />
           </button>
         </div>
       </div>
@@ -611,7 +807,11 @@ export const FileExplorerApp: React.FC = () => {
                 : "bg-white/5 hover:bg-amber-500/15 border-white/10 text-zinc-300"
             }`}
           >
-            {isWorkspaceActive ? <Check className="w-3 h-3" /> : <Star className="w-3 h-3 text-amber-400" />}
+            {isWorkspaceActive ? (
+              <Check className="w-3 h-3" />
+            ) : (
+              <Star className="w-3 h-3 text-amber-400" />
+            )}
             {isWorkspaceActive ? "Active Workspace" : "Set as Workspace"}
           </button>
 
@@ -664,7 +864,8 @@ export const FileExplorerApp: React.FC = () => {
         {clipboard && (
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-zinc-400 font-mono truncate max-w-[140px]">
-              {clipboard.mode === "cut" ? "Move:" : "Copy:"} {clipboard.entry.name}
+              {clipboard.mode === "cut" ? "Move:" : "Copy:"}{" "}
+              {clipboard.entry.name}
             </span>
             <button
               type="button"
@@ -708,7 +909,8 @@ export const FileExplorerApp: React.FC = () => {
               >
                 <Star className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span className="truncate font-mono">
-                  {wm.activeWorkspaceDir.split("/").filter(Boolean).pop() || "workspace"}
+                  {wm.activeWorkspaceDir.split("/").filter(Boolean).pop() ||
+                    "workspace"}
                 </span>
               </button>
             </div>
@@ -727,11 +929,15 @@ export const FileExplorerApp: React.FC = () => {
                       if (isMobile) setSidebarOpen(false);
                     }}
                     className={`w-full flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs transition ${
-                      cwd === p ? "bg-violet-500/20 text-white" : "text-zinc-400 hover:bg-white/6 hover:text-zinc-100"
+                      cwd === p
+                        ? "bg-violet-500/20 text-white"
+                        : "text-zinc-400 hover:bg-white/6 hover:text-zinc-100"
                     }`}
                   >
                     <Folder className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                    <span className="truncate font-mono">{p.split("/").pop()}</span>
+                    <span className="truncate font-mono">
+                      {p.split("/").pop()}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -796,7 +1002,9 @@ export const FileExplorerApp: React.FC = () => {
         {/* File List / Grid */}
         <div
           className={`flex-1 min-w-[200px] overflow-y-auto p-2 ${
-            selectedFile ? "hidden sm:block sm:max-w-[340px] border-r border-white/8" : ""
+            selectedFile
+              ? "hidden sm:block sm:max-w-[340px] border-r border-white/8"
+              : ""
           } ${dragOver ? "ring-2 ring-inset ring-cyan-400/60 bg-cyan-500/10" : ""}`}
         >
           {error && <div className="p-3 text-xs text-rose-400">{error}</div>}
@@ -813,6 +1021,34 @@ export const FileExplorerApp: React.FC = () => {
                 return (
                   <div
                     key={entry.path}
+                    draggable
+                    tabIndex={0}
+                    role="button"
+                    aria-label={entry.name}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void openEntry(entry);
+                      if (
+                        e.key === "ContextMenu" ||
+                        (e.shiftKey && e.key === "F10")
+                      ) {
+                        e.preventDefault();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setCtxMenu({ x: r.left, y: r.bottom, entry });
+                      }
+                    }}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "copyMove";
+                      e.dataTransfer.setData(
+                        "application/x-unkernel-file",
+                        JSON.stringify({
+                          path: entry.path,
+                          name: entry.name,
+                          isDir: entry.isDir,
+                          windowId: session?.id,
+                        }),
+                      );
+                      e.dataTransfer.setData("text/plain", entry.path);
+                    }}
                     onClick={() => void openEntry(entry)}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -836,7 +1072,9 @@ export const FileExplorerApp: React.FC = () => {
                     ) : (
                       <File className="w-8 h-8 text-zinc-400" />
                     )}
-                    <span className="text-[11px] font-mono truncate w-full">{entry.name}</span>
+                    <span className="text-[11px] font-mono truncate w-full">
+                      {entry.name}
+                    </span>
                     <span className="text-[9px] font-mono text-zinc-500">
                       {entry.isDir ? "Folder" : formatSize(entry.size)}
                     </span>
@@ -851,6 +1089,34 @@ export const FileExplorerApp: React.FC = () => {
                 return (
                   <div
                     key={entry.path}
+                    draggable
+                    tabIndex={0}
+                    role="button"
+                    aria-label={entry.name}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void openEntry(entry);
+                      if (
+                        e.key === "ContextMenu" ||
+                        (e.shiftKey && e.key === "F10")
+                      ) {
+                        e.preventDefault();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setCtxMenu({ x: r.left, y: r.bottom, entry });
+                      }
+                    }}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "copyMove";
+                      e.dataTransfer.setData(
+                        "application/x-unkernel-file",
+                        JSON.stringify({
+                          path: entry.path,
+                          name: entry.name,
+                          isDir: entry.isDir,
+                          windowId: session?.id,
+                        }),
+                      );
+                      e.dataTransfer.setData("text/plain", entry.path);
+                    }}
                     onClick={() => void openEntry(entry)}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -858,7 +1124,9 @@ export const FileExplorerApp: React.FC = () => {
                       setCtxMenu({ x: e.clientX, y: e.clientY, entry });
                     }}
                     className={`group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition ${
-                      active ? "bg-white/12 text-white" : "text-zinc-300 hover:bg-white/6"
+                      active
+                        ? "bg-white/12 text-white"
+                        : "text-zinc-300 hover:bg-white/6"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -970,14 +1238,17 @@ export const FileExplorerApp: React.FC = () => {
                   <ArrowLeft className="w-3.5 h-3.5" />
                 </button>
                 <span className="font-mono text-zinc-200 truncate">
-                  {selectedFile.name} {dirty ? <span className="text-amber-400">●</span> : null}
+                  {selectedFile.name}{" "}
+                  {dirty ? <span className="text-amber-400">●</span> : null}
                 </span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(selectedFile.path).catch(() => {});
+                    navigator.clipboard
+                      .writeText(selectedFile.path)
+                      .catch(() => {});
                     wmStore.pushToast("Path Copied", selectedFile.path, "info");
                   }}
                   className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10"
@@ -1061,156 +1332,197 @@ export const FileExplorerApp: React.FC = () => {
       </div>
 
       {/* File/Folder Right-Click Context Menu */}
-      {ctxMenu && (
-        <>
-          <div className="fixed inset-0 z-[120]" onClick={() => setCtxMenu(null)} />
-          <div
-            style={{
-              left: Math.min(ctxMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 210),
-              top: Math.min(ctxMenu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 280),
-            }}
-            className="fixed z-[125] w-52 rounded-2xl glass-surface-focused p-1.5 text-xs shadow-2xl animate-window-in"
-          >
-            <div className="px-2.5 py-1 text-[10px] font-mono text-zinc-400 truncate border-b border-white/8 mb-1">
-              {ctxMenu.entry.name}
-            </div>
-            {ctxMenu.entry.isDir ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    wmStore.setWorkspaceDir(ctxMenu.entry.path);
-                    wmStore.pushToast("Active Workspace Set", ctxMenu.entry.path, "success");
-                    setCtxMenu(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-amber-200"
-                >
-                  <Star className="w-3.5 h-3.5" />
-                  Set as Active Workspace
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    wmStore.openTerminalInDir(ctxMenu.entry.path);
-                    setCtxMenu(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-cyan-200"
-                >
-                  <Terminal className="w-3.5 h-3.5" />
-                  Open Terminal Here
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    wmStore.openDirInIde(ctxMenu.entry.path);
-                    setCtxMenu(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-sky-200"
-                >
-                  <Code2 className="w-3.5 h-3.5" />
-                  Open in Code IDE
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    wmStore.openFileInIde(ctxMenu.entry.path);
-                    setCtxMenu(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-sky-200"
-                >
-                  <Code2 className="w-3.5 h-3.5" />
-                  Open in Code IDE
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    wmStore.openFileInMedia(ctxMenu.entry.path);
-                    setCtxMenu(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-pink-200"
-                >
-                  <Film className="w-3.5 h-3.5" />
-                  Open in Media Studio
-                </button>
-                {/\.ipynb$/i.test(ctxMenu.entry.name) && (
+      {ctxMenu &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[120]"
+              onClick={() => setCtxMenu(null)}
+            />
+            <div
+              style={{
+                left: Math.min(
+                  ctxMenu.x,
+                  (typeof window !== "undefined" ? window.innerWidth : 1200) -
+                    210,
+                ),
+                top: Math.min(
+                  ctxMenu.y,
+                  (typeof window !== "undefined" ? window.innerHeight : 800) -
+                    280,
+                ),
+              }}
+              role="menu"
+              aria-label="Actions du fichier"
+              data-explorer-context-menu
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setCtxMenu(null);
+                }
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  const buttons = [
+                    ...e.currentTarget.querySelectorAll<HTMLButtonElement>(
+                      "button",
+                    ),
+                  ];
+                  const i = buttons.indexOf(
+                    document.activeElement as HTMLButtonElement,
+                  );
+                  buttons[
+                    (i + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                      buttons.length
+                  ]?.focus();
+                }
+              }}
+              className="fixed z-[125] w-52 rounded-2xl glass-surface-focused p-1.5 text-xs shadow-2xl animate-window-in"
+            >
+              <div className="px-2.5 py-1 text-[10px] font-mono text-zinc-400 truncate border-b border-white/8 mb-1">
+                {ctxMenu.entry.name}
+              </div>
+              {ctxMenu.entry.isDir ? (
+                <>
                   <button
                     type="button"
                     onClick={() => {
-                      wmStore.openFileInNotebook(ctxMenu.entry.path);
+                      wmStore.setWorkspaceDir(ctxMenu.entry.path);
+                      wmStore.pushToast(
+                        "Active Workspace Set",
+                        ctxMenu.entry.path,
+                        "success",
+                      );
                       setCtxMenu(null);
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-amber-200"
                   >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    Open in Notebook
+                    <Star className="w-3.5 h-3.5" />
+                    Set as Active Workspace
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleDownload(ctxMenu.entry);
-                    setCtxMenu(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Download to PC
-                </button>
-              </>
-            )}
-            <div className="my-1 border-t border-white/8" />
-            <button
-              type="button"
-              onClick={() => {
-                const e = ctxMenu.entry;
-                setCtxMenu(null);
-                void handleRename(e);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              Rename
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setClipboard({ mode: "copy", entry: ctxMenu.entry });
-                setCtxMenu(null);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Copy
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setClipboard({ mode: "cut", entry: ctxMenu.entry });
-                setCtxMenu(null);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
-            >
-              <Scissors className="w-3.5 h-3.5" />
-              Cut / Move
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const e = ctxMenu.entry;
-                setCtxMenu(null);
-                void handleDelete(e);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-rose-500/20 text-rose-300"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Delete
-            </button>
-          </div>
-        </>
-      )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      wmStore.openTerminalInDir(ctxMenu.entry.path);
+                      setCtxMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-cyan-200"
+                  >
+                    <Terminal className="w-3.5 h-3.5" />
+                    Open Terminal Here
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      wmStore.openDirInIde(ctxMenu.entry.path);
+                      setCtxMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-sky-200"
+                  >
+                    <Code2 className="w-3.5 h-3.5" />
+                    Open in Code IDE
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      wmStore.openFileInIde(ctxMenu.entry.path);
+                      setCtxMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-sky-200"
+                  >
+                    <Code2 className="w-3.5 h-3.5" />
+                    Open in Code IDE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      wmStore.openFileInMedia(ctxMenu.entry.path);
+                      setCtxMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-pink-200"
+                  >
+                    <Film className="w-3.5 h-3.5" />
+                    Open in Media Studio
+                  </button>
+                  {/\.ipynb$/i.test(ctxMenu.entry.name) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        wmStore.openFileInNotebook(ctxMenu.entry.path);
+                        setCtxMenu(null);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-amber-200"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      Open in Notebook
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleDownload(ctxMenu.entry);
+                      setCtxMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download to PC
+                  </button>
+                </>
+              )}
+              <div className="my-1 border-t border-white/8" />
+              <button
+                type="button"
+                onClick={() => {
+                  const e = ctxMenu.entry;
+                  setCtxMenu(null);
+                  void handleRename(e);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Rename
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setClipboard({ mode: "copy", entry: ctxMenu.entry });
+                  setCtxMenu(null);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Copy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setClipboard({ mode: "cut", entry: ctxMenu.entry });
+                  setCtxMenu(null);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-zinc-200"
+              >
+                <Scissors className="w-3.5 h-3.5" />
+                Cut / Move
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const e = ctxMenu.entry;
+                  setCtxMenu(null);
+                  void handleDelete(e);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-rose-500/20 text-rose-300"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 };

@@ -1,3 +1,4 @@
+import { wmStore } from "../wm/wm-store.ts";
 import { useSyncExternalStore } from "react";
 import { uiSounds } from "./ui-sounds.ts";
 
@@ -68,20 +69,32 @@ class ClipboardStore {
     this.emit();
   }
 
-  public async copyToHost(text: string, source: ClipboardEntry["source"] = "manual"): Promise<void> {
-    this.record(text, source);
-    uiSounds.playClick();
+  public async copyToHost(
+    text: string,
+    source: ClipboardEntry["source"] = "manual",
+  ): Promise<boolean> {
     try {
       await navigator.clipboard.writeText(text);
+      this.record(text, source);
+      uiSounds.playClick();
+      return true;
     } catch {
-      // ignore if permission denied
+      wmStore.pushToast(
+        "Copie refusée",
+        "Le navigateur a refusé le presse-papiers. Sélectionnez le texte et copiez-le manuellement.",
+        "warn",
+      );
+      return false;
     }
   }
 
   public togglePin(id: string): void {
     this.entries = this.entries
       .map((e) => (e.id === id ? { ...e, pinned: !e.pinned } : e))
-      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.timestamp - a.timestamp);
+      .sort(
+        (a, b) =>
+          Number(b.pinned) - Number(a.pinned) || b.timestamp - a.timestamp,
+      );
     this.emit();
   }
 
@@ -99,5 +112,8 @@ class ClipboardStore {
 export const clipboardStore = new ClipboardStore();
 
 export function useClipboardHistory(): readonly ClipboardEntry[] {
-  return useSyncExternalStore(clipboardStore.subscribe, clipboardStore.getSnapshot);
+  return useSyncExternalStore(
+    clipboardStore.subscribe,
+    clipboardStore.getSnapshot,
+  );
 }

@@ -1,4 +1,8 @@
 import {
+  useAppSurface,
+  useSurfaceRevision,
+} from "../../core/app-surface-registry.tsx";
+import {
   AudioWaveform,
   MonitorPlay,
   Play,
@@ -109,7 +113,12 @@ ${body}
 }`;
 }
 
-const SYNTH_KEYS: readonly { note: string; freq: number; key: string; black?: boolean }[] = [
+const SYNTH_KEYS: readonly {
+  note: string;
+  freq: number;
+  key: string;
+  black?: boolean;
+}[] = [
   { note: "C4", freq: 261.63, key: "a" },
   { note: "C#4", freq: 277.18, key: "w", black: true },
   { note: "D4", freq: 293.66, key: "s" },
@@ -134,6 +143,57 @@ export const ShaderSynthApp: React.FC = () => {
   const [shaderErr, setShaderErr] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1.0);
   const [fps, setFps] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
+  const simulationTime = useRef(0);
+  const revision = useSurfaceRevision(
+    presetId,
+    code,
+    speed,
+    paused,
+    mode,
+    shaderErr,
+  );
+  useAppSurface({
+    document: "shader:" + presetId,
+    revision,
+    status: shaderErr ? "disconnected" : paused ? "paused" : "live",
+    state: {
+      preset: presetId,
+      speed,
+      paused,
+      mode,
+      error: shaderErr,
+      time: simulationTime.current,
+    },
+    actions: {
+      pause: {
+        label: "Mettre le shader en pause",
+        run: () => {
+          setPaused(true);
+          return { paused: true };
+        },
+      },
+      resume: {
+        label: "Reprendre le shader",
+        run: () => {
+          setPaused(false);
+          return { paused: false };
+        },
+      },
+      preset: {
+        label: "Changer de scénario shader",
+        run: (args) => {
+          const p = SHADER_PRESETS.find((p) => p.id === args.id);
+          if (!p) throw new Error("Scénario inconnu");
+          setPresetId(p.id);
+          setCode(p.wgslBody);
+          return { preset: p.id };
+        },
+      },
+    },
+  });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const speedRef = useRef(1.0);
@@ -181,7 +241,9 @@ export const ShaderSynthApp: React.FC = () => {
         const info = await module.getCompilationInfo();
         const errs = info.messages.filter((m) => m.type === "error");
         if (errs.length > 0) {
-          setShaderErr(errs.map((e) => `L${e.lineNum}: ${e.message}`).join("\n"));
+          setShaderErr(
+            errs.map((e) => `L${e.lineNum}: ${e.message}`).join("\n"),
+          );
           return;
         }
         setShaderErr(null);
@@ -201,7 +263,7 @@ export const ShaderSynthApp: React.FC = () => {
           entries: [{ binding: 0, resource: { buffer: uBuf } }],
         });
 
-        let simTime = 0;
+        let simTime = simulationTime.current;
         let lastTs = performance.now();
         let frames = 0;
         let fpsStamp = lastTs;
@@ -211,11 +273,18 @@ export const ShaderSynthApp: React.FC = () => {
           const now = performance.now();
           const dt = (now - lastTs) / 1000;
           lastTs = now;
-          simTime += dt * speedRef.current;
+          if (!pausedRef.current) simTime += dt * speedRef.current;
+          simulationTime.current = simTime;
 
           const rect = canvas.getBoundingClientRect();
-          const w = Math.max(1, Math.floor(rect.width * Math.min(window.devicePixelRatio || 1, 2)));
-          const h = Math.max(1, Math.floor(rect.height * Math.min(window.devicePixelRatio || 1, 2)));
+          const w = Math.max(
+            1,
+            Math.floor(rect.width * Math.min(window.devicePixelRatio || 1, 2)),
+          );
+          const h = Math.max(
+            1,
+            Math.floor(rect.height * Math.min(window.devicePixelRatio || 1, 2)),
+          );
           if (canvas.width !== w || canvas.height !== h) {
             canvas.width = w;
             canvas.height = h;
@@ -224,7 +293,16 @@ export const ShaderSynthApp: React.FC = () => {
           device.queue.writeBuffer(
             uBuf,
             0,
-            new Float32Array([simTime, w, h, mouseRef.current.x, mouseRef.current.y, 0, 0, 0])
+            new Float32Array([
+              simTime,
+              w,
+              h,
+              mouseRef.current.x,
+              mouseRef.current.y,
+              0,
+              0,
+              0,
+            ]),
           );
           const enc = device.createCommandEncoder();
           const pass = enc.beginRenderPass({
@@ -304,7 +382,10 @@ export const ShaderSynthApp: React.FC = () => {
     osc.start(now);
     osc.stop(now + release + 0.08);
     setActiveNote(noteName);
-    setTimeout(() => setActiveNote((cur) => (cur === noteName ? null : cur)), 180);
+    setTimeout(
+      () => setActiveNote((cur) => (cur === noteName ? null : cur)),
+      180,
+    );
   };
 
   // Arpeggiator
@@ -382,6 +463,14 @@ export const ShaderSynthApp: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full h-full bg-[#090b12]/96 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setPaused((p) => !p)}
+        aria-pressed={paused}
+        className="absolute right-3 bottom-3 z-20 px-3 py-1.5 rounded-lg border border-white/15 bg-slate-900/90 text-xs text-amber-100"
+      >
+        {paused ? "Reprendre le shader" : "Mettre en pause"}
+      </button>
       {/* Top Mode Bar */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/45 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-1.5">
@@ -505,7 +594,11 @@ export const ShaderSynthApp: React.FC = () => {
             <div className="absolute top-2.5 left-3 flex items-center gap-2 text-[11px] font-mono text-zinc-400">
               <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
               <span>OSCILLOSCOPE</span>
-              {activeNote && <span className="text-violet-300 font-semibold">{activeNote}</span>}
+              {activeNote && (
+                <span className="text-violet-300 font-semibold">
+                  {activeNote}
+                </span>
+              )}
             </div>
           </div>
 
@@ -514,7 +607,9 @@ export const ShaderSynthApp: React.FC = () => {
             <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1.5">
               <div className="text-[11px] text-zinc-400">Waveform</div>
               <div className="grid grid-cols-2 gap-1">
-                {(["sine", "triangle", "sawtooth", "square"] as OscillatorType[]).map((w) => (
+                {(
+                  ["sine", "triangle", "sawtooth", "square"] as OscillatorType[]
+                ).map((w) => (
                   <button
                     key={w}
                     type="button"
@@ -550,7 +645,9 @@ export const ShaderSynthApp: React.FC = () => {
             <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
               <div className="flex justify-between text-[11px]">
                 <span className="text-zinc-400">Release</span>
-                <span className="font-mono text-violet-300">{release.toFixed(2)} s</span>
+                <span className="font-mono text-violet-300">
+                  {release.toFixed(2)} s
+                </span>
               </div>
               <input
                 type="range"
@@ -574,7 +671,11 @@ export const ShaderSynthApp: React.FC = () => {
                     : "bg-gradient-to-r from-violet-600 to-cyan-500 text-white"
                 }`}
               >
-                {arpPlaying ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                {arpPlaying ? (
+                  <Square className="w-3.5 h-3.5" />
+                ) : (
+                  <Play className="w-3.5 h-3.5" />
+                )}
                 {arpPlaying ? "Stop Arp" : "Play Synthwave Arp"}
               </button>
             </div>
@@ -591,12 +692,16 @@ export const ShaderSynthApp: React.FC = () => {
                   activeNote === k.note
                     ? "bg-gradient-to-b from-violet-500/60 to-cyan-500/60 border-white/60 text-white shadow-lg"
                     : k.black
-                    ? "bg-black/80 hover:bg-violet-950/60 border-white/15 text-zinc-400"
-                    : "bg-white/10 hover:bg-white/18 border-white/15 text-zinc-200"
+                      ? "bg-black/80 hover:bg-violet-950/60 border-white/15 text-zinc-400"
+                      : "bg-white/10 hover:bg-white/18 border-white/15 text-zinc-200"
                 }`}
               >
-                <span className="text-[10px] font-mono font-semibold">{k.note}</span>
-                <span className="text-[9px] text-zinc-500 uppercase mt-0.5">{k.key}</span>
+                <span className="text-[10px] font-mono font-semibold">
+                  {k.note}
+                </span>
+                <span className="text-[9px] text-zinc-500 uppercase mt-0.5">
+                  {k.key}
+                </span>
               </button>
             ))}
           </div>

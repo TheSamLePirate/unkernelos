@@ -1,3 +1,4 @@
+import { WindowSessionContext } from "../../core/app-surface-registry.tsx";
 import { Effect } from "effect";
 import {
   Activity,
@@ -42,7 +43,10 @@ import {
   type PiThinking,
 } from "../../core/schema.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
-import { KittyTerminalPane, type KittyTerminalHandle } from "./KittyTerminalPane.tsx";
+import {
+  KittyTerminalPane,
+  type KittyTerminalHandle,
+} from "./KittyTerminalPane.tsx";
 
 const PROMPT_TEMPLATES = [
   {
@@ -84,7 +88,10 @@ const CLAUDE_EFFORTS: readonly { value: ClaudeEffort; label: string }[] = [
   { value: "max", label: "Max" },
 ];
 
-const CLAUDE_PERMISSIONS: readonly { value: ClaudePermissionMode; label: string }[] = [
+const CLAUDE_PERMISSIONS: readonly {
+  value: ClaudePermissionMode;
+  label: string;
+}[] = [
   { value: "default", label: "Perms: Default" },
   { value: "auto", label: "Auto" },
   { value: "acceptEdits", label: "Accept Edits" },
@@ -129,7 +136,11 @@ const PI_THINKING_LEVELS: readonly { value: PiThinking; label: string }[] = [
 
 const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-function buildAgentCliCommand(agent: AgentKind, creds: CredentialsConfig, promptText?: string): string {
+function buildAgentCliCommand(
+  agent: AgentKind,
+  creds: CredentialsConfig,
+  promptText?: string,
+): string {
   const parts: string[] = [];
 
   if (agent === "claude") {
@@ -172,15 +183,17 @@ function buildAgentCliCommand(agent: AgentKind, creds: CredentialsConfig, prompt
   return parts.join(" ");
 }
 
-export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocused = true }) => {
+export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({
+  windowFocused = true,
+}) => {
   const wm = useWm();
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
-    DEFAULT_UNKERNEL_CONFIG
+    DEFAULT_UNKERNEL_CONFIG,
   );
   const creds = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.credsRef),
-    DEFAULT_CREDENTIALS
+    DEFAULT_CREDENTIALS,
   );
   const vmState = useSubscriptionRef(
     Effect.map(VmService, (v) => v.stateRef),
@@ -205,51 +218,92 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
       hasSnapshot: false,
       audioMuted: false,
       wispActiveUrl: "",
-    }
+    },
   );
 
   const [agent, setAgent] = useState<AgentKind>(creds.defaultAgent);
   const [workspaceDir, setWorkspaceDirState] = useState<string>(
-    wm.activeWorkspaceDir || "/home/user/workspace"
+    wm.activeWorkspaceDir || "/home/user/workspace",
   );
   const [knownProjects, setKnownProjects] = useState<readonly string[]>([]);
   const [prompt, setPrompt] = useState("");
+  const windowSession = React.useContext(WindowSessionContext);
+  const consumedHorizonContext = useRef<string | null>(null);
+  useEffect(() => {
+    const payload = windowSession?.props?.horizonContext;
+    if (
+      typeof payload === "string" &&
+      consumedHorizonContext.current !== payload
+    ) {
+      consumedHorizonContext.current = payload;
+      setPrompt((p) =>
+        [p, "Contexte choisi pour cette mission :", payload]
+          .filter(Boolean)
+          .join("\n\n"),
+      );
+      wmStore.updateWindowProps(windowSession!.id, {
+        horizonContext: undefined,
+      });
+    }
+  }, [windowSession?.props?.horizonContext]);
+
   const [previewPort, setPreviewPort] = useState<number>(3000);
   const [previewKey, setPreviewKey] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [deploying, setDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
-  const [deployedActionsUrl, setDeployedActionsUrl] = useState<string | null>(null);
+  const [deployedActionsUrl, setDeployedActionsUrl] = useState<string | null>(
+    null,
+  );
   const [deployError, setDeployError] = useState<string | null>(null);
-  const [mobilePane, setMobilePane] = useState<"terminal" | "preview">("terminal");
+  const [mobilePane, setMobilePane] = useState<"terminal" | "preview">(
+    "terminal",
+  );
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
 
   const isCustomClaudeModel =
     Boolean(creds.claudeModel) &&
-    !CLAUDE_MODELS.some((m) => m.value !== "__custom__" && m.value === creds.claudeModel);
+    !CLAUDE_MODELS.some(
+      (m) => m.value !== "__custom__" && m.value === creds.claudeModel,
+    );
   const isCustomPiModel =
     Boolean(creds.piModel) &&
-    !PI_MODELS.some((m) => m.value !== "__custom__" && m.value === creds.piModel);
+    !PI_MODELS.some(
+      (m) => m.value !== "__custom__" && m.value === creds.piModel,
+    );
 
-  const [customClaudeInput, setCustomClaudeInput] = useState(isCustomClaudeModel);
+  const [customClaudeInput, setCustomClaudeInput] =
+    useState(isCustomClaudeModel);
   const [customPiInput, setCustomPiInput] = useState(isCustomPiModel);
 
   const termHandleRef = useRef<KittyTerminalHandle | null>(null);
   const lastCdDirRef = useRef<string>(workspaceDir);
 
-  const projectName = workspaceDir.split("/").filter(Boolean).pop() || "workspace";
+  const projectName =
+    workspaceDir.split("/").filter(Boolean).pop() || "workspace";
 
   const updateCreds = (patch: Partial<CredentialsConfig>) => {
-    appRuntime.runFork(Effect.flatMap(SettingsService, (s) => s.updateCredentials(patch)));
+    appRuntime.runFork(
+      Effect.flatMap(SettingsService, (s) => s.updateCredentials(patch)),
+    );
   };
 
-  const cliPreview = useMemo(() => buildAgentCliCommand(agent, creds), [agent, creds]);
+  const cliPreview = useMemo(
+    () => buildAgentCliCommand(agent, creds),
+    [agent, creds],
+  );
 
   // Discover existing projects under ~/workspace
   useEffect(() => {
     if (vmState.phase !== "running") return;
     void appRuntime
-      .runPromise(Effect.either(Effect.flatMap(GuestFsService, (fs) => fs.listProjects("/home/user/workspace"))))
+      .runPromise(
+        Effect.either(
+          Effect.flatMap(GuestFsService, (fs) =>
+            fs.listProjects("/home/user/workspace"),
+          ),
+        ),
+      )
       .then((res) => {
         if (res._tag === "Right") setKnownProjects(res.right);
       });
@@ -259,9 +313,14 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
   useEffect(() => {
     if (wm.activeWorkspaceDir && wm.activeWorkspaceDir !== workspaceDir) {
       setWorkspaceDirState(wm.activeWorkspaceDir);
-      if (termHandleRef.current && lastCdDirRef.current !== wm.activeWorkspaceDir) {
+      if (
+        termHandleRef.current &&
+        lastCdDirRef.current !== wm.activeWorkspaceDir
+      ) {
         lastCdDirRef.current = wm.activeWorkspaceDir;
-        termHandleRef.current.write(`mkdir -p ${sq(wm.activeWorkspaceDir)} && cd ${sq(wm.activeWorkspaceDir)}\n`);
+        termHandleRef.current.write(
+          `mkdir -p ${sq(wm.activeWorkspaceDir)} && cd ${sq(wm.activeWorkspaceDir)}\n`,
+        );
       }
     }
   }, [wm.activeWorkspaceDir]);
@@ -287,7 +346,7 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             const vm = yield* VmService;
             yield* Effect.promise(() => vm.previewRelay.ready());
             return vm.previewRelay.previewUrl(firstPort, "/");
-          })
+          }),
         )
         .then((url) => {
           setPreviewUrl(url);
@@ -305,12 +364,16 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
           const vm = yield* VmService;
           yield* Effect.promise(() => vm.previewRelay.ready());
           return vm.previewRelay.previewUrl(port, "/");
-        })
+        }),
       );
       setPreviewUrl(url);
       setPreviewKey((k) => k + 1);
     } catch (err) {
-      wmStore.pushToast("Preview Error", err instanceof Error ? err.message : String(err), "error");
+      wmStore.pushToast(
+        "Preview Error",
+        err instanceof Error ? err.message : String(err),
+        "error",
+      );
     }
   };
 
@@ -356,29 +419,43 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
           return yield* git.deployToGitHubPages(
             workspaceDir,
             projectName,
-            `Build & publish ${projectName} via unkernelOS (${agent})`
+            `Build & publish ${projectName} via unkernelOS (${agent})`,
           );
-        })
-      )
+        }),
+      ),
     );
     setDeploying(false);
     if (res._tag === "Left") {
       setDeployError(res.left.message);
-      wmStore.pushToast("GitHub Pages Deploy Failed", res.left.message, "error");
+      wmStore.pushToast(
+        "GitHub Pages Deploy Failed",
+        res.left.message,
+        "error",
+      );
     } else {
       setDeployedUrl(res.right.pagesUrl);
       setDeployedActionsUrl(res.right.actionsUrl);
-      wmStore.pushToast("GitHub Pages Deployed!", res.right.pagesUrl, "success", {
-        label: "Open Pages",
-        url: res.right.pagesUrl,
-      });
+      wmStore.pushToast(
+        "GitHub Pages Deployed!",
+        res.right.pagesUrl,
+        "success",
+        {
+          label: "Open Pages",
+          url: res.right.pagesUrl,
+        },
+      );
     }
   };
 
   const hasAgentKey =
     agent === "claude"
       ? Boolean(creds.anthropicApiKey)
-      : Boolean(creds.anthropicApiKey || creds.openaiApiKey || creds.geminiApiKey || creds.openrouterApiKey);
+      : Boolean(
+          creds.anthropicApiKey ||
+          creds.openaiApiKey ||
+          creds.geminiApiKey ||
+          creds.openrouterApiKey,
+        );
 
   return (
     <div className="flex flex-col w-full h-full bg-[#0a0c13]/92">
@@ -427,7 +504,10 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
               value={workspaceDir}
               onChange={(e) => {
                 if (e.target.value === "__new__") {
-                  const name = window.prompt("New project folder name inside ~/workspace:", "new-app");
+                  const name = window.prompt(
+                    "New project folder name inside ~/workspace:",
+                    "new-app",
+                  );
                   if (name?.trim()) {
                     const safe = name.trim().replace(/[^a-zA-Z0-9._-]/g, "-");
                     switchProjectDir(`/home/user/workspace/${safe}`);
@@ -439,8 +519,18 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
               className="bg-transparent text-xs font-mono text-zinc-100 outline-none cursor-pointer max-w-[165px]"
               title={workspaceDir}
             >
-              {Array.from(new Set([workspaceDir, ...knownProjects, ...wm.recentWorkspaces])).map((d) => (
-                <option key={d} value={d} className="bg-[#12141f] text-zinc-100">
+              {Array.from(
+                new Set([
+                  workspaceDir,
+                  ...knownProjects,
+                  ...wm.recentWorkspaces,
+                ]),
+              ).map((d) => (
+                <option
+                  key={d}
+                  value={d}
+                  className="bg-[#12141f] text-zinc-100"
+                >
                   {d.replace(/^\/home\/user\/workspace\//, "~/workspace/")}
                 </option>
               ))}
@@ -463,7 +553,9 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
           {!hasAgentKey && (
             <button
               type="button"
-              onClick={() => wmStore.openApp("settings", { tab: "credentials" })}
+              onClick={() =>
+                wmStore.openApp("settings", { tab: "credentials" })
+              }
               className="text-[11px] px-2 py-1 rounded-md bg-amber-500/15 border border-amber-400/30 text-amber-300 hover:bg-amber-500/25 transition"
             >
               Set API Key
@@ -526,7 +618,9 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg text-xs font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:brightness-110 disabled:opacity-50 shadow-lg shadow-emerald-500/20 transition"
           >
             <Rocket className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{deploying ? "Publishing..." : "Publish to GitHub Pages"}</span>
+            <span className="hidden sm:inline">
+              {deploying ? "Publishing..." : "Publish to GitHub Pages"}
+            </span>
             <span className="sm:hidden">{deploying ? "..." : "Publish"}</span>
           </button>
         </div>
@@ -557,7 +651,11 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
                 className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
               >
                 {CLAUDE_MODELS.map((m) => (
-                  <option key={m.value} value={m.value} className="bg-[#12141f] text-zinc-100">
+                  <option
+                    key={m.value}
+                    value={m.value}
+                    className="bg-[#12141f] text-zinc-100"
+                  >
                     {m.label}
                   </option>
                 ))}
@@ -578,11 +676,17 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
               <select
                 aria-label="Claude Thinking Effort"
                 value={creds.claudeEffort}
-                onChange={(e) => updateCreds({ claudeEffort: e.target.value as ClaudeEffort })}
+                onChange={(e) =>
+                  updateCreds({ claudeEffort: e.target.value as ClaudeEffort })
+                }
                 className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
               >
                 {CLAUDE_EFFORTS.map((ef) => (
-                  <option key={ef.value} value={ef.value} className="bg-[#12141f] text-zinc-100">
+                  <option
+                    key={ef.value}
+                    value={ef.value}
+                    className="bg-[#12141f] text-zinc-100"
+                  >
                     {ef.label}
                   </option>
                 ))}
@@ -596,12 +700,19 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
                 aria-label="Claude Permission Mode"
                 value={creds.claudePermissionMode}
                 onChange={(e) =>
-                  updateCreds({ claudePermissionMode: e.target.value as ClaudePermissionMode })
+                  updateCreds({
+                    claudePermissionMode: e.target
+                      .value as ClaudePermissionMode,
+                  })
                 }
                 className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
               >
                 {CLAUDE_PERMISSIONS.map((pm) => (
-                  <option key={pm.value} value={pm.value} className="bg-[#12141f] text-zinc-100">
+                  <option
+                    key={pm.value}
+                    value={pm.value}
+                    className="bg-[#12141f] text-zinc-100"
+                  >
                     {pm.label}
                   </option>
                 ))}
@@ -611,7 +722,9 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
             {/* Continue Session */}
             <button
               type="button"
-              onClick={() => updateCreds({ claudeContinue: !creds.claudeContinue })}
+              onClick={() =>
+                updateCreds({ claudeContinue: !creds.claudeContinue })
+              }
               className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] border transition ${
                 creds.claudeContinue
                   ? "bg-orange-500/20 border-orange-400/40 text-orange-200"
@@ -635,7 +748,11 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
                 className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
               >
                 {PI_PROVIDERS.map((p) => (
-                  <option key={p.value} value={p.value} className="bg-[#12141f] text-zinc-100">
+                  <option
+                    key={p.value}
+                    value={p.value}
+                    className="bg-[#12141f] text-zinc-100"
+                  >
                     {p.label}
                   </option>
                 ))}
@@ -659,7 +776,11 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
                 className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
               >
                 {PI_MODELS.map((m) => (
-                  <option key={m.value} value={m.value} className="bg-[#12141f] text-zinc-100">
+                  <option
+                    key={m.value}
+                    value={m.value}
+                    className="bg-[#12141f] text-zinc-100"
+                  >
                     {m.label}
                   </option>
                 ))}
@@ -680,11 +801,17 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
               <select
                 aria-label="Pi Thinking Level"
                 value={creds.piThinking}
-                onChange={(e) => updateCreds({ piThinking: e.target.value as PiThinking })}
+                onChange={(e) =>
+                  updateCreds({ piThinking: e.target.value as PiThinking })
+                }
                 className="bg-transparent text-[11px] text-zinc-200 outline-none cursor-pointer"
               >
                 {PI_THINKING_LEVELS.map((lv) => (
-                  <option key={lv.value} value={lv.value} className="bg-[#12141f] text-zinc-100">
+                  <option
+                    key={lv.value}
+                    value={lv.value}
+                    className="bg-[#12141f] text-zinc-100"
+                  >
                     {lv.label}
                   </option>
                 ))}
@@ -735,17 +862,20 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
       {/* Prompt Composer Bar */}
       <div className="px-3 py-2.5 bg-white/[0.025] border-b border-white/8 shrink-0 space-y-2">
         <div className="flex items-center gap-2">
-          <input
+          <textarea
+            rows={2}
+            aria-label="Mission de l’agent"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 launchAgentPrompt();
               }
             }}
             placeholder={`Describe the app you want ${agent === "claude" ? "Claude Code" : "Pi"} to build, test & serve on localhost:3000...`}
-            className="flex-1 px-3 py-2 rounded-xl bg-black/50 border border-white/12 focus:border-violet-400/60 outline-none text-xs text-zinc-100 placeholder:text-zinc-500 transition"
+            className="flex-1 min-w-0 min-h-14 max-h-44 resize-y px-3 py-2 rounded-xl bg-black/50 border border-white/12 focus:border-violet-400/60 outline-none text-xs text-zinc-100 placeholder:text-zinc-500 transition"
           />
           <button
             type="button"
@@ -770,7 +900,9 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
         {/* Starter Templates + Deployment Banner */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] uppercase tracking-wider text-zinc-500">Presets:</span>
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+              Presets:
+            </span>
             {PROMPT_TEMPLATES.map((tpl) => (
               <button
                 key={tpl.label}
@@ -808,7 +940,9 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
               </a>
             )}
             {deployError && (
-              <span className="text-[11px] text-rose-400 truncate max-w-md">{deployError}</span>
+              <span className="text-[11px] text-rose-400 truncate max-w-md">
+                {deployError}
+              </span>
             )}
           </div>
         </div>
@@ -903,7 +1037,9 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
           <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-black/40 border-b border-white/8">
             <div className="flex items-center gap-1.5">
               <Globe className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-xs font-medium text-zinc-200">Live App Preview</span>
+              <span className="text-xs font-medium text-zinc-200">
+                Live App Preview
+              </span>
               {vmState.detectedPorts.map((p) => (
                 <button
                   key={p.port}
@@ -925,7 +1061,9 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
                 type="number"
                 value={previewPort}
                 onChange={(e) => setPreviewPort(Number(e.target.value) || 3000)}
-                onKeyDown={(e) => e.key === "Enter" && loadPreviewPort(previewPort)}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && loadPreviewPort(previewPort)
+                }
                 className="w-16 px-1.5 py-0.5 rounded bg-white/8 border border-white/10 text-[11px] font-mono text-zinc-200 outline-none"
               />
               <button
@@ -964,9 +1102,14 @@ export const AgentStudioApp: React.FC<{ windowFocused?: boolean }> = ({ windowFo
                   <Globe className="w-6 h-6 text-emerald-400" />
                 </div>
                 <div className="space-y-1 max-w-xs">
-                  <p className="text-sm font-medium text-zinc-200">Waiting for Guest Web Server</p>
+                  <p className="text-sm font-medium text-zinc-200">
+                    Waiting for Guest Web Server
+                  </p>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    When {agent === "claude" ? "Claude Code" : "Pi"} starts a dev server (Bun, Vite, Python, Node), unkernelOS detects the port automatically and streams it here over <code className="text-cyan-300">vsock</code>.
+                    When {agent === "claude" ? "Claude Code" : "Pi"} starts a
+                    dev server (Bun, Vite, Python, Node), unkernelOS detects the
+                    port automatically and streams it here over{" "}
+                    <code className="text-cyan-300">vsock</code>.
                   </p>
                 </div>
                 <button

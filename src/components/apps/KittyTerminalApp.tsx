@@ -17,11 +17,21 @@ import {
   Zap,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
-import { appRuntime, SettingsService, useSubscriptionRef } from "../../core/runtime.ts";
-import { DEFAULT_UNKERNEL_CONFIG, type KittyThemeId } from "../../core/schema.ts";
+import {
+  appRuntime,
+  SettingsService,
+  useSubscriptionRef,
+} from "../../core/runtime.ts";
+import {
+  DEFAULT_UNKERNEL_CONFIG,
+  type KittyThemeId,
+} from "../../core/schema.ts";
 import { KITTY_THEMES } from "../../gpu/webgpu-terminal.ts";
 import { useWm, wmStore } from "../../wm/wm-store.ts";
-import { KittyTerminalPane, type KittyTerminalHandle } from "./KittyTerminalPane.tsx";
+import {
+  KittyTerminalPane,
+  type KittyTerminalHandle,
+} from "./KittyTerminalPane.tsx";
 
 interface TermPane {
   readonly id: string;
@@ -37,17 +47,42 @@ interface TermTab {
   readonly activePane: string;
 }
 
-const QUICK_SNIPPETS: readonly { label: string; cmd: string; desc: string }[] = [
-  { label: "List Files", cmd: "ls -la", desc: "Detailed directory listing" },
-  { label: "Git Status", cmd: "git status -sb", desc: "Short git status & branch" },
-  { label: "Bun Dev Server", cmd: "bun run dev", desc: "Start dev server in workspace" },
-  { label: "Claude Code", cmd: "claude", desc: "Interactive Claude Code agent" },
-  { label: "Pi Agent", cmd: "pi", desc: "Interactive Pi coding agent" },
-  { label: "Wayland Foot", cmd: "wland foot &", desc: "Open native Wayland desktop window" },
-  { label: "3D GL kmscube", cmd: "kmscube &", desc: "Run VirGL 3D KMS demo" },
-  { label: "System Info", cmd: "uname -a && nproc && free -h", desc: "Kernel, vCPUs & RAM" },
-  { label: "Disk Usage", cmd: "df -h / /data", desc: "Persistent ext4 disk usage" },
-];
+const QUICK_SNIPPETS: readonly { label: string; cmd: string; desc: string }[] =
+  [
+    { label: "List Files", cmd: "ls -la", desc: "Detailed directory listing" },
+    {
+      label: "Git Status",
+      cmd: "git status -sb",
+      desc: "Short git status & branch",
+    },
+    {
+      label: "Bun Dev Server",
+      cmd: "bun run dev",
+      desc: "Start dev server in workspace",
+    },
+    {
+      label: "Claude Code",
+      cmd: "claude",
+      desc: "Interactive Claude Code agent",
+    },
+    { label: "Pi Agent", cmd: "pi", desc: "Interactive Pi coding agent" },
+    {
+      label: "Wayland Foot",
+      cmd: "wland foot &",
+      desc: "Open native Wayland desktop window",
+    },
+    { label: "3D GL kmscube", cmd: "kmscube &", desc: "Run VirGL 3D KMS demo" },
+    {
+      label: "System Info",
+      cmd: "uname -a && nproc && free -h",
+      desc: "Kernel, vCPUs & RAM",
+    },
+    {
+      label: "Disk Usage",
+      cmd: "df -h / /data",
+      desc: "Persistent ext4 disk usage",
+    },
+  ];
 
 const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
@@ -57,7 +92,12 @@ const makePane = (cwd: string, initialCommand?: string): TermPane => ({
   initialCommand,
 });
 
-const makeTab = (idx: number, cwd: string, title?: string, initialCommand?: string): TermTab => {
+const makeTab = (
+  idx: number,
+  cwd: string,
+  title?: string,
+  initialCommand?: string,
+): TermTab => {
   const p = makePane(cwd, initialCommand);
   const shortDir = cwd.split("/").filter(Boolean).pop() || "shell";
   return {
@@ -69,20 +109,27 @@ const makeTab = (idx: number, cwd: string, title?: string, initialCommand?: stri
   };
 };
 
-export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ windowFocused = true }) => {
+export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({
+  windowFocused = true,
+}) => {
   const wm = useWm();
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
-    DEFAULT_UNKERNEL_CONFIG
+    DEFAULT_UNKERNEL_CONFIG,
   );
 
-  const [tabs, setTabs] = useState<TermTab[]>(() => [makeTab(1, wm.activeWorkspaceDir || "/home/user/workspace")]);
+  const [tabs, setTabs] = useState<TermTab[]>(() => [
+    makeTab(1, wm.activeWorkspaceDir || "/home/user/workspace"),
+  ]);
   const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0]!.id);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchMatch, setSearchMatch] = useState<{ total: number; current: number }>({ total: 0, current: 0 });
+  const [searchMatch, setSearchMatch] = useState<{
+    total: number;
+    current: number;
+  }>({ total: 0, current: 0 });
   const [forceTouchBar, setForceTouchBar] = useState(false);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState("");
@@ -110,7 +157,10 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
   useEffect(() => {
     if (!windowFocused) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || (e.ctrlKey && e.shiftKey)) && e.key.toLowerCase() === "f") {
+      if (
+        (e.metaKey || (e.ctrlKey && e.shiftKey)) &&
+        e.key.toLowerCase() === "f"
+      ) {
         e.preventDefault();
         setSearchOpen((v) => !v);
         return;
@@ -152,22 +202,40 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
       prev.map((t) => {
         if (t.id !== activeTab.id) return t;
         if (t.split === mode && t.panes.length > 1) {
-          return { ...t, split: "single", panes: [t.panes[0]!], activePane: t.panes[0]!.id };
+          return {
+            ...t,
+            split: "single",
+            panes: [t.panes[0]!],
+            activePane: t.panes[0]!.id,
+          };
         }
-        const second = t.panes[1] ?? makePane(wm.activeWorkspaceDir || "/home/user/workspace");
-        return { ...t, split: mode, panes: [t.panes[0]!, second], activePane: second.id };
-      })
+        const second =
+          t.panes[1] ??
+          makePane(wm.activeWorkspaceDir || "/home/user/workspace");
+        return {
+          ...t,
+          split: mode,
+          panes: [t.panes[0]!, second],
+          activePane: second.id,
+        };
+      }),
     );
   };
 
   const setTheme = (kittyTheme: KittyThemeId) => {
-    appRuntime.runFork(Effect.flatMap(SettingsService, (s) => s.updateConfig({ kittyTheme })));
+    appRuntime.runFork(
+      Effect.flatMap(SettingsService, (s) => s.updateConfig({ kittyTheme })),
+    );
     setThemePickerOpen(false);
   };
 
   const bumpFont = (delta: number) => {
     const next = Math.max(10, Math.min(22, cfg.terminalFontSize + delta));
-    appRuntime.runFork(Effect.flatMap(SettingsService, (s) => s.updateConfig({ terminalFontSize: next })));
+    appRuntime.runFork(
+      Effect.flatMap(SettingsService, (s) =>
+        s.updateConfig({ terminalFontSize: next }),
+      ),
+    );
   };
 
   const syncToWorkspace = () => {
@@ -187,8 +255,13 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
     const text = getActiveHandle()?.getVisibleText() ?? "";
     if (!text) return;
     navigator.clipboard.writeText(text).then(
-      () => wmStore.pushToast("Copied", "Terminal output copied to clipboard", "success"),
-      () => {}
+      () =>
+        wmStore.pushToast(
+          "Copied",
+          "Terminal output copied to clipboard",
+          "success",
+        ),
+      () => {},
     );
   };
 
@@ -231,13 +304,18 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
                     onBlur={() => {
                       if (renameText.trim()) {
                         setTabs((prev) =>
-                          prev.map((x) => (x.id === t.id ? { ...x, title: renameText.trim().slice(0, 24) } : x))
+                          prev.map((x) =>
+                            x.id === t.id
+                              ? { ...x, title: renameText.trim().slice(0, 24) }
+                              : x,
+                          ),
                         );
                       }
                       setRenamingTabId(null);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+                      if (e.key === "Enter")
+                        (e.currentTarget as HTMLInputElement).blur();
                       if (e.key === "Escape") setRenamingTabId(null);
                     }}
                     onClick={(e) => e.stopPropagation()}
@@ -295,7 +373,9 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
             }}
             title="Search Scrollback (⌘F)"
             className={`p-1.5 rounded-md transition ${
-              searchOpen ? "bg-cyan-500/25 text-cyan-200" : "text-zinc-400 hover:text-white hover:bg-white/10"
+              searchOpen
+                ? "bg-cyan-500/25 text-cyan-200"
+                : "text-zinc-400 hover:text-white hover:bg-white/10"
             }`}
           >
             <Search className="w-3.5 h-3.5" />
@@ -309,7 +389,9 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
             }}
             title="Quick Command Snippets"
             className={`p-1.5 rounded-md transition ${
-              snippetsOpen ? "bg-violet-500/25 text-violet-200" : "text-zinc-400 hover:text-white hover:bg-white/10"
+              snippetsOpen
+                ? "bg-violet-500/25 text-violet-200"
+                : "text-zinc-400 hover:text-white hover:bg-white/10"
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
@@ -390,7 +472,9 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
             onClick={() => setForceTouchBar((v) => !v)}
             title="Toggle Virtual Accessory Keys"
             className={`hidden sm:inline-flex p-1.5 rounded-md transition ${
-              forceTouchBar ? "bg-cyan-500/25 text-cyan-200" : "text-zinc-400 hover:text-white hover:bg-white/10"
+              forceTouchBar
+                ? "bg-cyan-500/25 text-cyan-200"
+                : "text-zinc-400 hover:text-white hover:bg-white/10"
             }`}
           >
             <Keyboard className="w-3.5 h-3.5" />
@@ -406,7 +490,9 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
             className="flex items-center gap-1 px-1.5 sm:px-2 h-7 rounded-md text-xs text-zinc-300 hover:bg-white/10 transition"
           >
             <Palette className="w-3.5 h-3.5 text-violet-400" />
-            <span className="hidden xl:inline">{KITTY_THEMES[cfg.kittyTheme]?.name}</span>
+            <span className="hidden xl:inline">
+              {KITTY_THEMES[cfg.kittyTheme]?.name}
+            </span>
           </button>
 
           {/* Snippets Popover */}
@@ -424,7 +510,9 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
                 >
                   <div className="flex items-center justify-between text-xs text-white font-medium">
                     <span>{s.label}</span>
-                    <code className="text-[10px] font-mono text-cyan-300">{s.cmd}</code>
+                    <code className="text-[10px] font-mono text-cyan-300">
+                      {s.cmd}
+                    </code>
                   </div>
                   <div className="text-[10px] text-zinc-500">{s.desc}</div>
                 </button>
@@ -450,8 +538,14 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
                   >
                     <span>{th.name}</span>
                     <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-full border border-white/20" style={{ background: th.bg }} />
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: th.cursor }} />
+                      <span
+                        className="w-2.5 h-2.5 rounded-full border border-white/20"
+                        style={{ background: th.bg }}
+                      />
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ background: th.cursor }}
+                      />
                     </span>
                   </button>
                 );
@@ -470,7 +564,8 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
             value={searchQuery}
             onChange={(e) => runSearch(e.target.value, 1)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") runSearch(searchQuery, e.shiftKey ? -1 : 1);
+              if (e.key === "Enter")
+                runSearch(searchQuery, e.shiftKey ? -1 : 1);
               if (e.key === "Escape") {
                 getActiveHandle()?.clearSearch();
                 setSearchOpen(false);
@@ -480,7 +575,9 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
             className="flex-1 bg-transparent text-xs font-mono text-white placeholder:text-zinc-500 outline-none"
           />
           <span className="text-[11px] font-mono text-zinc-400">
-            {searchMatch.total > 0 ? `${searchMatch.current}/${searchMatch.total}` : "0 matches"}
+            {searchMatch.total > 0
+              ? `${searchMatch.current}/${searchMatch.total}`
+              : "0 matches"}
           </span>
           <button
             type="button"
@@ -529,18 +626,32 @@ export const KittyTerminalApp: React.FC<{ windowFocused?: boolean }> = ({ window
                   cwd={pane.cwd}
                   initialCommand={pane.initialCommand}
                   forceTouchBar={forceTouchBar}
-                  focused={windowFocused && tab.id === activeTab.id && tab.activePane === pane.id}
+                  surfaceActive={
+                    tab.id === activeTab.id && tab.activePane === pane.id
+                  }
+                  surfaceId={pane.id}
+                  focused={
+                    windowFocused &&
+                    tab.id === activeTab.id &&
+                    tab.activePane === pane.id
+                  }
                   onReady={(h) => {
                     paneHandlesRef.current.set(pane.id, h);
                   }}
                   onFocus={() =>
                     setTabs((prev) =>
-                      prev.map((t) => (t.id === tab.id ? { ...t, activePane: pane.id } : t))
+                      prev.map((t) =>
+                        t.id === tab.id ? { ...t, activePane: pane.id } : t,
+                      ),
                     )
                   }
                   onTitleChange={(title) =>
                     setTabs((prev) =>
-                      prev.map((t) => (t.id === tab.id ? { ...t, title: title.slice(0, 24) || t.title } : t))
+                      prev.map((t) =>
+                        t.id === tab.id
+                          ? { ...t, title: title.slice(0, 24) || t.title }
+                          : t,
+                      ),
                     )
                   }
                 />

@@ -1,9 +1,18 @@
+import { screenToElement } from "../../core/spatial-pointer.ts";
 import { Effect } from "effect";
 import { Crosshair, Gamepad2, Sparkles } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { domButtonToLinux, domCodeToLinux } from "unkernel";
-import { appRuntime, SettingsService, useSubscriptionRef, VmService } from "../../core/runtime.ts";
-import { DEFAULT_UNKERNEL_CONFIG, type FbScalingMode } from "../../core/schema.ts";
+import {
+  appRuntime,
+  SettingsService,
+  useSubscriptionRef,
+  VmService,
+} from "../../core/runtime.ts";
+import {
+  DEFAULT_UNKERNEL_CONFIG,
+  type FbScalingMode,
+} from "../../core/schema.ts";
 import { WebGpuFb0Renderer } from "../../gpu/webgpu-fb0.ts";
 
 /**
@@ -16,18 +25,25 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
 }) => {
   const cfg = useSubscriptionRef(
     Effect.map(SettingsService, (s) => s.configRef),
-    DEFAULT_UNKERNEL_CONFIG
+    DEFAULT_UNKERNEL_CONFIG,
   );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<WebGpuFb0Renderer | null>(null);
-  const stageRef = useRef<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null>(null);
+  const stageRef = useRef<{
+    canvas: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+  } | null>(null);
   const heldKeysRef = useRef<Set<number>>(new Set());
 
   const [captured, setCaptured] = useState(false);
   const [pointerLocked, setPointerLocked] = useState(false);
   const [backend, setBackend] = useState<"webgpu" | "canvas2d">("canvas2d");
-  const [res, setRes] = useState<{ w: number; h: number; kind: "3d-gl" | "fb0" } | null>(null);
+  const [res, setRes] = useState<{
+    w: number;
+    h: number;
+    kind: "3d-gl" | "fb0";
+  } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -43,7 +59,9 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
 
     const tick = () => {
       if (disposed) return;
-      const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+      const vm = appRuntime.runSync(
+        Effect.map(VmService, (v) => v.getHandle()),
+      );
       if (vm) {
         const gpu = vm.gl?.gpu;
         const scanout = gpu?.scanout;
@@ -53,16 +71,21 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
             stageRef.current = { canvas: c, ctx: c.getContext("2d")! };
           }
           const st = stageRef.current;
-          if (st.canvas.width !== scanout.width || st.canvas.height !== scanout.height) {
+          if (
+            st.canvas.width !== scanout.width ||
+            st.canvas.height !== scanout.height
+          ) {
             st.canvas.width = scanout.width;
             st.canvas.height = scanout.height;
           }
           if (gpu.drawFrame(st.ctx) !== null) {
             renderer.presentSource(st.canvas, scanout.width, scanout.height);
             setRes((prev) =>
-              prev?.kind === "3d-gl" && prev.w === scanout.width && prev.h === scanout.height
+              prev?.kind === "3d-gl" &&
+              prev.w === scanout.width &&
+              prev.h === scanout.height
                 ? prev
-                : { w: scanout.width, h: scanout.height, kind: "3d-gl" }
+                : { w: scanout.width, h: scanout.height, kind: "3d-gl" },
             );
             raf = requestAnimationFrame(tick);
             return;
@@ -73,9 +96,11 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
         if (frame && frame.data.byteLength > 0) {
           renderer.present(frame.data, frame.width, frame.height);
           setRes((prev) =>
-            prev?.kind === "fb0" && prev.w === frame.width && prev.h === frame.height
+            prev?.kind === "fb0" &&
+            prev.w === frame.width &&
+            prev.h === frame.height
               ? prev
-              : { w: frame.width, h: frame.height, kind: "fb0" }
+              : { w: frame.width, h: frame.height, kind: "fb0" },
           );
         }
       }
@@ -112,7 +137,9 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
   useEffect(() => {
     if (!captured || !windowFocused) return;
     const releaseAll = () => {
-      const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+      const vm = appRuntime.runSync(
+        Effect.map(VmService, (v) => v.getHandle()),
+      );
       if (vm?.evdev) {
         for (const c of heldKeysRef.current) vm.evdev.key(c, false);
       }
@@ -125,7 +152,9 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
         setCaptured(false);
         return;
       }
-      const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+      const vm = appRuntime.runSync(
+        Effect.map(VmService, (v) => v.getHandle()),
+      );
       const code = domCodeToLinux(e.code);
       if (vm?.evdev && code) {
         e.preventDefault();
@@ -147,7 +176,9 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
   }, [captured, windowFocused]);
 
   const setScaling = (fbScaling: FbScalingMode) => {
-    appRuntime.runFork(Effect.flatMap(SettingsService, (s) => s.updateConfig({ fbScaling })));
+    appRuntime.runFork(
+      Effect.flatMap(SettingsService, (s) => s.updateConfig({ fbScaling })),
+    );
   };
 
   return (
@@ -155,7 +186,11 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
       <div className="flex items-center justify-between px-2.5 py-1 bg-black/70 border-b border-white/10 text-[10px] font-mono shrink-0">
         <div className="flex items-center gap-2 text-zinc-300">
           <Sparkles className="w-3 h-3 text-emerald-400" />
-          <span>{res ? `${res.kind === "3d-gl" ? "VirGL 3D" : "FB0"} · ${res.w}×${res.h}` : "Waiting for GL/KMS frame..."}</span>
+          <span>
+            {res
+              ? `${res.kind === "3d-gl" ? "VirGL 3D" : "FB0"} · ${res.w}×${res.h}`
+              : "Waiting for GL/KMS frame..."}
+          </span>
           <span className="text-zinc-500">({backend})</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -165,7 +200,9 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
               type="button"
               onClick={() => setScaling(m)}
               className={`px-1.5 py-0.5 rounded uppercase transition ${
-                cfg.fbScaling === m ? "bg-violet-500/35 text-white" : "text-zinc-500 hover:text-zinc-200"
+                cfg.fbScaling === m
+                  ? "bg-violet-500/35 text-white"
+                  : "text-zinc-500 hover:text-zinc-200"
               }`}
             >
               {m}
@@ -203,34 +240,44 @@ export const GlViewportWindow: React.FC<{ windowFocused?: boolean }> = ({
         <canvas
           ref={canvasRef}
           onMouseMove={(e) => {
-            const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+            const vm = appRuntime.runSync(
+              Effect.map(VmService, (v) => v.getHandle()),
+            );
             const c = canvasRef.current;
             if (!vm?.evdev || !c) return;
             if (document.pointerLockElement === c) {
-              if (e.movementX || e.movementY) vm.evdev.move(e.movementX, e.movementY);
+              if (e.movementX || e.movementY)
+                vm.evdev.move(e.movementX, e.movementY);
               return;
             }
             const r = c.getBoundingClientRect();
+            const local = screenToElement(c, e.clientX, e.clientY);
             vm.evdev.moveTo(
-              Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width))),
-              Math.max(0, Math.min(1, (e.clientY - r.top) / Math.max(1, r.height)))
+              Math.max(0, Math.min(1, local.x / Math.max(1, c.clientWidth))),
+              Math.max(0, Math.min(1, local.y / Math.max(1, c.clientHeight))),
             );
           }}
           onMouseDown={(e) => {
             e.preventDefault();
             setCaptured(true);
-            const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+            const vm = appRuntime.runSync(
+              Effect.map(VmService, (v) => v.getHandle()),
+            );
             const btn = domButtonToLinux(e.button);
             if (vm?.evdev && btn) vm.evdev.button(btn, true);
           }}
           onMouseUp={(e) => {
             e.preventDefault();
-            const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+            const vm = appRuntime.runSync(
+              Effect.map(VmService, (v) => v.getHandle()),
+            );
             const btn = domButtonToLinux(e.button);
             if (vm?.evdev && btn) vm.evdev.button(btn, false);
           }}
           onWheel={(e) => {
-            const vm = appRuntime.runSync(Effect.map(VmService, (v) => v.getHandle()));
+            const vm = appRuntime.runSync(
+              Effect.map(VmService, (v) => v.getHandle()),
+            );
             if (vm?.evdev && e.deltaY) vm.evdev.wheel(e.deltaY < 0 ? 1 : -1);
           }}
           onContextMenu={(e) => e.preventDefault()}

@@ -1,3 +1,4 @@
+import { wmStore } from "../../wm/wm-store.ts";
 import React, { useEffect, useRef } from "react";
 import { waylandDesktopManager } from "../../core/wayland-host.ts";
 
@@ -36,17 +37,35 @@ export const WaylandSurfaceWindow: React.FC<WaylandSurfaceWindowProps> = ({
     const syncGeometry = () => {
       const rect = host.getBoundingClientRect();
       if (rect.width >= 100 && rect.height >= 60) {
-        waylandDesktopManager.resizeWindow(surfaceKey, rect.width, rect.height);
-        waylandDesktopManager.setWindowPosition(surfaceKey, rect.left, rect.top);
+        waylandDesktopManager.resizeWindow(
+          surfaceKey,
+          host.clientWidth,
+          host.clientHeight,
+        );
+        waylandDesktopManager.setWindowPosition(
+          surfaceKey,
+          rect.left,
+          rect.top,
+        );
       }
     };
 
     syncGeometry();
     const ro = new ResizeObserver(syncGeometry);
     ro.observe(host);
+    const frame = host.closest("[data-window-surface]");
+    frame?.addEventListener("transitionend", syncGeometry);
+    let geometryFrame = 0;
+    const unsubscribe = wmStore.subscribe(() => {
+      cancelAnimationFrame(geometryFrame);
+      geometryFrame = requestAnimationFrame(syncGeometry);
+    });
 
     return () => {
       ro.disconnect();
+      unsubscribe();
+      cancelAnimationFrame(geometryFrame);
+      frame?.removeEventListener("transitionend", syncGeometry);
       if (el.parentElement === host) {
         el.remove();
       }

@@ -1,0 +1,1195 @@
+[00:00:11.470] Thank you. I'm really, really glad to be
+[00:00:11.480] here.
+[00:00:12.480] Um
+[00:00:13.440] I um
+[00:00:14.920] have been in UX design for a very long
+[00:00:16.440] time. I've worked at Symbian for a
+[00:00:18.040] while, at Google, and at Apple.
+[00:00:20.760] And um
+[00:00:22.680] it was really fascinating about me being
+[00:00:25.240] at Google all those years is I I really
+[00:00:27.920] noticed a kind of a cultural shift
+[00:00:29.640] because back in 2005 when I joined, we
+[00:00:32.439] weren't evil, right? Uh we
+[00:00:35.800] we were really trying to do the right
+[00:00:37.400] thing. And I worked on the Chrome team
+[00:00:39.080] for a while, and the Chrome team was
+[00:00:40.720] filled with nothing but people that
+[00:00:42.560] wanted nothing but open source, open web
+[00:00:44.440] type projects. And things then just
+[00:00:46.800] really changed radically. And so I left
+[00:00:49.400] a few years ago.
+[00:00:50.920] And I've been trying to I've I've made
+[00:00:53.200] this joke a few times now, but I I I'm
+[00:00:54.760] trying to atone for my sins for by
+[00:00:57.360] working for these companies. Um I now
+[00:00:59.520] mentor uh UX designers. I do UX design
+[00:01:02.680] for Mastodon and for Home Assistant. So
+[00:01:05.440] I do work on open source projects.
+[00:01:07.920] Um and I've just been trying to work in
+[00:01:11.080] this space doing UX design, just trying
+[00:01:13.120] to kind of squeeze a little bit more you
+[00:01:14.960] a good UX design into open source.
+[00:01:17.680] Um I don't want to be too
+[00:01:18.840] confrontational, but I just I do think
+[00:01:20.640] that uh open source needs a lot of UX
+[00:01:23.440] design help.
+[00:01:25.640] And it's a challenging thing to do
+[00:01:27.480] because
+[00:01:29.160] most people are understaffed, things are
+[00:01:31.480] really, really busy. There's a good
+[00:01:33.000] reasons for it. It's not just that
+[00:01:35.400] you're a bunch of programmers. That's
+[00:01:36.680] way too simplistic a way of talking
+[00:01:38.280] about it. Um I'm here because
+[00:01:42.320] I gave a talk similar to this at Ubuntu
+[00:01:44.520] last year.
+[00:01:45.840] And um
+[00:01:47.720] some It was a small conference, a little
+[00:01:49.680] bit like this. Um I was in a more of an
+[00:01:51.560] esoteric topic. I was excited to talk
+[00:01:53.600] about it, but I didn't expect much from
+[00:01:55.880] it. And it went on YouTube and it went
+[00:01:58.760] nuts. Um,
+[00:02:00.560] it's got over half
+[00:02:02.600] a million views, which by YouTube
+[00:02:04.920] standards is trivial.
+[00:02:06.560] Uh, but by Scott standards, it's
+[00:02:08.000] enormous. I've I've I've never had a
+[00:02:10.119] talk go that viral before. It was really
+[00:02:12.480] shocking. So, I think I hit a nerve. I
+[00:02:15.040] think there's something here that people
+[00:02:16.200] want to talk about. And so,
+[00:02:18.840] uh,
+[00:02:19.640] the issue for me though is I want to
+[00:02:21.120] talk a little bit about desktop UX
+[00:02:22.760] specifically because I think it's very
+[00:02:24.720] different from other other types of UX.
+[00:02:26.880] So, back when I I worked at Apple on the
+[00:02:28.880] finder team, uh, the team wanted to do
+[00:02:31.760] ellipses. And so, the idea, this isn't
+[00:02:34.000] going to work really well. They wanted
+[00:02:35.320] to put the ellipses at the end, and I
+[00:02:36.840] was just like, "No, no, no, you're
+[00:02:37.800] losing way too much interesting
+[00:02:39.000] information. You should put the ellipses
+[00:02:40.240] in the middle." And so, they didn't have
+[00:02:42.480] a string routine to do that, so they
+[00:02:44.320] added it. Uh, they were very easy to
+[00:02:46.480] work with, and it's now considered one
+[00:02:48.680] of those things that's an exciting
+[00:02:50.360] little attention-to-detail issue that
+[00:02:52.680] the Macintosh does. And so, um, it's
+[00:02:56.240] frankly very fun to see that something
+[00:02:57.959] you had a part of 40 years ago is still
+[00:02:59.800] shipping.
+[00:03:00.840] Um,
+[00:03:02.040] uh, another small one is this idea that
+[00:03:04.360] you can drag a icon from one window
+[00:03:07.040] that's in the background to the
+[00:03:08.160] foreground.
+[00:03:09.519] Cuz on most Linux systems, when you
+[00:03:11.720] click on mouse down, the window comes
+[00:03:13.519] forward.
+[00:03:14.560] And on the Macintosh, selection happens
+[00:03:16.560] on mouse down, but the window coming
+[00:03:18.920] forward happens on mouse up. So, it
+[00:03:20.760] allows you to drag things from a window
+[00:03:22.880] behind. And this is not just some
+[00:03:24.519] trivial little thing about copying
+[00:03:27.000] icons. Cuz if you talk to a Linux
+[00:03:28.440] person, they're like, "I just use a
+[00:03:29.360] command line. What's your problem?"
+[00:03:31.080] And I'm like, "No, no, no, no, no. It's
+[00:03:32.720] more than just copying files. It's about
+[00:03:34.800] dragging things into applications." And
+[00:03:37.560] this is a fundamentally
+[00:03:43.990] user data movement thing. Without the
+[00:03:44.000] ability to do this, you can't move data
+[00:03:45.800] into applications quite as easily. And
+[00:03:48.120] so, I talked about this 2 years ago
+[00:03:49.600] actually on on
+[00:03:51.120] and I I talked about this is not an edge
+[00:03:53.240] case, and then someone from KDE
+[00:03:55.280] responded and said, "Oh, that's a good
+[00:03:57.080] idea. I just implemented it."
+[00:03:59.720] And I and I and I forgot who that was.
+[00:04:01.560] So, if anybody is here that did that,
+[00:04:04.800] thank you.
+[00:04:06.400] I've been wanting to meet you for 2
+[00:04:08.000] years.
+[00:04:14.949] >> And it's it's an example of how open
+[00:04:14.959] source can be awesome cuz someone said,
+[00:04:17.160] "That's a good idea. I'll just do it."
+[00:04:19.320] So, my big point though is that the
+[00:04:22.120] desktop has not changed in 20 years.
+[00:04:24.720] There's a lot of things happening in the
+[00:04:26.320] '80s and the '90s, and then it just
+[00:04:28.000] stabilized, and not much has really
+[00:04:29.600] changed. And we there's so much more
+[00:04:32.880] that we're doing today with our
+[00:04:34.160] computers than when we did 20 years ago.
+[00:04:36.200] I think there's ways for it to grow. And
+[00:04:39.080] so, a lot of our the UX that happens in
+[00:04:41.680] these systems was initially copied from
+[00:04:43.200] Windows and Mac. KDE even says it's for
+[00:04:46.680] Windows users. It wants to be similar to
+[00:04:48.919] Windows users. So, there's nothing wrong
+[00:04:50.760] with that. In fact, it's it's a
+[00:04:51.880] compliment because originally the Xerox
+[00:04:54.120] Star came out, and it implemented it
+[00:04:56.720] influenced the Macintosh, and then the
+[00:04:58.440] Mac I wouldn't say it influenced Windows
+[00:05:01.040] cuz Windows really did a terrible job.
+[00:05:03.160] Um
+[00:05:04.480] and then of course along came all the
+[00:05:06.480] different Linux distros. And then of
+[00:05:08.080] course over time once things matured, it
+[00:05:10.520] flowed back again. So, I would say the
+[00:05:12.640] initial model was there, and then it
+[00:05:14.800] kind of went back and forth a little
+[00:05:16.040] bit. Um so, what's the problem? Well,
+[00:05:18.840] the problem is that
+[00:05:21.160] the Linux community in general has been
+[00:05:23.680] just leaning on Apple and Microsoft to
+[00:05:26.760] do all of the research, the testing, and
+[00:05:28.880] frankly the mistakes. Like who who wants
+[00:05:31.000] to
+[00:05:31.960] like implement Clippy again, right? I
+[00:05:34.480] mean, it's it's good that they do these
+[00:05:36.000] things first cuz then we can kind of
+[00:05:37.440] draft behind them. It's actually a very
+[00:05:38.960] smart thing to do. But the problem is
+[00:05:41.640] they're not doing anything anymore.
+[00:05:43.400] They're just kind of given up to a
+[00:05:44.960] certain extent. And so, I like this
+[00:05:46.919] quote from Alan Kay who says perspective
+[00:05:48.760] is worth 80 IQ points. It's the same
+[00:05:51.120] problem, you're the same person, but the
+[00:05:54.000] ability to see the problem in a new way,
+[00:05:55.880] I think, allows you to see a problem and
+[00:05:57.920] find out different solutions. So, that's
+[00:05:59.880] what the today's talk is. I This is a
+[00:06:02.360] smaller version. You Some of you have
+[00:06:04.960] seen my talk before will recognize some
+[00:06:06.600] of these slides, but I've tried to limit
+[00:06:08.160] that a little bit. But, I do want to
+[00:06:09.760] talk about the perspective side of
+[00:06:11.840] things. And the biggest critique I got
+[00:06:13.840] of the Ubuntu talk was that I did not
+[00:06:15.640] give any specific examples. And so, I'm
+[00:06:18.440] going to try to fix that. So, half of
+[00:06:19.760] this talk will be prototypes
+[00:06:21.760] of these ideas I'm going to show you
+[00:06:22.840] guys.
+[00:06:23.720] So,
+[00:06:25.080] Apple, I think, really made their play
+[00:06:27.200] in 2017.
+[00:06:28.960] Um I think it's pretty easy to see in
+[00:06:30.640] retrospect that the back in 2017, Apple
+[00:06:33.800] hated the Macintosh. They I mean,
+[00:06:35.960] everything they did with the stupid
+[00:06:37.160] keyboard to getting rid of all the ports
+[00:06:39.480] on the the MacBook Pro uh to just
+[00:06:42.000] letting the cheese grater Mac Pro like
+[00:06:44.560] languish for years and years and years.
+[00:06:47.240] Um and then what really cemented that
+[00:06:49.760] idea was this ad they did in 2017 where
+[00:06:53.440] they showed this very cute young student
+[00:06:55.440] going through doing cool things with her
+[00:06:57.919] iPad. And just And at the end of the
+[00:07:00.120] day, she's sitting in the backyard
+[00:07:02.280] typing away. And the neighbor leans over
+[00:07:04.200] the fence and goes, "Oh, what you doing
+[00:07:05.480] with your computer?" And she turns and
+[00:07:08.320] just innocent, kind little thing says,
+[00:07:11.040] "What's a computer?"
+[00:07:12.840] Just as like, "You old person." You
+[00:07:15.360] know, I mean, like Apple wanted the Mac
+[00:07:17.560] to die. They wanted the world to move
+[00:07:19.400] over to the iPad. And guess what? It
+[00:07:21.960] didn't. And now they're kind of like
+[00:07:23.560] going, "Whoops." Cuz it's now their
+[00:07:25.800] problem. And now they're doing all sorts
+[00:07:26.960] of crazy things to kind of like, "Oh, I
+[00:07:28.240] guess the Mac's important now." and
+[00:07:29.680] trying to do that. Um it's caused a lot
+[00:07:31.600] of issues there. They also The things
+[00:07:33.560] they've done with the Macintosh have
+[00:07:34.840] been kind of dumb, right? I mean, like
+[00:07:37.840] liquid glass has not been really
+[00:07:40.000] popular. And the latest version of Mac
+[00:07:42.320] actually took away a lot of what
+[00:07:44.280] LiquidGlass did. So, they're not really
+[00:07:46.680] And then the the features they do add
+[00:07:48.720] tend to be about tying it closer to the
+[00:07:50.800] iPhone. They're basically in
+[00:07:53.240] tying you into their ecosystem, which is
+[00:07:55.560] not a bad idea, but it's really
+[00:07:58.720] building their moat higher. It's not
+[00:08:00.800] really improving the desktop.
+[00:08:03.120] And Microsoft is just making one mistake
+[00:08:05.480] after another. I mean, they're just
+[00:08:07.640] they've had the thirsty OneDrive
+[00:08:09.320] sign-ups, the Recall end of life
+[00:08:11.720] disaster,
+[00:08:13.200] um
+[00:08:14.240] ads everywhere. You know, it's just
+[00:08:16.520] really it just I mean, you guys know
+[00:08:18.680] this. Um my short story was I
+[00:08:21.200] interviewed there 8 years ago to uh be
+[00:08:24.680] uh head of UX for Windows.
+[00:08:26.760] And it's really not cool to kiss and
+[00:08:29.800] tell and talk about that, but what I
+[00:08:31.600] will say is that when you go there, you
+[00:08:34.120] go in with an agenda. You don't get a
+[00:08:37.039] job like that kind of going, "Well,
+[00:08:38.320] whatever you want." No, you go in and
+[00:08:39.800] say, "This is what I'll do." And I was
+[00:08:42.039] talking about this issue back then, that
+[00:08:44.320] the desktop needed to evolve.
+[00:08:46.560] It's not like I wanted to blow up
+[00:08:48.480] Windows. I understand that there's
+[00:08:50.120] hundreds of millions of users, and you
+[00:08:51.920] just can't change things. It'll freak
+[00:08:53.839] people out. I mean, I'm I'm not a
+[00:08:55.120] monster, right? I mean, I don't want to
+[00:08:57.440] like change everything. I want it to be
+[00:08:59.280] kind of, you know, but I wanted there to
+[00:09:00.800] be experiments. I wanted to be some
+[00:09:02.040] additional things that were going on.
+[00:09:04.160] And they didn't want that, and it was
+[00:09:07.240] really clear that it was not a good
+[00:09:08.560] match. So, I'm I'm really glad that
+[00:09:10.880] didn't work out.
+[00:09:12.360] So, my point is is that
+[00:09:15.839] the whole Linux community has been just
+[00:09:17.880] waiting for Apple and Microsoft
+[00:09:20.400] more or less to take all the risks.
+[00:09:23.640] And they're not taking any more risks.
+[00:09:26.160] So, what are we going to do about it?
+[00:09:28.360] And we just can't
+[00:09:30.520] patch and bug fix our way into the
+[00:09:32.560] future. We actually have to like start
+[00:09:34.760] taking leadership ourselves. And what
+[00:09:37.560] does that mean? What does that look
+[00:09:38.720] like? Now, whenever I say that the
+[00:09:40.680] desktop has stopped, I kind of get three
+[00:09:42.520] pushbacks. The first one is this kind of
+[00:09:45.440] somewhat shallow, "Okay, boomer. Mobile
+[00:09:47.560] won. Desktop, you know, is old. It just
+[00:09:49.640] just do what mobile does." I'm like,
+[00:09:52.640] "Oh, my sweet young child. No. No, no,
+[00:09:55.040] no. Of course mobile won. I'm not going
+[00:09:57.440] to argue that mobile is small or
+[00:09:59.560] insignificant. It's huge, right? But it
+[00:10:02.080] won consumers. It won gaming. It won
+[00:10:04.440] social media. It won cameras. Okay? It
+[00:10:07.240] didn't win productivity. You don't see
+[00:10:09.760] companies
+[00:10:11.320] with everybody sitting at their desk
+[00:10:12.240] with their phones typing away, right?
+[00:10:13.680] That's They Desktops are silently
+[00:10:17.017] [snorts]
+[00:10:18.200] awesome. They have keyboards and big
+[00:10:20.600] screens and they can do amazing things
+[00:10:22.640] and we don't We've almost gotten bored
+[00:10:24.600] by it. We're kind of like almost
+[00:10:25.760] embarrassed. Oh, well, yeah, they're
+[00:10:27.360] awesome, but they've been awesome for a
+[00:10:28.720] while. Whatever. We don't really
+[00:10:30.560] appreciate kind of how good they are.
+[00:10:32.680] And so, I think that we should kind of
+[00:10:34.440] appre- uh understand why they're so good
+[00:10:37.440] and then what we can do to make them
+[00:10:38.760] better. The second pushback I get is, uh
+[00:10:41.200] it's a standard. It's like you can only
+[00:10:44.080] do Windows so many ways. Just stop
+[00:10:46.640] trying to kind of fix it. It's done. And
+[00:10:49.480] I'm like, "No." I mean, like CD-ROMs
+[00:10:52.080] were a standard. BlackBerry, for those
+[00:10:53.920] of you old enough,
+[00:10:55.320] um
+[00:10:56.040] was a standard and they have all gone by
+[00:10:58.320] the wayside.
+[00:10:59.720] I'd even go so far as to say that the,
+[00:11:01.720] you know, the
+[00:11:02.839] laptop is kind of an ergonomic standard.
+[00:11:05.000] We just assume that everything has to be
+[00:11:06.640] in a screen this big with a pointer and
+[00:11:09.080] And it's like, "No, I think there's
+[00:11:10.240] other kinds of hardware that's coming
+[00:11:11.680] along, too, that can be interesting."
+[00:11:14.280] And the third pu- pushback I get a lot,
+[00:11:16.760] uh I think this comes really strongly in
+[00:11:18.600] the the the tech community, is, "Don't
+[00:11:20.640] touch my stuff.
+[00:11:22.560] I've worked really hard to get this
+[00:11:23.960] desktop exactly the way I want it and if
+[00:11:25.600] you change it, I'm going to be pissed."
+[00:11:27.720] And I'm I get that. Um and I as I said
+[00:11:30.720] before, you don't want to change
+[00:11:33.000] everything, but I also think that the
+[00:11:35.120] world is moving and things are
+[00:11:37.400] happening. We need new tools and we need
+[00:11:39.720] to grow our way gently into some new
+[00:11:42.720] things. So, I think we're in this
+[00:11:44.440] perfect situation where the desktop UX
+[00:11:46.720] has stopped improving and when I talk
+[00:11:49.000] about it, so many people kind of go,
+[00:11:50.920] "Yeah,
+[00:11:52.080] whatever. I don't I don't want to Why
+[00:11:53.560] Why do you want to do that?" And I'm
+[00:11:55.040] trying to say, "No, we need to do
+[00:11:56.800] something about this."
+[00:11:58.640] So, that's the the problem. Now, let's
+[00:12:00.600] go into the perspective side of things.
+[00:12:02.240] How can we think about this to figure
+[00:12:04.240] out where we want to go next? So, like I
+[00:12:06.280] said before, I don't want to create
+[00:12:09.640] something crazy. I think I want to have
+[00:12:11.880] an incrementally small change of things,
+[00:12:14.240] right? So, but it gets into this
+[00:12:16.240] question though is what is UX? And I
+[00:12:18.600] think the [snorts] term UX, especially
+[00:12:20.360] in the tech community, is massively
+[00:12:22.560] misunderstood. I hate the term UI/UX
+[00:12:26.720] with the heat of a thousand suns. It is
+[00:12:30.360] the stupidest term that has ever been
+[00:12:32.200] invented and it was in done The UX
+[00:12:34.560] community did it to ourselves. We're the
+[00:12:36.560] only ones to blame for this.
+[00:12:38.440] Because back a long time ago when I
+[00:12:41.000] started off at Apple, we called it human
+[00:12:43.080] interface. And then as things got more
+[00:12:45.920] involved, they called it user interface.
+[00:12:49.040] And then Don Norman came along and he
+[00:12:51.040] actually called the term user experience
+[00:12:53.360] and it was the same thing. We were just
+[00:12:55.200] evolving the terms. We just kind of
+[00:12:56.880] called it a little bit more, but it's
+[00:12:58.440] the same stuff. Okay? And then along
+[00:13:01.160] came Figma and just everything
+[00:13:02.560] up.
+[00:13:03.520] And
+[00:13:05.160] And it really pissed me off because what
+[00:13:07.440] happened was we got a whole bunch of
+[00:13:08.600] visual designers and visual designers
+[00:13:11.000] are a subset of design and they Yes, I'm
+[00:13:14.280] going to go there. I'm going to go there
+[00:13:16.000] because the visual designers did this.
+[00:13:17.920] They basically said, "Oh, we're not
+[00:13:19.360] getting enough attention. So, we're
+[00:13:21.320] going to take the term that you used to
+[00:13:22.600] use and we're going to use it and mean
+[00:13:24.280] something else." And just confused the
+[00:13:26.200] hell out of everybody, so now it's this
+[00:13:28.360] UI UX term and UX is composed of 12
+[00:13:32.864] >> [snorts]
+[00:13:32.880] >> different disciplines and now we say,
+[00:13:35.120] "Oh, but there's just two."
+[00:13:36.600] Everything else and UI and nobody knows
+[00:13:38.920] what it means. And when you ask most
+[00:13:41.000] people, especially like more manager
+[00:13:42.680] types, they just think it's pixels.
+[00:13:45.120] And it's like no, UX is so much more
+[00:13:47.320] than pixels and that's what's hard to
+[00:13:48.720] talk about. And so if you really want to
+[00:13:51.000] piss off a UX designer,
+[00:13:53.880] this works really well. This works
+[00:14:02.110] >> [laughter]
+[00:14:02.120] >> Yeah, this this this causes fights.
+[00:14:04.560] Um
+[00:14:05.280] and it's helpful to think of UX as
+[00:14:07.120] having layers and there's many ways that
+[00:14:10.000] you can cut it, many groups have talked
+[00:14:11.600] about it, but there's three basic ones.
+[00:14:13.320] You start with style and style is white
+[00:14:16.160] space, iconography, colors, yeah,
+[00:14:18.840] pixels, right? But then there's the
+[00:14:20.680] structure, you know, how do you move
+[00:14:23.000] through the application? What's your
+[00:14:24.280] navigational model? What's your error
+[00:14:26.240] How do you handle errors? How do you get
+[00:14:28.400] How do you start? There's all the flow
+[00:14:30.440] through all the pixels is the structure.
+[00:14:33.160] And then more important one, I think is
+[00:14:34.560] strategy. Who is their user? What do
+[00:14:37.360] they want? What is important? What's not
+[00:14:39.720] important? What are you going to ignore?
+[00:14:41.880] The fastest way a UX designer can save
+[00:14:44.120] your team time is to help you say no.
+[00:14:48.280] And it's hard, especially with open
+[00:14:50.280] source, to say no to anybody. I
+[00:14:52.120] understand that. But if you want to
+[00:14:54.280] prioritize things, it helps to have the
+[00:14:55.880] strategy layer. So I wrote I wrote a
+[00:14:57.480] book many years ago
+[00:14:59.320] called The Simplicity Shift and I
+[00:15:01.120] actually said there's a layer below
+[00:15:02.680] this, which I kind of called stuff.
+[00:15:05.360] Because
+[00:15:06.120] cuz
+[00:15:06.920] I just liked ST words and then I, you
+[00:15:09.480] know,
+[00:15:10.320] um and it's really more like underlying
+[00:15:12.440] technology. Like if if you're, you know,
+[00:15:14.520] if you're writing a DOS application,
+[00:15:16.400] you're not going to write a nice, you
+[00:15:17.920] know, Macintosh application. The
+[00:15:19.440] technology dictates what you can do. But
+[00:15:21.600] more importantly, what I'm talking about
+[00:15:23.240] is now that we've had 40 years of
+[00:15:25.040] evolution,
+[00:15:26.400] that we have an awful lot of expected
+[00:15:28.600] standards. There's how things work that
+[00:15:31.000] we just assume is going to stick around.
+[00:15:33.960] And it's just historical
+[00:15:36.160] cruft, if I can use that American term.
+[00:15:39.520] But, the idea is that we just have a
+[00:15:40.760] bunch of stuff that we've just accepted.
+[00:15:42.680] And I think if we're going to fix the
+[00:15:44.440] desktop, we have to understand this
+[00:15:46.160] lower-level limitation, and how do we
+[00:15:48.520] want to fix that?
+[00:15:50.080] We just accept that mobile and desktop
+[00:15:52.120] has stuff today, and we just don't think
+[00:15:54.680] about you know, fixing it. So, let me
+[00:15:57.120] give you an example of this. Um, mobile
+[00:15:59.200] text editing, I did some work on on the
+[00:16:01.120] Android team about fixing text editing.
+[00:16:02.880] And so, we did a study where we asked
+[00:16:04.800] people to get rid of this There's two
+[00:16:08.080] spaces here. And we just said, "Just
+[00:16:10.120] remove that space." And you'd think we
+[00:16:12.120] were asking them to do brain surgery. We
+[00:16:14.880] We asked 10 people to do it, and they
+[00:16:17.240] all could not do it. What ended up
+[00:16:19.400] happening was I just I just said
+[00:16:21.760] There's effectively this particular This
+[00:16:23.400] is a video of a real user. This is
+[00:16:24.800] actually I didn't do this. This is a
+[00:16:25.960] user. And there was five attempts. They
+[00:16:27.720] They tapped to the right. They tapped to
+[00:16:29.200] the left. They accidentally would drag
+[00:16:31.280] the cursor. They accidentally brought up
+[00:16:33.240] the menu, and then they finally got it.
+[00:16:35.400] And we found out how bad it was because
+[00:16:37.360] when people started when we started
+[00:16:39.200] asking people about editing, "Oh, well,
+[00:16:40.600] I don't do that."
+[00:16:41.960] What do you do? Well, I I start on the
+[00:16:43.600] mobile, then I finish it on the desktop.
+[00:16:45.960] I mean, really? I said, "What happens if
+[00:16:47.320] you have Well, then I'll I'll just
+[00:16:48.360] select the whole thing and delete it and
+[00:16:49.880] start over." I mean, editing is so bad,
+[00:16:52.200] they just decided not to do it. I was
+[00:16:53.800] really surprised by that. So, what we
+[00:16:55.839] ended up doing was Well, the reason why
+[00:16:58.040] it was a problem is that it's basically
+[00:16:59.839] a bad copy of desktop. So much of UX is
+[00:17:03.280] copying other things and not really
+[00:17:05.400] being sure as to how it's working. And
+[00:17:07.600] so, the big problem with desktop is that
+[00:17:09.160] there's no mouse cursor, there's no menu
+[00:17:10.880] bar, there's no command keys. All you've
+[00:17:12.959] got is a finger and a tap. And
+[00:17:15.360] everything has to go through this one
+[00:17:16.959] action. And so you're effectively you're
+[00:17:18.600] multiplexing tap. So tap has to insert,
+[00:17:22.160] it has to drag, it has to bring up a
+[00:17:23.400] menu, it has to do all this stuff, and
+[00:17:26.079] it's just too much, and it just makes
+[00:17:28.120] things difficult. So, what we did on the
+[00:17:30.600] Android team is we Well, it This never
+[00:17:32.760] shipped. It's one of the reasons why Oh,
+[00:17:35.400] this is one of the reasons why I left
+[00:17:36.760] because they they
+[00:17:39.120] It's [clears throat] a long story. You
+[00:17:40.120] get I mean, it
+[00:17:41.480] It Buy me a beer and we'll talk about
+[00:17:43.320] it. Um
+[00:17:44.360] but the idea was that uh we had we
+[00:17:47.000] basically invented a new long press
+[00:17:49.080] event that allowed you to select this,
+[00:17:51.840] and it worked really really really well.
+[00:17:53.560] Now, the desktop has the same thing. Um
+[00:17:56.360] people forget that the original
+[00:17:57.840] Macintosh was a whopping 342 pixels
+[00:18:02.240] high.
+[00:18:03.160] That's smaller than most icons today,
+[00:18:05.440] right? Um and that was the screen size.
+[00:18:08.120] And so guess what? Things overlapped a
+[00:18:10.160] lot. And we just assumed that windows
+[00:18:13.760] have to overlap. And now that we have
+[00:18:15.320] giant giant giant screens, anybody who's
+[00:18:18.920] tried using a window manager on a large
+[00:18:20.600] screen, you just get tired, right? And
+[00:18:23.320] it's I can understand why people use
+[00:18:24.960] tiled window systems and so forth
+[00:18:26.520] because this existing model just does
+[00:18:28.680] not work very well. So, there's all
+[00:18:30.920] sorts of just historical things that
+[00:18:33.440] we've just accepted. So, Alan Kay, who
+[00:18:36.640] as you can tell I really like a lot, has
+[00:18:38.600] talked a lot about thinking about the
+[00:18:40.640] future. Now, he's never said these
+[00:18:41.920] things in this particular order, but
+[00:18:43.200] he's written about them, so I'm stealing
+[00:18:44.640] it. He talks about the three steps to
+[00:18:46.600] understand stuff. What is your present?
+[00:18:48.840] What is going on right now?
+[00:18:51.160] Don't forget your past. Know what work
+[00:18:53.520] has been done before. Stand on the
+[00:18:54.800] shoulders of giants. And then finally is
+[00:18:57.680] really make sure your questions are
+[00:19:00.080] clear. Too many people rush to
+[00:19:02.600] solutions. You should really be rushing
+[00:19:04.840] to questions. And if you can be clear on
+[00:19:07.160] the questions, the answers come better.
+[00:19:09.200] So, let me take these in order. What is
+[00:19:11.200] your present?
+[00:19:12.680] What is happening right now on the
+[00:19:14.200] desktop?
+[00:19:15.440] I'll give you three guesses.
+[00:19:22.630] I did not want to make this talk about
+[00:19:22.640] AI and I have to talk about AI and it
+[00:19:24.920] pisses me off because there's so many
+[00:19:27.680] cool things we could be talking about
+[00:19:29.440] and AI just sucks up all the oxygen and
+[00:19:31.760] it's all you can talk about.
+[00:19:33.640] Almost every conversation I have back
+[00:19:35.320] home always ends up talking about AI and
+[00:19:37.360] it just it's getting old. Um so
+[00:19:41.120] the but the fascinating thing is so many
+[00:19:43.280] things are happening with AI on the
+[00:19:44.480] desktop and they're all doing it in a
+[00:19:46.160] really weird way. So Google has this
+[00:19:48.400] thing called AI pointer. It's a research
+[00:19:50.320] thing where you can talk while you point
+[00:19:51.760] at things and they have the the Google
+[00:19:53.800] book shake your cursor and they're fine.
+[00:19:56.120] I don't want to say they're bad or
+[00:19:57.480] anything but what they're trying to do
+[00:19:59.240] is
+[00:20:00.440] keep the entire desktop use exactly the
+[00:20:03.120] same and they're trying to sneak AI in.
+[00:20:06.720] And that's kind of one approach to do
+[00:20:09.080] it. The other one is this lovely project
+[00:20:11.280] which
+[00:20:13.280] I knew that would go over really well.
+[00:20:15.694] >> [laughter]
+[00:20:16.840] >> And um and
+[00:20:18.960] the problem I think with here is that
+[00:20:22.000] people keep saying this is an AI OS and
+[00:20:24.000] that is so irritating. It's not an AI
+[00:20:26.720] OS. It's basically Apple script with a
+[00:20:28.560] chatbot.
+[00:20:29.840] Okay.
+[00:20:34.510] I mean really I mean yes I actually
+[00:20:34.520] think that if it wasn't by DHS this we
+[00:20:38.240] could have a conversation about how this
+[00:20:39.560] is interesting and by scripting and
+[00:20:41.560] automating scripting at the lower levels
+[00:20:44.040] yes there could be some interesting
+[00:20:45.320] things here.
+[00:20:46.880] But it's just scripting the lower level
+[00:20:49.200] system access. It's not a complete re-
+[00:20:51.840] rework of the entire system. So
+[00:20:54.240] what are all these things Oh and by the
+[00:20:56.000] way um there's so much more that's
+[00:20:57.640] coming in this space. Apple has this
+[00:20:59.640] thing called on-screen awareness which
+[00:21:01.200] is trying to understand what's happening
+[00:21:02.480] on your screen.
+[00:21:03.880] Android has the exact same thing called
+[00:21:05.400] assist structure. Even free desktop.org
+[00:21:07.920] by the way, is getting involved in this.
+[00:21:09.640] But they're all effectively trying to
+[00:21:11.840] understand
+[00:21:13.960] what's happening on the screen so that
+[00:21:16.160] you can talk to it with a chatbot or you
+[00:21:18.880] know, a voice prompt, which is again, I
+[00:21:20.720] think kind of missing the opportunity
+[00:21:22.520] here. So what's happening, I think, is
+[00:21:24.400] that we have this kind of matrix, this
+[00:21:26.040] continuum here, where we have the Google
+[00:21:28.800] things with a cursor coming in at the
+[00:21:30.360] top and all these other operating system
+[00:21:32.720] type things coming at the bottom. So we
+[00:21:34.440] have thing we have AI coming in above
+[00:21:36.880] the UX or below the UX, but there's
+[00:21:39.360] nothing really in the middle, which I
+[00:21:40.760] thought was really fascinating. So this
+[00:21:42.080] is where I was starting to kind of go,
+[00:21:43.240] wait, something weird is happening here.
+[00:21:45.480] So
+[00:21:47.000] what I I what I the the glimmer that I
+[00:21:49.640] had that could be this something
+[00:21:51.280] actually is interesting happening was
+[00:21:52.920] this.
+[00:21:53.960] People AI is moving so quickly that
+[00:21:56.040] people forget that last summer AI was
+[00:21:58.280] running out of steam. People were just
+[00:21:59.800] doing they're getting frustrated with
+[00:22:01.280] all the hallucination. People weren't
+[00:22:03.400] really getting a lot of value out of it.
+[00:22:04.920] And then along came Claude Code and
+[00:22:06.600] they're like, oh, this actually kind of
+[00:22:09.000] can work. And it completely changed
+[00:22:10.960] things because what it was doing was it
+[00:22:12.600] was looking down into your file system.
+[00:22:15.360] Instead of you providing context, it was
+[00:22:17.320] getting context from your file system
+[00:22:19.160] and that allowed it to do something more
+[00:22:20.360] interesting.
+[00:22:21.520] And now whether you're doing with files
+[00:22:23.280] whether you're doing it with coding or
+[00:22:24.920] with Obsidian with personal a lot of
+[00:22:27.080] experimentations are going on here. Now
+[00:22:28.480] again, I'm not I should probably say by
+[00:22:30.440] the way that I have a lot of personal
+[00:22:32.640] problems with the the um frontier
+[00:22:36.120] models. Uh they are ethical and
+[00:22:38.800] environmental disasters. I am not very
+[00:22:41.000] excited by them. I think there's lots of
+[00:22:42.600] issues with them.
+[00:22:44.040] Um but I'm only calling it out because
+[00:22:46.560] everyone's talking about it right now. I
+[00:22:48.560] am kind of excited by the fact that um
+[00:22:51.840] the Swiss government has got something
+[00:22:53.600] called Apertus. Has anybody heard of
+[00:22:55.120] Apertus?
+[00:22:56.520] Yes. I think it's quite interesting.
+[00:22:58.360] They basically have an entirely
+[00:23:00.200] ethically sourced data set, which I
+[00:23:02.400] think is awesome. And then they train
+[00:23:04.720] their their model on it, and they've
+[00:23:06.040] trained not only a large-ish model, but
+[00:23:08.640] lots of very small models. And I don't
+[00:23:10.720] think people appreciate how powerful
+[00:23:12.440] small language models can be when you
+[00:23:14.200] get away from the hype.
+[00:23:15.800] Because with a small language model, you
+[00:23:17.200] can run it locally, and a lot of the
+[00:23:18.920] environmental issues go away. So, I do
+[00:23:21.560] think it's possible to talk about
+[00:23:23.520] ethically trained small language models
+[00:23:25.560] running locally, and you don't have to
+[00:23:27.720] sell your soul to the devil. So, I do
+[00:23:29.680] think that there's some direction to
+[00:23:31.000] talk about this. But, the key point I
+[00:23:33.320] wanted to make is it's not about
+[00:23:34.480] generation, it's about context. And by
+[00:23:36.880] having
+[00:23:38.080] this system embrace the desktop, use the
+[00:23:41.280] file system, it actually got better.
+[00:23:44.400] So, to me, what I'd like to say is
+[00:23:46.400] Claude Code was somewhere in the middle.
+[00:23:48.080] It wasn't really off the line, it was
+[00:23:49.640] using the existing filing system, but I
+[00:23:51.840] think it was a I'll give him the benefit
+[00:23:53.280] of the doubt, let's put it a little bit
+[00:23:54.200] off the line. To me, the question is can
+[00:23:56.560] we expand this impact? Now that we know
+[00:23:58.960] that if we embrace the actual desktop,
+[00:24:01.840] and better things happen, how do we
+[00:24:03.360] embrace it more?
+[00:24:04.960] So, what are the desktop building
+[00:24:07.000] blocks? Well, we simply have obviously
+[00:24:09.440] the big ones. We have Windows, we got
+[00:24:11.280] files and icons, and the clipboard. Now,
+[00:24:13.600] there's the mouse, and there's the
+[00:24:15.160] keyboard, but those are more input
+[00:24:16.560] systems.
+[00:24:17.800] And
+[00:24:18.840] what I think is interesting is there
+[00:24:20.520] these are the things that allow you to
+[00:24:22.040] kind of capture and move and edit and
+[00:24:24.680] store data. And that is the fun
+[00:24:27.360] foundation of what I think a desktop UX
+[00:24:29.480] does for users. It allows them to move
+[00:24:31.560] data around.
+[00:24:33.280] And it's the heart of what direct
+[00:24:34.640] manipulation is, but I think that direct
+[00:24:37.200] manipulation has a weakness. And it's
+[00:24:40.000] that it has it's completely stateless.
+[00:24:42.400] It's very fast, it's very powerful, and
+[00:24:44.840] if you are a very good user, you can
+[00:24:46.760] move through it very very quickly, but
+[00:24:48.600] if you come back the next day, you come
+[00:24:50.120] back the next week, you're trying to
+[00:24:51.200] figure out what happened, if you copy a
+[00:24:53.200] few too many things to the for the to
+[00:24:54.640] the clipboard, whoop, sorry, it's gone.
+[00:24:56.880] And so, there's a lot of issues with
+[00:24:58.520] that. So, I actually kind of call this
+[00:24:59.760] the curse of direct manipulation.
+[00:25:02.440] It's powerful, but it doesn't really
+[00:25:04.320] support you in the work that you're
+[00:25:06.040] trying to do.
+[00:25:07.560] And so, and I think we intuitively know
+[00:25:10.440] that.
+[00:25:11.880] There are people that are rewriting when
+[00:25:13.640] There are like what? 37 window managers
+[00:25:15.720] for Linux?
+[00:25:16.960] Right? There's a There's probably more,
+[00:25:18.800] right? Um there's also alternative
+[00:25:21.400] shells, and there's alternative, you
+[00:25:23.040] know, uh file managers. There's
+[00:25:25.160] alternative clipboard managers. So,
+[00:25:27.160] people are feeling this pain. These
+[00:25:29.440] systems aren't quite working right, but
+[00:25:31.240] what the solution seems to be is to
+[00:25:32.800] solve them in their own silo. And I
+[00:25:35.480] think for me, what I get excited about
+[00:25:37.400] is to say, this is really about working
+[00:25:39.400] memory. How do I manage my data in such
+[00:25:42.840] a way that I can remember it across all
+[00:25:45.040] of these things and actually use it. So,
+[00:25:46.800] I I got my perspective shift thinking
+[00:25:49.240] about this more holistically outside of
+[00:25:50.920] these things.
+[00:25:52.200] So, that's how what I What I'd like to
+[00:25:54.000] do is to take that dot and move it out
+[00:25:55.880] by saying, what would we do to working
+[00:25:58.760] memory to improve the desktop UX?
+[00:26:01.560] And I want to make it sure it's really
+[00:26:02.640] clear. I want to solve this for people
+[00:26:04.000] first, and if the AI can use it, great.
+[00:26:07.040] I don't care. That It'll That That comes
+[00:26:08.960] later. Let's just focus on getting
+[00:26:10.200] something for people.
+[00:26:11.560] Okay. So, the next point is to remember
+[00:26:13.880] your past. There have been some great
+[00:26:15.920] papers. This is a seminal paper from the
+[00:26:17.520] '90s called Life Streams that talked
+[00:26:19.160] about organizing your data, um
+[00:26:21.520] you know, along a timeline. Uh I I
+[00:26:23.560] recommend you get it. When They'd
+[00:26:25.360] actually influenced WinFS, which is a
+[00:26:26.960] really cool file system that was a
+[00:26:28.320] relational database. It wasn't just the
+[00:26:30.000] data, it's where you downloaded it from,
+[00:26:32.240] who has worked on it, you know, that
+[00:26:33.960] kind of thing. So, you could actually
+[00:26:34.960] have a story about a
+[00:26:36.960] history of what this file has been
+[00:26:38.760] through. That's what we mean by thinking
+[00:26:40.880] outside the box, having a file system
+[00:26:42.720] help you remember the journey this file
+[00:26:44.760] has been on. And anybody know about
+[00:26:47.240] Nepomuk?
+[00:26:49.280] Right?
+[00:26:50.680] And um another project that was, I
+[00:26:52.960] think, very much ahead of its time. The
+[00:26:54.840] problem with is that both of these
+[00:26:56.280] projects basically crashed and burned.
+[00:26:59.080] And it's really unfortunate because I
+[00:27:00.600] think the ideas are really quite clever.
+[00:27:02.200] And they now they've lived on in things
+[00:27:04.400] like Spotlight or Baloo or things like
+[00:27:05.880] that. But the the problem is there these
+[00:27:07.480] are tiny tiny tiny variations of what
+[00:27:09.320] the original vision was.
+[00:27:11.120] And my concern is that they you see
+[00:27:14.400] these projects as proof that these ideas
+[00:27:16.320] were wrong, which is no, not at all the
+[00:27:18.480] case. I would say is that the the the
+[00:27:20.560] hardware and the the systems at the time
+[00:27:23.280] let the vision down. I think it's time
+[00:27:25.640] to rethink a lot of these projects in
+[00:27:27.840] light of new hardware. And maybe
+[00:27:29.920] possibly make them a little bit simpler,
+[00:27:31.520] but my point is
+[00:27:33.440] these are not bad ideas. So, now what I
+[00:27:37.160] would say is the questions that I would
+[00:27:38.960] ask, and these are clearly my questions.
+[00:27:41.680] We can ask additional questions, but I
+[00:27:44.120] would say, "Okay,
+[00:27:46.720] let's remember that remember I told you
+[00:27:48.440] how small the Macintosh was uh
+[00:27:50.160] initially? People are a little freaked
+[00:27:51.760] out when I tell them that the original
+[00:27:52.880] Macintosh would fit within the screen of
+[00:27:56.040] an iMac iPad Mini. That's how small the
+[00:27:58.840] original Macintosh was.
+[00:28:00.880] What would happen if we designed only
+[00:28:04.000] for large monitors? I mean really big
+[00:28:06.080] like wide screen monitors, okay? It
+[00:28:08.320] wouldn't work on laptops. I don't care.
+[00:28:10.920] I just want to try, right? I just want
+[00:28:12.600] to see what it's like. What does it
+[00:28:14.320] unlock if we try to design for large
+[00:28:16.400] monitors, right? How can we tightly
+[00:28:18.240] integrate, for example, the clipboard,
+[00:28:19.720] files, and windows to a more holistic
+[00:28:21.560] concept? What that look like? And how
+[00:28:23.480] can we capture user intent over time?
+[00:28:25.160] So, I think these are the questions that
+[00:28:27.560] I'd like to see explored. And like I
+[00:28:29.840] said before, you focus on the questions,
+[00:28:31.320] not the solutions.
+[00:28:32.880] Now, I am going to show you prototypes
+[00:28:34.360] right now and go into that, but I want
+[00:28:36.200] to start with this quote from Donald
+[00:28:37.560] Knuth, "Premature optimization is the
+[00:28:39.320] root of all evil."
+[00:28:41.080] I
+[00:28:42.080] am going to show you these prototypes,
+[00:28:44.200] and I'm a little nervous about it
+[00:28:45.520] because technical people love to find
+[00:28:48.280] mistakes.
+[00:28:50.240] And oh my god, 10 minutes. Really?
+[00:28:53.200] >> Yeah.
+[00:28:53.520] >> Damn. I I got to speak fast.
+[00:28:56.240] Okay, so let's just go into that real
+[00:28:58.000] quick.
+[00:28:59.440] Um
+[00:29:01.200] Let's see, go here.
+[00:29:09.910] So, let me
+[00:29:09.920] uh show this is effectively my
+[00:29:12.160] simulation of a wide screen display. Um
+[00:29:15.240] it's a little scaled down because of
+[00:29:16.760] course this is not a wide screen. So,
+[00:29:18.240] sorry that it's tiny.
+[00:29:19.680] But the idea here is that historically
+[00:29:21.360] what people have done have done Exposé,
+[00:29:22.920] which is how you would see things like
+[00:29:24.480] this like this is what what Macintosh
+[00:29:25.720] would do. But the problem is if I double
+[00:29:27.440] the number of windows, Exposé breaks
+[00:29:29.400] down very quickly. It turns into this
+[00:29:30.840] Cartesian sort. And on top of all that,
+[00:29:33.080] it's a it's a
+[00:29:34.880] modal that I can't really interact with
+[00:29:36.960] very easily. And those windows at a
+[00:29:38.480] small size are still useful. So, what
+[00:29:40.960] I'd like to do is to
+[00:29:43.840] first of all realize that a wide screen
+[00:29:46.160] is very difficult to work on the sides.
+[00:29:48.480] It's good for peripheral vision, but
+[00:29:50.440] it's not good for working. So, by doing
+[00:29:52.360] that, let's start by saying move the
+[00:29:54.320] menu bar in because having the menu I
+[00:29:56.560] have the icons in the corners is stupid.
+[00:29:58.640] Bring it in and then have that 50% um
+[00:30:02.640] uh focus right there. And to reinforce
+[00:30:04.920] that focus, what I'm going to do is add
+[00:30:07.000] a background that basically says, "Okay,
+[00:30:09.200] this is what the center is about and the
+[00:30:10.760] sides are more the periphery." I'm not
+[00:30:12.680] suggesting this is the desktop that you
+[00:30:14.160] ship with. I'm just doing it so you guys
+[00:30:15.840] can see where the morphing happens. And
+[00:30:17.840] then what we'll do is I'll bring the the
+[00:30:19.240] windows back. And the idea here is if I
+[00:30:21.360] drag the window, the idea is that it can
+[00:30:23.360] shrink down as I get to this spot and
+[00:30:25.120] eventually I could dock it and pull it
+[00:30:27.000] back. Now, that's not terribly
+[00:30:29.080] interesting. Um what I will say is I did
+[00:30:31.240] play around with the idea of actually
+[00:30:32.960] morphing it so that when I would drag
+[00:30:34.680] it, it would actually slide.
+[00:30:36.840] Um um but it's not legible, right? If
+[00:30:39.920] you can't read it. So, I I turned that
+[00:30:41.600] off. I just did the regular one. But,
+[00:30:43.280] the idea here though is that now that I
+[00:30:46.200] I've taken something and I've moved it
+[00:30:47.760] over here, it's still selectable. It's
+[00:30:50.040] still a window. I can still do it. Now,
+[00:30:51.360] not all windows can do this, but I now
+[00:30:53.520] have this ability to have windows on the
+[00:30:54.720] side that are a little bit more
+[00:30:56.240] interactive and I can still use them.
+[00:30:57.800] Now,
+[00:30:59.320] I'm not against virtual desktops.
+[00:31:01.440] Virtual desktops are used by very
+[00:31:03.440] organized and intelligent people.
+[00:31:06.480] I know my audience.
+[00:31:13.110] But, most consumers don't. And most
+[00:31:13.120] consumers can't deal with virtual
+[00:31:14.400] desktops. I'm trying to come up with
+[00:31:15.840] something that's a little bit more
+[00:31:16.560] organic and a little messy, actually.
+[00:31:19.240] And so, the idea here is that if I do
+[00:31:21.680] have these things and I start to say
+[00:31:23.400] play it, this is my uh music player I'm
+[00:31:24.880] playing,
+[00:31:26.160] also not only can I put it in this stash
+[00:31:28.000] area, so I can still interact with it, I
+[00:31:29.640] want to steal from effectively um
+[00:31:32.520] the web, but which basically re-
+[00:31:34.360] recombines things on small as I drag it
+[00:31:35.960] over to the the size, it actually just
+[00:31:37.760] reconfigures itself just to be a button.
+[00:31:40.200] So, I can play and pause. And so, now
+[00:31:42.440] I've effectively turned a window into a
+[00:31:43.680] widget. So, the idea here is to have a
+[00:31:46.120] window manager,
+[00:31:47.520] thank you, uh a window manager that is
+[00:31:49.600] kind of part window manager, part
+[00:31:51.520] exposé, part um
+[00:31:54.360] uh
+[00:31:56.520] just it is it's a it's a a bunch of
+[00:31:58.160] things together and then the intention
+[00:32:00.000] is, let me just reset everything here.
+[00:32:03.680] Um what I can then do is if I just take
+[00:32:05.880] the window and shake it,
+[00:32:07.520] they can go off to the side
+[00:32:08.320] automatically, right? And so, and then
+[00:32:10.960] and to to go there and say that I I have
+[00:32:12.800] to rush a little bit. If I were to
+[00:32:13.880] double the number of windows,
+[00:32:16.960] okay, and shake it, um it scales fairly
+[00:32:20.480] well and it scales even more. So, I
+[00:32:22.040] think there's something to explore here
+[00:32:23.520] to have this messy, organic kind of
+[00:32:25.840] window manager that allows me to move
+[00:32:27.920] things around and play with them. And I
+[00:32:29.840] think Wayland can do all of this right
+[00:32:31.680] now, right? This is not a fundamentally
+[00:32:33.360] difficult thing to do. We just have to
+[00:32:34.360] play around with it. So, what I'd like
+[00:32:35.800] to do is to build uh a real prototype of
+[00:32:38.360] this and just see how it feels. And if
+[00:32:40.240] it doesn't feel right, we can try figure
+[00:32:41.840] something else out. So, I have to move
+[00:32:43.400] quickly.
+[00:32:44.480] I do have another version here, which is
+[00:32:46.640] to say if we were to have a document,
+[00:32:49.440] how could we store clipboard items and
+[00:32:51.920] files a little bit better? So, the idea
+[00:32:53.360] here is to steal a page from Obsidian.
+[00:32:55.480] If I were to select this text and say I
+[00:32:57.400] don't want to work in this right now, I
+[00:32:58.280] could drag it here.
+[00:32:59.680] And if I were to then Now, it's not just
+[00:33:01.840] a clipboard history, it's actually a
+[00:33:03.320] clipboard file, but it's associated with
+[00:33:05.400] this document. So, I could drag multiple
+[00:33:07.040] things in.
+[00:33:08.160] I could also then say bring in a file
+[00:33:10.960] over here and drag it in. I could go
+[00:33:12.640] from a web browser and I could drag
+[00:33:14.360] something in here and drag it in. And
+[00:33:16.920] I'm I'm as a shortcut, I'm going to
+[00:33:18.400] bring some more in. And the idea here is
+[00:33:20.760] that this is now effectively a
+[00:33:22.680] collection of stuff that I've gathered
+[00:33:25.200] for this document. And if I close it
+[00:33:27.800] and then come back tomorrow,
+[00:33:29.480] it's all still there. It's all there.
+[00:33:31.040] It's all available to me. And now that I
+[00:33:32.840] have my stuff and I can use it, now the
+[00:33:34.920] local AI can come in and do things like,
+[00:33:37.040] "Oh, look, you got a bunch of hotels.
+[00:33:38.320] Let me organize them for you, right?" Or
+[00:33:40.200] if I click on the hotel, I can actually
+[00:33:41.880] say map these
+[00:33:44.200] and it would it would create a map that
+[00:33:45.680] I can drag into my document. And the
+[00:33:47.760] idea here is by the way, I can also
+[00:33:50.040] split screen it so I can edit and not
+[00:33:51.960] only can I view these things, I can even
+[00:33:53.120] edit them. And so, we're now verging on
+[00:33:55.960] effectively a baby version of virtual
+[00:33:57.560] desktops, right? And move them back and
+[00:33:59.640] forth. So, the idea here is to start to
+[00:34:03.040] collect this data in a way that is still
+[00:34:04.680] useful. Thank you.
+[00:34:06.640] Um so, let me then go into my next one
+[00:34:09.800] cuz I'm going to I
+[00:34:12.000] There's so much data that we could
+[00:34:13.320] collect and that makes people nervous.
+[00:34:15.080] And so, I tried to come up with a way of
+[00:34:16.280] doing telemetry that was more
+[00:34:17.720] privacy-preserving. So, this is 50
+[00:34:20.040] websites that I browsed looking for an
+[00:34:22.000] e-bike and most web browsers just give
+[00:34:24.960] you a linear list. So, I decided and
+[00:34:27.440] some browsers will give you a
+[00:34:28.360] hierarchical view, but it's not very
+[00:34:30.200] useful.
+[00:34:31.240] So, what I did was I just gathered uh
+[00:34:33.159] what I thought was not content, right?
+[00:34:35.919] You know, how long have you scrolled?
+[00:34:38.280] You know, what how long were you there?
+[00:34:39.919] Did you Did you do a clipboard event? I
+[00:34:41.840] didn't gather the clipboard. I said,
+[00:34:43.280] "Did you do a copy? Did you do a paste?"
+[00:34:45.679] So, I grabbed effectively attention
+[00:34:47.240] signals.
+[00:34:48.840] And the idea was to say how and then
+[00:34:51.080] mathematically I would I would do is I
+[00:34:52.720] would take this and I would convert it
+[00:34:54.360] into something like something I'm sorry.
+[00:34:56.240] I'd take this and I'd convert it into
+[00:34:57.400] something like this. Take 50 nodes and
+[00:34:59.440] convert it into seven. It's a very
+[00:35:00.800] opinionated view that says, "Oh, here is
+[00:35:03.120] your Google search and here's all the
+[00:35:04.600] things that you did, but here's the
+[00:35:05.760] three important ones and here's the
+[00:35:07.640] pages that you landed on and I did this
+[00:35:09.840] keep thing." Now, I'm not suggesting
+[00:35:11.600] this is a UX for users. All this was
+[00:35:13.880] trying to do is to gather really simple
+[00:35:16.160] privacy-preserving data and not using
+[00:35:19.440] AI, just using simple math, could I
+[00:35:22.200] synthesize things down a little bit
+[00:35:23.680] more? And so, what I ended up saying was
+[00:35:25.840] to say, "Well, what would happen if we
+[00:35:26.960] actually had some kind of history of
+[00:35:29.440] what I've been doing in the desktop?"
+[00:35:31.840] To say, "Oh, look, I was in the email
+[00:35:33.960] and I went to go get a doc I went to um
+[00:35:37.160] I opened up a document and I went and
+[00:35:38.640] got an image
+[00:35:40.200] and I worked in this document." And so,
+[00:35:42.160] the idea here is to kind of tell a story
+[00:35:44.560] of where you've spent your time.
+[00:35:46.520] And then once I have this kind of
+[00:35:47.600] concept of history, I wanted to go back
+[00:35:50.240] to say, "Well, let's turn history on
+[00:35:51.880] here
+[00:35:53.040] to say, 'Oh, well, now I've collected
+[00:35:55.120] all this stuff. Where did this
+[00:35:57.760] c- uh ca- clip come from?' Well, it came
+[00:36:00.160] from this part of the document. Well,
+[00:36:01.280] where did this budget come from? It came
+[00:36:02.480] from this finder window. Where did this
+[00:36:04.120] map come from? It came from here." So,
+[00:36:06.160] we now are starting to tell a story that
+[00:36:08.040] once we have this ability to collect all
+[00:36:10.000] this data, we can now start to annotate
+[00:36:12.080] it and and give it to the user and
+[00:36:13.680] hopefully keep it all local, keep it all
+[00:36:15.480] private and not gather that much
+[00:36:17.080] information. So,
+[00:36:19.560] the goal here
+[00:36:21.040] uh
+[00:36:21.640] was to um give you guys this kind of
+[00:36:24.240] rough idea and I have like 2 minutes
+[00:36:26.240] left, right? So, I got to go back.
+[00:36:31.950] Uh
+[00:36:31.960] So, I basically came up with the
+[00:36:33.800] spatial, associative, and episodic
+[00:36:35.520] memory prompt. I don't want you guys to
+[00:36:37.920] think that I'm selling you on doing
+[00:36:40.080] exactly these things. I'm just trying to
+[00:36:42.240] explore the space to say, is this
+[00:36:44.160] interesting? Is there something else we
+[00:36:45.680] could be doing? So, I started with the
+[00:36:47.240] spatial, a messy organic way of
+[00:36:49.480] organizing your windows. The next was
+[00:36:51.520] effectively associative. Take all your
+[00:36:53.400] data and put it together so that it's
+[00:36:55.160] captured, remembered, and survives being
+[00:36:57.960] you know, restarted. So, I have more of
+[00:36:59.280] it together. And finally it was this
+[00:37:00.960] episodic memory to say, can we gather
+[00:37:03.280] telemetry in a good way and then
+[00:37:05.240] organize it for the user so that it
+[00:37:06.720] actually can be shown to them in an
+[00:37:08.520] interesting helpful way. So, that's
+[00:37:11.320] effectively what I was trying to get us
+[00:37:13.320] excited about. And these are the
+[00:37:14.520] prototypes that I want us to build. And
+[00:37:16.720] the idea here is I've been pitching this
+[00:37:18.840] idea to all these distros, trying to get
+[00:37:21.200] somebody to get excited about building
+[00:37:22.760] these things out as an experiment on the
+[00:37:25.360] side that's totally optional.
+[00:37:27.880] And I'll blow through this. In can
+[00:37:29.960] switch has got a really lovely model. I
+[00:37:31.520] worked with them on this project called
+[00:37:32.640] Upwelling. The idea is to effectively
+[00:37:35.480] build up small team of people, build
+[00:37:37.720] something really quickly, and then build
+[00:37:39.640] a prototype and open source it. And this
+[00:37:41.360] is like the superpower of open source.
+[00:37:42.960] We can actually do this research in the
+[00:37:44.720] open.
+[00:37:46.080] So,
+[00:37:47.200] all I'm In closing, the main thing I
+[00:37:49.480] want for you guys is to understand this
+[00:37:50.960] problem, to realize what an issue it is,
+[00:37:53.120] and how we should be looking for
+[00:37:54.280] solutions.
+[00:37:55.640] My perspective is I think working memory
+[00:37:58.080] is a good example of where we should go.
+[00:38:00.040] I think there's other perspectives and I
+[00:38:01.360] want to talk to people about it. And the
+[00:38:04.080] three
+[00:38:05.360] uh memories is what I kind of came up
+[00:38:07.280] with as an approach. And I'd like to
+[00:38:09.240] explore a little bit more. So, the goal
+[00:38:11.480] with this talk is to say, let's start to
+[00:38:13.640] take this apart. And I really hope that
+[00:38:16.240] my prototypes cause you guys to come to
+[00:38:18.360] me and say, well, you forgot about this.
+[00:38:19.840] And And talk about that. But I'm excited
+[00:38:22.600] that KDE cares enough about the user
+[00:38:24.000] experience that we could actually try to
+[00:38:26.160] build something like that. So, I just
+[00:38:28.360] want us to try because no one else is
+[00:38:30.720] going to try and I think someone's got
+[00:38:32.080] to start. That's what I'm going to do.
+[00:38:33.480] So, thank you very much.
+[00:38:35.451] >> [applause]
+[00:38:53.781] >> You're welcome.
+[00:38:53.791] >> [applause]
+[00:38:58.590] >> I think we have
+[00:38:58.600] time for one question.
+[00:39:08.430] >> Who wants to be the first and the last?
+[00:39:08.440] >> And if not, grab me afterwards. I really
+[00:39:10.320] want to talk to people. So, just if you
+[00:39:11.760] you don't have time now, don't be shy
+[00:39:13.280] later.
+[00:39:20.830] >> Um you've mentioned something about
+[00:39:20.840] all this memory stuff and my question is
+[00:39:23.440] how is this model going to protect
+[00:39:26.920] against the privacy concerns that
+[00:39:29.520] Microsoft faced with Windows Recall?
+[00:39:33.160] As in how are we going to make sure that
+[00:39:35.040] this history remains only accessible by
+[00:39:37.840] the user and cannot be hacked in like it
+[00:39:40.200] could happen with the Windows Recall.
+[00:39:42.120] >> The biggest argument against this is
+[00:39:43.840] that you've just created the world's
+[00:39:44.800] greatest honeypot and so everyone's
+[00:39:46.280] going to go after it, which is why the
+[00:39:48.080] telemetry idea was trying to gather
+[00:39:50.720] not interesting information, right? If
+[00:39:53.200] you're gathering focus information and
+[00:39:54.960] not text, I think that significantly
+[00:39:57.320] reduces the heat. I do not want to
+[00:39:59.760] underplay the issue. I think this issue
+[00:40:01.560] needs more discussion.
+[00:40:03.520] Um what I'd like to do though is I'd
+[00:40:04.880] like to build a prototype and see if
+[00:40:06.760] it's a good idea first, right? And if
+[00:40:09.840] it's good, then let's talk about ways to
+[00:40:12.160] then further encrypt it because even the
+[00:40:13.960] safer telemetry
+[00:40:15.760] is still valuable information, right?
+[00:40:17.840] So, I completely agree with you, but I I
+[00:40:21.240] mean
+[00:40:22.840] people keep their bank details on their
+[00:40:25.280] computer today.
+[00:40:26.880] Right? And people seem to be okay with
+[00:40:28.440] that. So, I do feel like this is not
+[00:40:31.280] much a step above what you already are
+[00:40:33.520] storing. We just have to be very, very
+[00:40:35.440] careful. Windows Recall's biggest
+[00:40:37.120] mistake was how stupidly they protected
+[00:40:39.440] that data.
+[00:40:41.160] Right? And I think we can do a whole lot
+[00:40:42.480] better than that. So, I want to
+[00:40:44.360] acknowledge your point, but I'd like to
+[00:40:45.600] think it's a solvable problem.
+[00:40:47.320] >> I see. Thank you.
+[00:40:48.360] >> You're welcome.

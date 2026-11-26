@@ -1,3 +1,5 @@
+import { surfaceRegistry } from './app-surface-registry.tsx';
+import { contextStore } from './context-store.ts';
 import { Effect } from "effect";
 import { useSyncExternalStore } from "react";
 import type { HostCommandContext, KernelHandle } from "unkernel";
@@ -97,6 +99,11 @@ export interface AgentApiCallRecord {
 }
 
 export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
+  {method:"horizon.status",category:"wm",summary:"Read Horizon desktop mode, layout and placements. Does not expose drawer content.",paramsSchema:{type:"object",properties:{}},example:{}},
+  {method:"horizon.sessions",category:"wm",summary:"Discover session capabilities and current revisions. Read content only with a user-issued grant.",paramsSchema:{type:"object",properties:{}},example:{}},
+  {method:"horizon.session.read",category:"wm",summary:"Read only the chosen session state/items allowed by a user-issued, expiring grant.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"}},required:["windowId","grantId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant"}},
+  {method:"horizon.session.action",category:"wm",summary:"Invoke an explicitly granted app action at the expected revision. Replayed requestIds are deduplicated.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"},action:{type:"string"},expectedRevision:{type:"string"},requestId:{type:"string"},args:{type:"object"}},required:["windowId","grantId","action","expectedRevision","requestId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant",action:"save",expectedRevision:"3",requestId:"unique-action-id",args:{}}},
+
   // ─── SYSTEM ──────────────────────────────────────────────────────────
   {
     method: "system.info",
@@ -1332,6 +1339,9 @@ const PERM_MODE_STORAGE_KEY = "unkernelos:agent-perm-mode:v1";
 export type AgentPermissionMode = "auto" | "supervised" | "read-only";
 
 const READ_ONLY_METHODS = new Set([
+  "horizon.status",
+  "horizon.sessions",
+  "horizon.session.read",
   "system.info",
   "system.clipboard.read",
   "system.clipboard.history",
@@ -1509,6 +1519,14 @@ export async function executeOsAction(
 
 async function dispatchOsAction(method: string, p: Record<string, unknown>): Promise<unknown> {
   switch (method) {
+    case "horizon.status": {const w=wmStore.getSnapshot();return {enabled:w.horizonEnabled,layout:w.horizonLayout,flat:w.horizonFlat,workspace:w.activeWorkspace,windows:w.windows.map(x=>({id:x.id,sessionId:x.sessionId,contextId:x.contextId,placement:x.placement??"center",minimized:x.minimized}))};}
+    case "horizon.sessions": return surfaceRegistry.list();
+    case "horizon.session.read": return surfaceRegistry.read(String(p.windowId??""),String(p.grantId??""));
+    case "horizon.session.action": {
+      if(!p.requestId||!p.expectedRevision)throw new Error("requestId and expectedRevision are required");
+      return surfaceRegistry.act({windowId:String(p.windowId??""),grantId:String(p.grantId??""),action:String(p.action??""),expectedRevision:String(p.expectedRevision),requestId:String(p.requestId),args:p.args&&typeof p.args==="object"&&!Array.isArray(p.args)?p.args as Record<string,unknown>:{}});
+    }
+
     // ─── SYSTEM ────────────────────────────────────────────────────────
     case "system.info": {
       const vmState = await appRuntime.runPromise(Effect.flatMap(VmService, (v) => v.stateRef.get));

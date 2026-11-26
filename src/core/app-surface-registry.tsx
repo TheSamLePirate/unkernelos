@@ -1,0 +1,269 @@
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+} from "react";
+import { wmStore, type WindowInstance } from "../wm/wm-store.ts";
+import { contextStore } from "./context-store.ts";
+export const WindowSessionContext = createContext<WindowInstance | null>(null);
+export interface SurfaceAdapter {
+  document?: string;
+  title?: string;
+  state: Record<string, unknown>;
+  revision: string;
+  actions?: Record<
+    string,
+    {
+      label: string;
+      run: (args: Record<string, unknown>) => unknown | Promise<unknown>;
+    }
+  >;
+  status?: "live" | "paused" | "disconnected" | "loading" | "opaque";
+  updatedAt?: number;
+}
+export interface SurfaceGrant {
+  id: string;
+  windowId: string;
+  contextId: string;
+  itemIds: string[];
+  actions: string[];
+  expiresAt: number;
+  readState: boolean;
+}
+class SurfaceRegistry {
+  private adapters = new Map<string, SurfaceAdapter>();
+  private grants = new Map<string, SurfaceGrant>();
+  private listeners = new Set<() => void>();
+  private version = 0;
+  subscribe = (fn: () => void) => {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  };
+  getSnapshot = () => this.version;
+  private emit() {
+    this.version++;
+    for (const fn of this.listeners) fn();
+  }
+  register(id: string, adapter: SurfaceAdapter) {
+    this.adapters.set(id, adapter);
+    this.emit();
+    return () => {
+      if (this.adapters.get(id) === adapter) {
+        this.adapters.delete(id);
+        this.emit();
+      }
+    };
+  }
+  peek(id: string) {
+    return this.adapters.get(id);
+  }
+  list() {
+    return wmStore.getSnapshot().windows.map((w) => {
+      const a = this.adapters.get(w.id);
+      return {
+        windowId: w.id,
+        sessionId: w.sessionId,
+        contextId: w.contextId,
+        title: a?.title ?? w.title,
+        document: a?.document,
+        revision: a?.revision ?? null,
+        status: a?.status ?? "opaque",
+        actions: Object.entries(a?.actions ?? {}).map(([name, x]) => ({
+          name,
+          label: x.label,
+        })),
+      };
+    });
+  }
+  grant(input: Omit<SurfaceGrant, "id" | "expiresAt">) {
+    const win = wmStore
+      .getSnapshot()
+      .windows.find((w) => w.id === input.windowId);
+    if (!win || win.contextId !== input.contextId)
+      throw new Error("La session a changé.");
+    const g = {
+      ...input,
+      id: crypto.randomUUID(),
+      expiresAt: Date.now() + 15 * 60_000,
+    };
+    this.grants.set(g.id, g);
+    contextStore.record(
+      "Accès agent accordé",
+      win.id,
+      input.actions.join(", ") || "Lecture choisie",
+    );
+    this.emit();
+    return g;
+  }
+  revoke(id: string) {
+    this.grants.delete(id);
+    this.emit();
+  }
+  activeGrants() {
+    return [...this.grants.values()].filter((g) => g.expiresAt > Date.now());
+  }
+  private requireGrant(windowId: string, id: string) {
+    const g = this.grants.get(id);
+    const w = wmStore.getSnapshot().windows.find((w) => w.id === windowId);
+    if (
+      !g ||
+      g.expiresAt < Date.now() ||
+      g.windowId !== windowId ||
+      g.contextId !== w?.contextId
+    )
+      throw new Error("Accès absent, expiré ou révoqué.");
+    return g;
+  }
+  read(windowId: string, grantId: string) {
+    const g = this.requireGrant(windowId, grantId),
+      a = this.adapters.get(windowId);
+    return {
+      windowId,
+      revision: a?.revision ?? null,
+      state: g.readState ? a?.state : undefined,
+      items: contextStore
+        .getSnapshot()
+        .entries.filter(
+          (e) => e.contextId === g.contextId && g.itemIds.includes(e.id),
+        )
+        .map(({ blob, ...e }) => ({ ...e, hasFile: !!blob })),
+    };
+  }
+  private pending = new Map<string, Promise<unknown>>();
+  async act(input: {
+    windowId: string;
+    grantId: string;
+    action: string;
+    expectedRevision: string;
+    requestId: string;
+    args: Record<string, unknown>;
+  }) {
+    const g = this.requireGrant(input.windowId, input.grantId);
+    if (!g.actions.includes(input.action))
+      throw new Error("Action hors du périmètre accordé.");
+    const key = g.id + ":" + input.requestId;
+    const existing = this.pending.get(key);
+    if (existing) return existing;
+    const a = this.adapters.get(input.windowId);
+    if (!a || a.revision !== input.expectedRevision)
+      throw new Error("REVISION_CONFLICT : relisez la session avant d’agir.");
+    const action = a.actions?.[input.action];
+    if (!action) throw new Error("Action indisponible.");
+    const promise = Promise.resolve()
+      .then(() => {
+        this.requireGrant(input.windowId, input.grantId);
+        if (
+          this.adapters.get(input.windowId)?.revision !== input.expectedRevision
+        )
+          throw new Error("REVISION_CONFLICT");
+        return action.run(input.args);
+      })
+      .then((result) => {
+        contextStore.record(
+          "Action agent terminée",
+          input.windowId,
+          action.label,
+        );
+        return {
+          status: "completed",
+          result,
+          revision: this.adapters.get(input.windowId)?.revision,
+        };
+      })
+      .catch((error) => {
+        contextStore.record(
+          "Action agent refusée ou échouée",
+          input.windowId,
+          String(error),
+        );
+        throw error;
+      });
+    this.pending.set(key, promise);
+    if (this.pending.size > 200)
+      this.pending.delete(this.pending.keys().next().value!);
+    return promise;
+  }
+}
+export const surfaceRegistry = new SurfaceRegistry();
+export const useSurfaces = () =>
+  useSyncExternalStore(surfaceRegistry.subscribe, surfaceRegistry.getSnapshot);
+export function useAppSurface(adapter: SurfaceAdapter, enabled = true) {
+  const win = useContext(WindowSessionContext);
+  const contextsReady = useSyncExternalStore(
+    contextStore.subscribe,
+    () => contextStore.getSnapshot().ready,
+  );
+  const latest = useRef(adapter);
+  latest.current = adapter;
+  useEffect(() => {
+    if (!win || !enabled) return;
+    const stable: SurfaceAdapter = {
+      ...adapter,
+      get state() {
+        return latest.current.state;
+      },
+      actions: adapter.actions
+        ? Object.fromEntries(
+            Object.entries(adapter.actions).map(([name, a]) => [
+              name,
+              {
+                label: a.label,
+                run: (args: Record<string, unknown>) =>
+                  latest.current.actions?.[name]?.run(args),
+              },
+            ]),
+          )
+        : undefined,
+    };
+    return surfaceRegistry.register(win.id, stable);
+  }, [win?.id, adapter.revision, adapter.document, adapter.status, enabled]);
+  useEffect(() => {
+    if (!win || !enabled || !adapter.document) return;
+    const ownKey = `${win.appId}:${adapter.document}:${win.sessionId ?? win.id}`;
+    const attached = new Set(
+      wmStore
+        .getSnapshot()
+        .windows.filter((w) => w.id !== win.id)
+        .map((w) => w.contextId),
+    );
+    const matching = contextStore
+      .getSnapshot()
+      .entries.filter(
+        (e) =>
+          e.source.appId === win.appId &&
+          e.source.document === adapter.document &&
+          !attached.has(e.contextId),
+      );
+    const key =
+      matching.find((e) => e.contextId === win.contextId)?.contextId ??
+      matching.sort((a, b) => b.createdAt - a.createdAt)[0]?.contextId ??
+      ownKey;
+    if (win.contextId !== key)
+      wmStore.bindWindowContext(win.id, key, adapter.title);
+  }, [
+    win?.id,
+    win?.sessionId,
+    win?.contextId,
+    adapter.document,
+    adapter.title,
+    contextsReady,
+    enabled,
+  ]);
+}
+
+export function useSurfaceRevision(...values: unknown[]): string {
+  const ref = useRef<{ values: unknown[]; revision: number }>({
+    values: [],
+    revision: 0,
+  });
+  if (
+    values.some((v, i) => v !== ref.current.values[i]) ||
+    values.length !== ref.current.values.length
+  )
+    ref.current = { values, revision: ref.current.revision + 1 };
+  return String(ref.current.revision);
+}
