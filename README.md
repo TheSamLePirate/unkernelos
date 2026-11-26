@@ -49,6 +49,8 @@ Dans **Studio de preuves → Récit → Vocabulaire du récit**, ajoutez ou modi
 
 L’exemple **L’être nécessaire · la contingence** contient l’argument principal, six lemmes, les définitions modales et leurs récits. Les hypothèses de raison suffisante et d’extériorité sont explicites : voir [la présentation de la formalisation](docs/necessary-being.md).
 
+**Contingence · critique et contre-modèles** ajoute dix théorèmes et leurs récits : deux mondes habités sans être nécessaire montrent pourquoi la contingence seule ne suffit pas. Deux scénarios isolent le rôle de la raison suffisante et de l'extériorité, en conservant la validité conditionnelle de l'argument complet.
+
 Sonora est le lecteur MP3 intégré avec dock play/pause et commandes agent. Voir [le lecteur](docs/sonora.md) et [le SDK d’applications Bun/Node/Rust](docs/app-sdk.md). Les applications compatibles partagent leur contexte et leurs actions par défaut.
 
 ## Companion macOS Rust : Wisp local, MCP et CLI

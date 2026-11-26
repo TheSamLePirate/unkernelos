@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { CONTINGENCY_EXAMPLE } from "../src/core/poule-contingency.ts";
-import { globalFacts, parseFormula, POULE_EXAMPLES, type Fm } from "../src/core/poule.ts";
+import { globalFacts, parseFormula, POULE_EXAMPLES } from "../src/core/poule.ts";
 import { parseGlossary } from "../src/core/poule-story.ts";
+import { finiteModel } from "./helpers/poule-model.ts";
 
 const facts = globalFacts(CONTINGENCY_EXAMPLE.source);
 const axioms = facts.filter((f) => f.kind === "axiom");
@@ -20,31 +21,11 @@ function interpretation({ necessary, reason, contingent = true }: { necessary: b
     membre_totalite: isContingent,
     raison_totale: (being) => reason === being,
   };
-  const evaluate = (fm: Fm, env: Record<string, string> = {}): boolean => {
-    switch (fm.k) {
-      case "top": return true;
-      case "bottom": return false;
-      case "and": return evaluate(fm.a, env) && evaluate(fm.b, env);
-      case "or": return evaluate(fm.a, env) || evaluate(fm.b, env);
-      case "impl": return !evaluate(fm.a, env) || evaluate(fm.b, env);
-      case "forall": case "exists": {
-        const domain = fm.ty === "Etre" ? beings : worlds;
-        const values = domain.map((value) => evaluate(fm.body, { ...env, [fm.x]: value }));
-        return fm.k === "forall" ? values.every(Boolean) : values.some(Boolean);
-      }
-      case "pred": {
-        const pred = predicates[fm.name];
-        if (!pred) throw new Error("Unknown predicate " + fm.name);
-        const args = fm.args.split(",").filter(Boolean).map((arg) => {
-          const key = arg.trim();
-          return env[key] ?? (key === "Reel" ? "actual" : key);
-        });
-        return pred(...args);
-      }
-      case "eq": throw new Error("Unexpected equality in this example");
-    }
-  };
-  return evaluate;
+  return finiteModel({
+    domains: { Etre: beings, Monde: worlds },
+    constants: { Reel: "actual" },
+    predicates,
+  });
 }
 
 describe("necessary being example", () => {

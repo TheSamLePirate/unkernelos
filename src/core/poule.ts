@@ -1,4 +1,5 @@
 import { CONTINGENCY_EXAMPLE } from "./poule-contingency.ts";
+import { CONTINGENCY_CRITIQUE_EXAMPLE } from "./poule-contingency-critique.ts";
 
 /**
  * Poule — the proof language shipped with microML (coucou747/microML, poulelib/).
@@ -1191,6 +1192,7 @@ theorem brouwer : forall (w : M). a(w) -> forall (v : M). acc(w, v) -> exists (u
 `,
   },
   CONTINGENCY_EXAMPLE,
+  CONTINGENCY_CRITIQUE_EXAMPLE,
   {
     id: "ontological",
     level: "expert",

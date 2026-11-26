@@ -23,6 +23,26 @@ Les prédicats `necessaire`, `contingent` et `membre_totalite` sont reliés à l
 
 Poule vérifie cette conséquence logique des hypothèses, dont l’acceptation philosophique reste à discuter. En particulier, P2 dépasse une explication séparée de chaque contingent et P3 ne découle pas de la seule définition d’une collection. L’unicité de cet être et ses éventuels attributs divins exigeraient des arguments supplémentaires. [Discussion des prémisses et de la portée de l’argument](https://plato.stanford.edu/entries/cosmological-argument/).
 
+## Critique et contre-modèles
+
+Le second exemple, **Preuves → Exemples → Contingence · critique et contre-modèles**, contient dix théorèmes vérifiés, leurs définitions et leurs récits modifiables. Il conserve exactement les définitions de l'argument original, puis décrit cette interprétation :
+
+| Individu | Monde actuel | Autre monde |
+| --- | --- | --- |
+| L'individu d'ici | Existe | Absent |
+| L'individu d'ailleurs | Absent | Existe |
+
+Les deux mondes sont habités, mais aucun individu n'existe dans tous les mondes. Il existe donc un contingent sans être nécessaire dans ce modèle. La critique ne dépend pas de la possibilité d'un monde vide.
+
+Deux scénarios isolent les prémisses supplémentaires :
+
+- **A — aucune raison totale attribuée.** P1, P3 et P4 restent vraies ; P2 est fausse. La contingence seule ne fournit pas la raison suffisante qu'exige P2.
+- **B — raison totale attribuée à l'individu contingent d'ici.** P1, P2 et P4 restent vraies ; P3 est fausse. Exiger une raison extérieure à la totalité ajoute une condition qui ne découle pas des définitions.
+
+Ces affectations de `raison_totale` sont des hypothèses locales de théorèmes distincts. Elles ne sont jamais ajoutées ensemble comme axiomes. Les tests sémantiques vérifient une interprétation cohérente pour chaque scénario et évaluent les formules exactes des prémisses originales.
+
+Cela établit une **non-conséquence logique** : les prémisses conservées ne suffisent pas à la conclusion. Cela ne rend pas invalide la déduction complète sous P1–P4, ne prouve pas que P2 ou P3 sont fausses dans la réalité et ne démontre pas l'inexistence réelle d'un être nécessaire. Un troisième test montre d'ailleurs qu'on peut rejeter P2 tout en admettant un être nécessaire.
+
 ## Vérification
 
-`bun test test/poule-contingency.test.ts` vérifie les définitions, un modèle cohérent et des contre-modèles quand P1, P2 ou P3 est retirée. `POULE_BIN=/chemin/vers/poule bun run test:poule-contingency` fait vérifier les sept théorèmes par le vrai compilateur Poule et produit les sept récits dans `.cache/proof-qa/necessary-being-stories.txt`.
+`bun test test/poule-contingency.test.ts test/poule-contingency-critique.test.ts` vérifie les définitions, les modèles cohérents et les prémisses conservées dans chaque contre-modèle. `POULE_BIN=/chemin/vers/poule bun run test:poule-contingency` fait vérifier les **17 théorèmes** des deux exemples par le vrai compilateur Poule et produit leurs récits dans `.cache/proof-qa/necessary-being-stories.txt` et `.cache/proof-qa/necessary-being-critique-stories.txt`.
