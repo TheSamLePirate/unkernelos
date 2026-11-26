@@ -1,4 +1,5 @@
 mod broker;
+mod browser;
 mod cli;
 mod mcp;
 mod server;
@@ -54,6 +55,7 @@ pub fn token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 pub struct App {
+    pub browser: browser::BrowserEngine,
     pub broker: broker::Shared,
     pub connection: std::sync::RwLock<Connection>,
     pub cookie: String,
@@ -128,6 +130,7 @@ fn main() -> Result<()> {
         )))
         .context("Companion already running, or local port unavailable")?;
     let app = Arc::new(App {
+        browser: browser::BrowserEngine::default(),
         broker: broker::Broker::new(),
         connection: std::sync::RwLock::new(Connection {
             url: format!("http://127.0.0.1:{port}"),

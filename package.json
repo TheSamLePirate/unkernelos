@@ -16,7 +16,8 @@
     "test:sonora-browser": "bun scripts/test-sonora-browser.mjs",
     "companion:build": "scripts/build-companion.sh",
     "companion:dev": "cargo run --manifest-path companion/Cargo.toml",
-    "test:companion": "bun scripts/test-companion.mjs"
+    "test:companion": "bun scripts/test-companion.mjs",
+    "test:browser-engine": "bun scripts/test-browser-engine.mjs"
   },
   "dependencies": {
     "@xterm/headless": "^5.5.0",

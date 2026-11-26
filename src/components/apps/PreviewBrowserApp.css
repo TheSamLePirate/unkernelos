@@ -1,0 +1,395 @@
+.os-browser {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0d1420;
+  color: #dce4ee;
+  font:
+    12px system-ui,
+    sans-serif;
+  overflow: hidden;
+}
+.os-browser button,
+.os-browser a {
+  cursor: pointer;
+}
+.os-browser button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.os-browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 10px;
+  background: #141d2a;
+  border-bottom: 1px solid #ffffff10;
+  flex-shrink: 0;
+}
+.os-browser-toolbar > button,
+.os-browser-toolbar > a,
+.os-browser-viewport button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 30px;
+  border-radius: 7px;
+  color: #aebbcf;
+  background: transparent;
+  flex-shrink: 0;
+}
+.os-browser-toolbar button:hover,
+.os-browser-toolbar > a:hover {
+  background: #ffffff0c;
+  color: #fff;
+}
+.os-browser-address {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 60px;
+  flex: 1;
+  background: #090f19;
+  border: 1px solid #ffffff19;
+  border-radius: 10px;
+  padding: 0 10px;
+  height: 34px;
+  color: #89bcba;
+}
+.os-browser-address:focus-within {
+  border-color: #80cbbd88;
+  box-shadow: 0 0 0 2px #80cbbd0e;
+}
+.os-browser-address input {
+  min-width: 0;
+  flex: 1;
+  background: none;
+  color: #e0e8f0;
+  outline: none;
+  font:
+    12px ui-monospace,
+    monospace;
+}
+.os-browser-address button {
+  padding: 4px;
+  color: #7d91a6;
+}
+.os-browser-viewport {
+  display: flex;
+  margin-left: 3px;
+}
+.os-browser-viewport .selected {
+  background: #ffffff0f;
+  color: #a2e4d5;
+}
+.os-browser-status {
+  padding: 5px 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #8798af;
+  background: #101824;
+  border-bottom: 1px solid #ffffff08;
+  min-height: 26px;
+  flex-shrink: 0;
+}
+.os-browser-dot {
+  height: 5px;
+  width: 5px;
+  background: #6b7b92;
+  border-radius: 100%;
+}
+.os-browser-dot.connected {
+  background: #8ce2bb;
+  box-shadow: 0 0 7px #8ce2bb33;
+}
+.os-browser-status-spacer {
+  flex: 1;
+}
+.os-browser-status button {
+  border: 1px solid #ffffff15;
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: #9cbbbc;
+}
+.os-browser-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  background: #080e17;
+}
+.os-browser-page {
+  height: 100%;
+  width: 100%;
+  flex-shrink: 0;
+  background: white;
+  position: relative;
+}
+.os-browser-page.viewport-tablet {
+  width: 768px;
+  max-width: 100%;
+}
+.os-browser-page.viewport-mobile {
+  width: 390px;
+  max-width: 100%;
+}
+.os-browser-page iframe {
+  border: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+}
+.os-browser-home {
+  width: min(650px, 100%);
+  margin: auto;
+  padding: 35px;
+  text-align: center;
+}
+.os-browser-home-icon {
+  border-radius: 20px;
+  background: linear-gradient(145deg, #9fe6d51e, #8ab0f50b);
+  color: #a2e1d0;
+  border: 1px solid #c5f5e41a;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 20px;
+}
+.os-browser-home > span {
+  letter-spacing: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7aa696;
+}
+.os-browser-home h1 {
+  font-size: clamp(23px, 3vw, 34px);
+  font-weight: 550;
+  letter-spacing: -1px;
+  color: #edf3f9;
+  margin: 15px 0 10px;
+}
+.os-browser-home > p {
+  color: #8292a9;
+  line-height: 1.6;
+  font-size: 12px;
+}
+.os-browser-home > form {
+  margin-top: 30px;
+  background: #182332;
+  border: 1px solid #ffffff1c;
+  border-radius: 13px;
+  padding: 9px 10px 9px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #8da8b7;
+  box-shadow: 0 10px 30px #0003;
+}
+.os-browser-home > form input {
+  flex: 1;
+  min-width: 0;
+  outline: none;
+  background: none;
+  color: #e1eaf4;
+}
+.os-browser-home > form button {
+  background: #99d8c3;
+  color: #10251f;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 9px 12px;
+  border-radius: 8px;
+}
+.os-browser-shortcuts {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin: 25px 0 34px;
+}
+.os-browser-shortcuts button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #9aa9bd;
+}
+.os-browser-shortcuts b {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border: 1px solid #ffffff12;
+  border-radius: 12px;
+  background: #162030;
+  color: #cfdee9;
+  font-size: 18px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.os-browser-shortcuts button:hover b {
+  background: #26354a;
+}
+.os-browser-home .os-browser-home-note {
+  font-size: 10px;
+  color: #5b7187;
+}
+.os-browser-error,
+.os-browser-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 11px;
+  background: #482423;
+  color: #f2c3b8;
+  flex-shrink: 0;
+}
+.os-browser-error span {
+  flex: 1;
+}
+.os-browser-error button {
+  padding: 0 5px;
+  font-size: 16px;
+}
+.os-browser-notice {
+  background: #223345;
+  color: #c3dbea;
+}
+.os-browser-notice button {
+  color: #a5e6d0;
+  text-decoration: underline;
+}
+.os-browser-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  background: #101824;
+  color: #8fa7b8;
+}
+.native-browser-view {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  background: white;
+  touch-action: none;
+  isolation: isolate;
+}
+.native-browser-view > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+.native-browser-keyboard {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  resize: none;
+}
+.native-browser-context {
+  position: absolute;
+  z-index: 5;
+  width: 185px;
+  padding: 5px;
+  background: #172231f5;
+  border: 1px solid #ffffff26;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px #0006;
+  display: flex;
+  flex-direction: column;
+}
+.native-browser-context button {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #dde8f1;
+  font: 11px system-ui;
+}
+.native-browser-context button:hover {
+  background: #ffffff10;
+}
+.native-browser-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: #0007;
+}
+.native-browser-modal > div {
+  width: 350px;
+  max-width: 90%;
+  padding: 24px;
+  border: 1px solid #ffffff24;
+  border-radius: 15px;
+  background: #14202f;
+  color: #e5edf6;
+  box-shadow: 0 20px 60px #0005;
+}
+.native-browser-modal h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.native-browser-modal p {
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow: auto;
+  line-height: 1.5;
+}
+.native-browser-modal input {
+  width: 100%;
+  background: #0a111b;
+  border: 1px solid #ffffff20;
+  border-radius: 7px;
+  padding: 8px;
+  outline: none;
+  margin-top: 15px;
+}
+.native-browser-modal footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.native-browser-modal button {
+  padding: 7px 13px;
+  border-radius: 7px;
+  background: #ffffff10;
+}
+.native-browser-modal button:last-child {
+  background: #9bd9c3;
+  color: #11251d;
+}
+@media (max-width: 620px) {
+  .os-browser-viewport {
+    display: none;
+  }
+  .os-browser-toolbar {
+    padding: 6px;
+    gap: 2px;
+  }
+  .os-browser-toolbar > button {
+    width: 24px;
+  }
+  .os-browser-shortcuts {
+    gap: 15px;
+  }
+  .os-browser-home {
+    padding: 24px;
+  }
+}

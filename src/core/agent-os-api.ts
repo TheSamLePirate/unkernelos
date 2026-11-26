@@ -1,3 +1,4 @@
+import { parseBrowserAddress } from "./browser-address.ts";
 import { SKILL_MODDING_MD, SKILL_REACTIVE_MD, SKILL_OS_CONTROL_MD } from "./builtin-agent-skills.ts";
 import { listAgentSkills, readAgentSkill } from "./agent-skills-service.ts";
 import { surfaceRegistry } from './app-surface-registry.tsx';
@@ -549,6 +550,8 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
     },
     example: { dir: "/home/user/workspace/my-ai-app", app: "terminal", command: "ls -la" },
   },
+
+  {method:"browser.open",category:"browser",summary:"Open an HTTP(S) address in the OS browser. Internet sites use the companion’s isolated Chromium engine; localhost/guest addresses use the Linux preview. Discover page context and actions with horizon.sessions and horizon.session.read/action.",paramsSchema:{type:"object",properties:{url:{type:"string"},newWindow:{type:"boolean"}},required:["url"]},example:{url:"https://www.wikipedia.org"}},
 
   // ─── PREVIEW & WEB SERVERS ───────────────────────────────────────────
   {
@@ -2130,6 +2133,11 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
     }
 
     // ─── PREVIEW ───────────────────────────────────────────────────────
+    case "browser.open": {
+      const target = parseBrowserAddress(String(p.url ?? ""));
+      const windowId=wmStore.openBrowser(target.address,Boolean(p.newWindow));
+      return {windowId,url:target.address,mode:target.kind};
+    }
     case "preview.open": {
       const port = Number(p.port);
       if (!port || port < 1 || port > 65535) throw new Error("Valid port (1..65535) is required");

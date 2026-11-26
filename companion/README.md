@@ -84,6 +84,24 @@ Tools: `companion_sessions`, `companion_schema`, `companion_call`. These expose 
 - COOP/COEP and range requests support SharedArrayBuffer, workers and distro streaming. Authentication and MCP routes bypass the PWA cache.
 - Pending calls fail when a browser disconnects. No mutations are retried. A lost reply or timeout may mean a mutation already executed; inspect state before retrying.
 
+## Integrated Internet browser
+
+The OS browser now accepts ordinary HTTP and HTTPS addresses, bare domains, and guest server addresses. Internet pages run in an installed Chrome/Chromium engine on the Mac, with their rendered view inside the OS window. This avoids iframe embedding restrictions without rewriting sites or disabling CSP, same-origin security, TLS validation or the Chromium sandbox. Chrome, Chromium, Edge or Arc must be installed; UNKERNELOS_BROWSER_BINARY can select an explicit executable.
+
+    unkernelos browser.open --params '{"url":"https://www.wikipedia.org"}'
+    unkernelos browser.open --params '{"url":"https://github.com","newWindow":true}'
+    unkernelos preview.open --params '{"port":3000,"path":"/"}'
+
+Each OS browser window owns its Chromium page and its shared app context. Back/forward, reload/stop, responsive viewports, keyboard/IME, pointer selection, touch scrolling, copy/paste and JavaScript dialogs use the real page. Agents discover navigate, snapshot, click, fill, scroll, key and dialog actions through horizon.sessions. Page snapshots expose visible text and control selectors/rectangles, omitting input values. A private app session keeps its existing sharing rules.
+
+The dedicated browser profile lives in the companion support directory under browser-profile. It shares cookies between OS web windows, separately from your personal browser profile. Internet traffic uses the Mac's network directly. Wisp's pause switch controls guest networking. Closing a web window closes its page; quitting the companion stops its browser process.
+
+**Local addresses:** localhost, guest, 127.0.0.1, IPv6 loopback and :PORT point to HTTP servers inside Linux. Use an explicit http://host.localhost:PORT address for a server on the Mac. Guest HTTPS is not supported by the existing guest preview relay; it reports that limitation rather than silently downgrading to HTTP.
+
+This mode requires the local companion. The static hosted OS still supports guest previews and shows a clear message when native Internet browsing is unavailable. There is no guarantee that every site or every browser feature works: anti-bot challenges, DRM, hardware authentication and system permission/file dialogs can require the host browser. Popups are surfaced as links to open; workflows requiring a persistent window.opener relationship are not fully relayed. The toolbar offers an explicit host-browser link for these cases.
+
+Native engine checks: scripts/test-browser-engine.mjs covers protected-frame pages, JavaScript forms/trusted clicks, cookies, history, redirects, WebSockets, dialogs and HTTPS navigation to Wikipedia, GitHub and MDN. It uses a separate companion test instance and a local fixture on port 17893.
+
 ## Storage and migration
 
 The local address is a **new browser origin**. It does not inherit your public site's IndexedDB, cookies, settings or session context. Each browser profile has its own VM data.
@@ -104,3 +122,5 @@ bun test test
 See `scripts/test-companion.mjs` for real-browser, Wisp and external-agent integration checks. No native login auto-start or system-wide installation is performed.
 
 Sources consulted: Rune's pinned source/README (AppSpec, tray, app lifetime and tooling), wisp-mux 5.1.0 source and Wisp protocol, rmcp 3.11.0 source/tests, Axum 0.8.9 WebSocket and tower-http static-serving documentation. See THIRD_PARTY.md for licenses and relinking instructions.
+
+Browser protocol references: https://developer.chrome.com/docs/automation-and-testing/headless , https://chromedevtools.github.io/devtools-protocol/tot/Page/ , https://chromedevtools.github.io/devtools-protocol/tot/Input/ . Embedding restrictions: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors .

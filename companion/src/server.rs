@@ -62,7 +62,7 @@ async fn guard(State(app): State<Arc<App>>, req: Request, next: Next) -> Respons
         req.headers()
             .get("sec-fetch-site")
             .is_some_and(|v| v == "same-origin")
-    } else if path == "/wisp" || path == "/__companion/connect" {
+    } else if path == "/wisp" || path == "/__companion/connect" || path == "/__companion/browser" {
         exact_origin(req.headers(), &app) && cookie(req.headers(), &app)
     } else if path.starts_with("/__companion/") || path == "/mcp" || path.starts_with("/mcp/") {
         bearer(req.headers(), &app)
@@ -179,6 +179,11 @@ async fn wisp(State(app): State<Arc<App>>, ws: WebSocketUpgrade) -> Response {
         .on_upgrade(move |socket| crate::wisp::serve(socket, app.broker.clone()))
         .into_response()
 }
+async fn browser(State(app): State<Arc<App>>, ws: WebSocketUpgrade) -> Response {
+    ws.max_message_size(1024 * 1024)
+        .on_upgrade(move |socket| crate::browser::serve(socket, app))
+        .into_response()
+}
 async fn connect(State(app): State<Arc<App>>, ws: WebSocketUpgrade) -> Response {
     if app
         .broker
@@ -223,10 +228,12 @@ pub async fn run(listener: tokio::net::TcpListener, app: Arc<App>) -> anyhow::Re
         Default::default(),
         StreamableHttpServerConfig::default().with_json_response(true),
     );
+    let shutdown_app = app.clone();
     let router = Router::new()
         .route("/", get(index))
         .route("/__companion/bootstrap", get(bootstrap))
         .route("/__companion/connect", get(connect))
+        .route("/__companion/browser", get(browser))
         .route("/wisp", get(wisp))
         .route("/__companion/status", post(status))
         .route("/__companion/sessions", post(sessions))
@@ -237,7 +244,13 @@ pub async fn run(listener: tokio::net::TcpListener, app: Arc<App>) -> anyhow::Re
         .fallback_service(ServeDir::new(&app.web))
         .layer(middleware::from_fn_with_state(app.clone(), guard))
         .with_state(app);
-    axum::serve(listener, router).await?;
+    axum::serve(listener, router)
+        .with_graceful_shutdown(async move {
+            let _ = tokio::signal::ctrl_c().await;
+            shutdown_app.browser.shutdown_now();
+            shutdown_app.broker.revoke();
+        })
+        .await?;
     Ok(())
 }
 #[cfg(test)]
@@ -246,6 +259,7 @@ mod tests {
     #[test]
     fn credentials_are_separate_and_exact() {
         let app = App {
+            browser: crate::browser::BrowserEngine::default(),
             broker: crate::broker::Broker::new(),
             connection: std::sync::RwLock::new(crate::Connection {
                 url: "http://127.0.0.1:17891".into(),

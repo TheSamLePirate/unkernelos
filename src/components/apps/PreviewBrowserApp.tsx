@@ -1,227 +1,591 @@
 import {
+  WindowSessionContext,
   useAppSurface,
   useSurfaceRevision,
 } from "../../core/app-surface-registry.tsx";
 import { Effect } from "effect";
 import {
+  ArrowLeft,
+  ArrowRight,
   ExternalLink,
   Globe,
+  Home,
+  LoaderCircle,
   Monitor,
   RefreshCw,
+  Search,
   Smartphone,
   Tablet,
-  Wifi,
+  X,
+  Plus,
 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import {
   appRuntime,
   useSubscriptionRef,
   VmService,
 } from "../../core/runtime.ts";
-import { useWm } from "../../wm/wm-store.ts";
-
-type ViewportMode = "desktop" | "tablet" | "mobile";
-
+import { useWm, wmStore } from "../../wm/wm-store.ts";
+import { parseBrowserAddress } from "../../core/browser-address.ts";
+import {
+  NativeBrowserClient,
+  type NativePageState,
+} from "../../core/native-browser.ts";
+import { getCompanionConfig } from "../../core/companion-config.ts";
+import { NativeBrowserView } from "./NativeBrowserView.tsx";
+import "./PreviewBrowserApp.css";
+type Mode = "home" | "web" | "guest";
+type Viewport = "desktop" | "tablet" | "mobile";
 export const PreviewBrowserApp: React.FC = () => {
   const wm = useWm();
-  const vmState = useSubscriptionRef(
+  const session = useContext(WindowSessionContext);
+  const requestedAddress =
+    typeof session?.props?.browserAddress === "string"
+      ? session.props.browserAddress
+      : "unkernel:newtab";
+  const vm = useSubscriptionRef(
     Effect.map(VmService, (v) => v.stateRef),
-    {
-      phase: "idle" as const,
-      bootStage: "",
-      bootProgress: 0,
-      error: null,
-      support: null,
-      crossOriginIsolated: false,
-      webgpuAvailable: false,
-      distro: "debian",
-      cpus: 1,
-      memoryMiB: 2048,
-      transport: "inline",
-      stats: null,
-      glStatus: null,
-      displayMode: null,
-      inputState: { keyboard: false, mouse: false, tablet: false },
-      detectedPorts: [],
-      kernelLogs: [],
-      hasSnapshot: false,
-      audioMuted: false,
-      wispActiveUrl: "",
-    },
+    { detectedPorts: [] } as unknown as Awaited<ReturnType<typeof getVmState>>,
   );
-
-  const [port, setPort] = useState(wm.previewPort || 3000);
-  const [path, setPath] = useState(wm.previewPath || "/");
-  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [viewport, setViewport] = useState<ViewportMode>("desktop");
-  const [err, setErr] = useState<string | null>(null);
-  const revision = useSurfaceRevision(iframeSrc, reloadKey, err);
+  const [address, setAddress] = useState(requestedAddress),
+    [mode, setMode] = useState<Mode>("home"),
+    [iframe, setIframe] = useState("");
+  const [guestRevision, setGuestRevision] = useState(0);
+  const [page, setPage] = useState<NativePageState>({
+    url: "",
+    title: "Nouvel onglet",
+    canBack: false,
+    canForward: false,
+  });
+  const [client, setClient] = useState<NativeBrowserClient | null>(null),
+    [loading, setLoading] = useState(false),
+    [error, setError] = useState(""),
+    [viewport, setViewport] = useState<Viewport>("desktop");
+  const [snapshot, setSnapshot] = useState<unknown>(null),
+    [dialog, setDialog] = useState<Record<string, unknown> | null>(null),
+    [popup, setPopup] = useState("");
+  const clientRef = useRef<NativeBrowserClient | null>(null),
+    inputRef = useRef<HTMLInputElement>(null),
+    urlFocused = useRef(false),
+    navigation = useRef(0),
+    alive = useRef(true);
+  const snapshotJson = useRef("");
+  const loadSnapshot = async (c = clientRef.current) => {
+    if (c) {
+      try {
+        const s = await c.call("snapshot");
+        if (alive.current && snapshotJson.current !== JSON.stringify(s)) {
+          snapshotJson.current = JSON.stringify(s);
+          setSnapshot(s);
+        }
+      } catch {
+        /* Page may be navigating. */
+      }
+    }
+  };
+  const engine = () => {
+    if (clientRef.current) return clientRef.current;
+    const c = new NativeBrowserClient((event) => {
+      if (!alive.current) return;
+      if (event.type === "state") {
+        const state = event.state as NativePageState;
+        setPage(state);
+        if (!urlFocused.current && state.url && state.url !== "about:blank")
+          setAddress(state.url);
+      } else if (event.type === "loading") {
+        setLoading(Boolean(event.loading));
+        if (!event.loading) void loadSnapshot(c);
+      } else if (event.type === "dialog")
+        setDialog(event.dialog as Record<string, unknown>);
+      else if (event.type === "popup") setPopup(String(event.url));
+      else if (event.type === "error") {
+        setError(String(event.error));
+        setLoading(false);
+      }
+    });
+    clientRef.current = c;
+    setClient(c);
+    return c;
+  };
+  const navigate = async (raw: string) => {
+    const turn = ++navigation.current;
+    setError("");
+    setPopup("");
+    snapshotJson.current = "";
+    setSnapshot(null);
+    try {
+      const target = parseBrowserAddress(raw);
+      setAddress(target.address);
+      if (target.kind === "home") {
+        setMode("home");
+        setLoading(false);
+        clientRef.current?.close();
+        clientRef.current = null;
+        setClient(null);
+        setPage({
+          url: "",
+          title: "Nouvel onglet",
+          canBack: false,
+          canForward: false,
+        });
+        return { url: target.address };
+      }
+      if (target.kind === "guest") {
+        setMode("guest");
+        setLoading(true);
+        clientRef.current?.close();
+        clientRef.current = null;
+        setClient(null);
+        const url = await appRuntime.runPromise(
+          Effect.gen(function* () {
+            const v = yield* VmService;
+            yield* Effect.promise(() => v.previewRelay.ready());
+            return v.previewRelay.previewUrl(target.port, target.path);
+          }),
+        );
+        if (turn === navigation.current) {
+          setIframe(url);
+          setGuestRevision((v) => v + 1);
+          setLoading(false);
+          setPage({
+            url: target.address,
+            title: "Linux · localhost:" + target.port,
+            canBack: false,
+            canForward: false,
+          });
+        }
+        return { url: target.address };
+      }
+      setMode("web");
+      setLoading(true);
+      const c = engine();
+      await c.call("navigate", { url: target.url });
+      return { url: target.url };
+    } catch (e) {
+      setLoading(false);
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
+      throw e;
+    }
+  };
+  const run = (action: string, args: Record<string, unknown> = {}) => {
+    if (!clientRef.current || mode !== "web")
+      throw new Error("Ouvrez une page Internet avant cette action.");
+    return clientRef.current.call(action, args);
+  };
+  const revision = useSurfaceRevision(
+    mode,
+    page.url,
+    page.title,
+    loading,
+    error,
+    snapshot,
+    dialog,
+    guestRevision,
+  );
   useAppSurface({
-    document: iframeSrc ?? undefined,
+    document: mode === "guest" ? iframe : page.url,
+    title: page.title || "Navigateur",
     revision,
-    status: err ? "disconnected" : "opaque",
-    state: { url: iframeSrc, error: err, contentAccess: "opaque" },
+    status: error
+      ? "disconnected"
+      : loading
+        ? "loading"
+        : mode === "guest"
+          ? "opaque"
+          : "live",
+    state: {
+      mode,
+      url: mode === "home" ? "unkernel:newtab" : page.url,
+      title: page.title,
+      loading,
+      error: error || null,
+      engine:
+        mode === "web"
+          ? "Chromium companion"
+          : mode === "guest"
+            ? "guest preview"
+            : null,
+      canBack: page.canBack,
+      canForward: page.canForward,
+      page: snapshot,
+      dialog,
+      contentAccess: mode === "guest" ? "opaque" : "structured",
+    },
     actions: {
-      reload: {
-        label: "Recharger cette prévisualisation",
-        run: () => {
-          setReloadKey((k) => k + 1);
-          return { url: iframeSrc };
+      navigate: {
+        label:
+          "Ouvrir une adresse HTTP(S), un serveur Linux ou un nouvel onglet",
+        paramsSchema: {
+          type: "object",
+          properties: { url: { type: "string" } },
+          required: ["url"],
         },
+        run: (a) => navigate(String(a.url ?? "")),
+      },
+      reload: {
+        label: "Recharger la page",
+        run: () => (mode === "guest" ? navigate(address) : run("reload")),
+      },
+      back: { label: "Page précédente", run: () => run("back") },
+      forward: { label: "Page suivante", run: () => run("forward") },
+      stop: { label: "Arrêter le chargement", run: () => run("stop") },
+      snapshot: {
+        label:
+          "Lire le texte et les contrôles visibles de la page (sans valeurs des champs)",
+        run: async () => {
+          const value = await run("snapshot");
+          setSnapshot(value);
+          return value;
+        },
+      },
+      click: {
+        label: "Cliquer un contrôle de la page par sélecteur CSS",
+        paramsSchema: {
+          type: "object",
+          properties: { selector: { type: "string" } },
+          required: ["selector"],
+        },
+        run: (a) => run("click", a),
+      },
+      fill: {
+        label: "Saisir du texte dans un champ de la page",
+        paramsSchema: {
+          type: "object",
+          properties: {
+            selector: { type: "string" },
+            value: { type: "string" },
+          },
+          required: ["selector", "value"],
+        },
+        run: (a) => run("fill", a),
+      },
+      scroll: {
+        label: "Faire défiler la page",
+        paramsSchema: {
+          type: "object",
+          properties: {
+            deltaX: { type: "number" },
+            deltaY: { type: "number" },
+          },
+        },
+        run: (a) =>
+          run("pointer", {
+            kind: "mouseWheel",
+            x: 200,
+            y: 200,
+            deltaX: Number(a.deltaX) || 0,
+            deltaY: Number(a.deltaY) || 0,
+          }),
+      },
+      dialog: {
+        label: "Répondre à une boîte de dialogue de la page",
+        paramsSchema: {
+          type: "object",
+          properties: { accept: { type: "boolean" }, text: { type: "string" } },
+          required: ["accept"],
+        },
+        run: async (a) => {
+          const result = await run("dialog", a);
+          setDialog(null);
+          return result;
+        },
+      },
+      key: {
+        label: "Envoyer une touche au navigateur",
+        run: (a) => run("key", { kind: "keyDown", ...a }),
       },
     },
   });
-
-  const navigate = async (targetPort = port, targetPath = path) => {
-    setErr(null);
-    setPort(targetPort);
-    setPath(targetPath);
-    try {
-      const url = await appRuntime.runPromise(
-        Effect.gen(function* () {
-          const vm = yield* VmService;
-          yield* Effect.promise(() => vm.previewRelay.ready());
-          return vm.previewRelay.previewUrl(targetPort, targetPath);
-        }),
-      );
-      setIframeSrc(url);
-      setReloadKey((k) => k + 1);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    }
-  };
-
   useEffect(() => {
-    void navigate(wm.previewPort, wm.previewPath);
-  }, [wm.previewPort, wm.previewPath]);
-
-  const widthClass =
-    viewport === "mobile"
-      ? "w-[390px] max-w-full rounded-2xl shadow-2xl border border-white/15"
-      : viewport === "tablet"
-        ? "w-[768px] max-w-full rounded-xl shadow-2xl border border-white/15"
-        : "w-full";
-
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      navigation.current++;
+      clientRef.current?.close();
+      clientRef.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    void navigate(requestedAddress).catch(() => {});
+  }, [requestedAddress, session?.props?.navigationId]);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (wmStore.getSnapshot().activeWindowId !== session?.id) return;
+      const letter = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && ["l", "r"].includes(letter)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (letter === "l") {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        } else if (mode === "guest") void navigate(address).catch(() => {});
+        else if (mode === "web") buttonRun("reload");
+      } else if (e.altKey && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (
+          mode === "web" &&
+          (e.key === "ArrowLeft" ? page.canBack : page.canForward)
+        )
+          buttonRun(e.key === "ArrowLeft" ? "back" : "forward");
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [session?.id, mode, address, error, page.canBack, page.canForward]);
+  const buttonRun = (action: string) => {
+    if (error && action === "reload") {
+      clientRef.current?.close();
+      clientRef.current = null;
+      setClient(null);
+      void navigate(address).catch(() => {});
+      return;
+    }
+    void run(action).catch((e) => setError(e.message));
+  };
   return (
-    <div className="flex flex-col w-full h-full bg-[#090b12]">
-      {/* Browser Address Bar */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-black/45 border-b border-white/10 shrink-0">
+    <div className="os-browser" data-os-browser>
+      <form
+        className="os-browser-toolbar"
+        onSubmit={(e) => {
+          e.preventDefault();
+          inputRef.current?.blur();
+          void navigate(address).catch(() => {});
+        }}
+      >
         <button
           type="button"
-          onClick={() => navigate(port, path)}
-          className="p-1.5 rounded-lg bg-white/6 hover:bg-white/12 text-zinc-300 transition"
-          title="Reload"
+          title="Page précédente"
+          aria-label="Page précédente"
+          disabled={!page.canBack || mode !== "web"}
+          onClick={() => buttonRun("back")}
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <ArrowLeft size={16} />
         </button>
-
-        <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-black/55 border border-white/12 focus-within:border-emerald-400/50">
-          <Wifi className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span className="text-xs font-mono text-zinc-500">http://guest:</span>
+        <button
+          type="button"
+          title="Page suivante"
+          aria-label="Page suivante"
+          disabled={!page.canForward || mode !== "web"}
+          onClick={() => buttonRun("forward")}
+        >
+          <ArrowRight size={16} />
+        </button>
+        <button
+          type="button"
+          title={loading ? "Arrêter" : "Recharger"}
+          aria-label={loading ? "Arrêter" : "Recharger"}
+          onClick={() =>
+            mode === "guest"
+              ? void navigate(address).catch(() => {})
+              : mode === "home"
+                ? undefined
+                : buttonRun(loading ? "stop" : "reload")
+          }
+        >
+          {loading ? <X size={15} /> : <RefreshCw size={15} />}
+        </button>
+        <button
+          type="button"
+          title="Accueil"
+          aria-label="Accueil"
+          onClick={() => void navigate("unkernel:newtab")}
+        >
+          <Home size={15} />
+        </button>
+        <button
+          type="button"
+          aria-label="Nouvelle fenêtre web"
+          title="Nouvelle fenêtre web"
+          onClick={() => wmStore.openBrowser("unkernel:newtab", true)}
+        >
+          <Plus size={15} />
+        </button>
+        <label className="os-browser-address">
+          {loading ? (
+            <LoaderCircle size={15} className="animate-spin" />
+          ) : (
+            <Globe size={15} />
+          )}
           <input
-            type="number"
-            value={port}
-            onChange={(e) => setPort(Number(e.target.value) || 80)}
-            onKeyDown={(e) => e.key === "Enter" && navigate(port, path)}
-            className="w-14 bg-transparent text-xs font-mono text-emerald-300 outline-none"
+            ref={inputRef}
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            onFocus={(e) => {
+              urlFocused.current = true;
+              e.target.select();
+            }}
+            onBlur={() => (urlFocused.current = false)}
+            aria-label="Adresse web"
+            placeholder="Adresse web ou localhost:3000"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
           />
-          <input
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && navigate(port, path)}
-            className="flex-1 bg-transparent text-xs font-mono text-zinc-200 outline-none"
-            placeholder="/"
-          />
-        </div>
-
-        {/* Viewport Toggle */}
-        <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
+          <button type="submit" aria-label="Ouvrir l’adresse">
+            ↵
+          </button>
+        </label>
+        <div className="os-browser-viewport">
           {(
             [
               ["desktop", Monitor],
               ["tablet", Tablet],
               ["mobile", Smartphone],
             ] as const
-          ).map(([mode, Icon]) => (
+          ).map(([v, Icon]) => (
             <button
-              key={mode}
               type="button"
-              onClick={() => setViewport(mode)}
-              className={`p-1.5 rounded-md transition ${
-                viewport === mode
-                  ? "bg-white/15 text-white"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-              title={mode}
+              key={v}
+              title={v}
+              aria-label={"Vue " + v}
+              className={viewport === v ? "selected" : ""}
+              onClick={() => setViewport(v)}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon size={14} />
             </button>
           ))}
         </div>
-
-        {iframeSrc && (
+        {mode !== "home" && (
           <a
-            href={iframeSrc}
+            href={mode === "guest" ? iframe : page.url || address}
             target="_blank"
             rel="noreferrer"
-            className="p-1.5 rounded-lg bg-white/6 hover:bg-white/12 text-zinc-300 transition"
-            title="Open in new browser tab"
+            title="Ouvrir dans le navigateur du Mac"
+            aria-label="Ouvrir dans le navigateur du Mac"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink size={15} />
           </a>
         )}
-      </div>
-
-      {/* Detected Listening Ports Ribbon */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.02] border-b border-white/6 text-[11px] overflow-x-auto shrink-0">
-        <span className="text-zinc-500 shrink-0">Listening guest ports:</span>
-        {vmState.detectedPorts.length === 0 ? (
-          <span className="text-zinc-500 italic">
-            None detected yet — start a web server in Linux
-          </span>
-        ) : (
-          vmState.detectedPorts.map((p) => (
-            <button
-              key={p.port}
-              type="button"
-              onClick={() => navigate(p.port, "/")}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-mono border transition ${
-                port === p.port
-                  ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-300"
-                  : "bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              localhost:{p.port}
-            </button>
-          ))
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-h-0 flex justify-center bg-[#06070c] p-0 overflow-auto">
-        {err ? (
-          <div className="m-auto p-6 max-w-md text-center space-y-2">
-            <Globe className="w-8 h-8 text-rose-400 mx-auto" />
-            <p className="text-sm font-medium text-rose-300">
-              Preview Unavailable
-            </p>
-            <p className="text-xs text-zinc-400">{err}</p>
-          </div>
-        ) : iframeSrc ? (
-          <div
-            className={`${widthClass} h-full overflow-hidden ${viewport !== "desktop" ? "my-3" : ""}`}
+      </form>
+      <div className="os-browser-status">
+        <span
+          className={
+            "os-browser-dot " +
+            (mode === "web" && client && !error ? "connected" : "")
+          }
+        />
+        <span>
+          {mode === "web"
+            ? "Chromium · profil unkernelOS"
+            : mode === "guest"
+              ? "Aperçu du serveur Linux"
+              : "Navigateur unkernelOS"}
+        </span>
+        <span className="os-browser-status-spacer" />
+        {vm.detectedPorts.map((p) => (
+          <button
+            key={p.port}
+            onClick={() =>
+              void navigate("http://guest:" + p.port + "/").catch(() => {})
+            }
           >
-            <iframe
-              key={reloadKey}
-              src={iframeSrc}
-              title={`Guest Server Port ${port}`}
-              className="w-full h-full bg-white border-0"
-            />
+            Linux :{p.port}
+          </button>
+        ))}
+      </div>
+      {popup && (
+        <div className="os-browser-notice">
+          La page souhaite ouvrir un autre onglet.{" "}
+          <button onClick={() => void navigate(popup).catch(() => {})}>
+            Ouvrir ici
+          </button>
+          <button onClick={() => setPopup("")} aria-label="Ignorer">
+            ×
+          </button>
+        </div>
+      )}
+      {error && (
+        <div className="os-browser-error" role="alert">
+          <Globe size={16} />
+          <span>{error}</span>
+          <button onClick={() => setError("")} aria-label="Fermer l’erreur">
+            ×
+          </button>
+        </div>
+      )}
+      <div className="os-browser-content">
+        {mode === "home" ? (
+          <div className="os-browser-home">
+            <div className="os-browser-home-icon">
+              <Globe size={34} />
+            </div>
+            <span>UNKERNEL / WEB</span>
+            <h1>Le Web, dans votre espace.</h1>
+            <p>Sites Internet et applications Linux, à la même adresse.</p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void navigate(
+                  address === "unkernel:newtab"
+                    ? "https://www.wikipedia.org"
+                    : address,
+                ).catch(() => {});
+              }}
+            >
+              <Search size={18} />
+              <input
+                aria-label="Ouvrir un site"
+                placeholder="Saisissez une adresse : wikipedia.org"
+                onChange={(e) => setAddress(e.target.value)}
+              />
+              <button>Ouvrir ↗</button>
+            </form>
+            <div className="os-browser-shortcuts">
+              {[
+                ["W", "Wikipédia", "https://www.wikipedia.org"],
+                ["G", "GitHub", "https://github.com"],
+                ["M", "MDN", "https://developer.mozilla.org"],
+                ["⌘", "Linux :3000", "http://guest:3000/"],
+              ].map(([icon, label, url]) => (
+                <button
+                  key={url}
+                  onClick={() => void navigate(url).catch(() => {})}
+                >
+                  <b>{icon}</b>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="os-browser-home-note">
+              {getCompanionConfig()
+                ? "Moteur Chromium local · sessions séparées de votre navigateur personnel"
+                : "Ouvrez cette version depuis le companion pour naviguer sur Internet."}
+            </p>
           </div>
-        ) : null}
+        ) : (
+          <div className={"os-browser-page viewport-" + viewport}>
+            {mode === "guest" ? (
+              iframe && (
+                <iframe
+                  key={guestRevision}
+                  src={iframe}
+                  title="Application Linux"
+                  onLoad={() => setLoading(false)}
+                />
+              )
+            ) : client ? (
+              <NativeBrowserView
+                client={client}
+                onError={setError}
+                dialog={dialog}
+                onDialogClose={() => setDialog(null)}
+              />
+            ) : (
+              <div className="os-browser-placeholder">
+                <Globe size={32} />
+                <p>Connexion au moteur web…</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 };
+async function getVmState() {
+  return appRuntime.runPromise(
+    Effect.flatMap(VmService, (v) => v.stateRef.get),
+  );
+}

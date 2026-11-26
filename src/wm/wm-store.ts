@@ -368,10 +368,10 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
   },
   preview: {
     id: "preview",
-    title: "Web Preview",
-    shortTitle: "Preview",
+    title: "Navigateur Web",
+    shortTitle: "Web",
     description:
-      "Live browser preview for guest dev servers over vsock + WebSocket HMR",
+      "Sites Internet dans Chromium et aperçus des serveurs Linux",
     defaultWidth: 980,
     defaultHeight: 640,
     minWidth: 440,
@@ -1944,9 +1944,13 @@ class WindowManagerStore {
     }));
   }
 
+  public openBrowser(url: string, forceNew = false): string {
+    return this.openApp("preview", {browserAddress:url,navigationId:Math.random()},forceNew);
+  }
+
   public openPreview(port: number, path = "/"): void {
     this.setState((s) => ({ ...s, previewPort: port, previewPath: path }));
-    this.openApp("preview", { port, path });
+    this.openApp("preview", { port, path, browserAddress:"http://guest:"+port+path,navigationId:Math.random() });
   }
 
   public setWorkspaceDir(dir: string): void {

@@ -228,9 +228,9 @@ fn overview(s: &State) -> El {
                         .child(button(
                             "network",
                             if enabled {
-                                "Suspendre le réseau"
+                                "Suspendre Wisp"
                             } else {
-                                "Activer le réseau"
+                                "Activer Wisp"
                             },
                             false,
                             |s| {
@@ -384,7 +384,8 @@ pub fn run(app: Arc<App>) {
             view,
         )
     })
-    .keep_running();
+    .keep_running()
+    .on_quit(|s, _| s.app.browser.shutdown_now());
     let handle = native.handle();
     let mut pixels = vec![0u8; 24 * 24 * 4];
     for y in 4..20 {
