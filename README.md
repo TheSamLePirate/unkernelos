@@ -42,3 +42,5 @@ bun run start                   # Serves dist/ + Range /distros/*.erofs + COOP/C
 ## Horizon desktop
 
 Horizon est l’interface principale : applications centrales, ailes vivantes, tiroirs de contexte persistants et actions agent limitées à une session. Voir [le guide Horizon](docs/horizon.md) pour les gestes, la reprise, les capacités exposées et les vérifications.
+
+Sonora est le lecteur MP3 intégré avec dock play/pause et commandes agent. Voir [le lecteur](docs/sonora.md) et [le SDK d’applications Bun/Node/Rust](docs/app-sdk.md). Les applications compatibles partagent leur contexte et leurs actions par défaut.

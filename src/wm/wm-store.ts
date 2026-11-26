@@ -29,6 +29,7 @@ export type AppId =
   | "custom-app"
   | "notes"
   | "whiteboard"
+  | "music"
   | "media-studio"
   | "dev-utils"
   | "processes"
@@ -304,6 +305,18 @@ export const APP_CATALOG: Record<AppId, AppDefinition> = {
     minWidth: 580,
     minHeight: 400,
     accent: "from-pink-500 to-violet-600",
+  },
+  music: {
+    id: "music",
+    title: "Sonora — Lecteur MP3",
+    shortTitle: "Sonora",
+    description:
+      "Votre collection musicale, lecture MP3 et dock play/pause pilotables par les agents",
+    defaultWidth: 1000,
+    defaultHeight: 680,
+    minWidth: 360,
+    minHeight: 440,
+    accent: "from-lime-300 to-emerald-700",
   },
   "media-studio": {
     id: "media-studio",
@@ -1798,7 +1811,12 @@ class WindowManagerStore {
 
   public openFileInMedia(filePath: string): void {
     this.setState((s) => ({ ...s, mediaOpenFilePath: filePath }));
-    this.openApp("media-studio", { filePath });
+    this.openApp(
+      /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(filePath)
+        ? "music"
+        : "media-studio",
+      { filePath },
+    );
   }
 
   public clearMediaOpenFile(): void {

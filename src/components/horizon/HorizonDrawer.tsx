@@ -486,8 +486,24 @@ export function HorizonWindowDrawer({
         <section className="horizon-agent-scope">
           <div className="horizon-row">
             <ShieldCheck size={17} />
-            <h3>Partager avec un agent</h3>
+            <h3>Accès des agents</h3>
           </div>
+          <label className="horizon-check">
+            <input
+              type="checkbox"
+              checked={surfaceRegistry.isShared(win.id)}
+              onChange={(e) =>
+                surfaceRegistry.setSharing(win.id, e.target.checked)
+              }
+            />
+            Partager le contexte et toutes les commandes de cette session (par
+            défaut)
+          </label>
+          <p>
+            {surfaceRegistry.isShared(win.id)
+              ? "Les agents du système peuvent lire ce tiroir et piloter cette application."
+              : "Session privée : seul un accès explicite ci-dessous permet de la lire ou de la piloter."}
+          </p>
           <p>
             Cette fenêtre uniquement.{" "}
             {

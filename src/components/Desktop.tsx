@@ -96,6 +96,11 @@ const DevUtilitiesApp = lazy(() =>
     default: m.DevUtilitiesApp,
   })),
 );
+const MusicPlayerApp = lazy(() =>
+  import("./apps/MusicPlayerApp.tsx").then((m) => ({
+    default: m.MusicPlayerApp,
+  })),
+);
 const DynamicAppHost = lazy(() =>
   import("./apps/DynamicAppHost.tsx").then((m) => ({
     default: m.DynamicAppHost,
@@ -290,6 +295,8 @@ const renderWindowApp = (
       return <NotesStudioApp />;
     case "whiteboard":
       return <WhiteboardApp />;
+    case "music":
+      return <MusicPlayerApp />;
     case "media-studio":
       return <MediaStudioApp />;
     case "dev-utils":

@@ -12,7 +12,8 @@
     "fetch-distros": "bun run server/fetch-distros.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test test",
-    "test:horizon-browser": "bun scripts/test-horizon-browser.mjs"
+    "test:horizon-browser": "bun scripts/test-horizon-browser.mjs",
+    "test:sonora-browser": "bun scripts/test-sonora-browser.mjs"
   },
   "dependencies": {
     "@xterm/headless": "^5.5.0",

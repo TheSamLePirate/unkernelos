@@ -58,7 +58,7 @@ useAppSurface({
 
 Champs disponibles : `label`, `value`, `detail`, `glyph`, `primaryAction`, `progress` (0–1). Les glyphes fournis sont `play`, `pause`, `sun`, `cloud`, `rain`, `snow`, `activity` ; sans glyphe, l’icône de l’application est utilisée. Une météo pourrait publier `glyph: "sun", value: "21°"` depuis ses vraies données. Ce contrat ne crée pas un lecteur ou un service météo factice.
 
-Le Shader/Synth utilise déjà cette interface : son élément de dock devient une commande pause/reprise et expose son scénario courant. Notes montre son état enregistré/modifié. Pour les autres apps, l’icône rappelle la fenêtre ; les commandes de contexte et de rappel restent distinctes. Les actions du dock sont déclenchées par l’utilisateur ; les agents continuent à utiliser les grants et contrôles de révision décrits ci-dessous.
+Sonora, le lecteur MP3, utilise cette interface pour proposer play/pause et la progression dans les docks gauche/droite. Le Shader/Synth utilise aussi cette interface : son élément de dock devient une commande pause/reprise et expose son scénario courant. Notes montre son état enregistré/modifié. Pour les autres apps, l’icône rappelle la fenêtre ; les commandes de contexte et de rappel restent distinctes. Les actions du dock sont déclenchées par l’utilisateur ; les agents continuent à utiliser les grants et contrôles de révision décrits ci-dessous.
 
 La vue de dock ne remplace pas le composant applicatif et ne suspend pas implicitement son processus. Une app non compatible reste ouverte avec une icône de rappel. Plusieurs colonnes se forment si un dock contient plus d’éléments que la hauteur disponible.
 
@@ -66,14 +66,14 @@ La vue de dock ne remplace pas le composant applicatif et ne suspend pas implici
 
 Notes, IDE, Explorer, terminal, Preview et Shader/Synth publient des capacités adaptées à ce qu’ils savent réellement exposer. Une prévisualisation iframe reste opaque : son URL et sa commande de rechargement sont disponibles, pas un accès fictif à son DOM.
 
-Dans le tiroir, choisir les éléments, la lecture éventuelle de l’état et les actions autorisées, puis accorder le périmètre. Un grant est limité à la fenêtre/contexte et expire après 15 minutes. Il est révocable depuis le tiroir. Le partage reste explicite : copie, téléchargement ou préparation du prompt dans Agent Studio, sans lancement automatique de la mission.
+Le contexte et toutes les actions publiées sont partagés par défaut avec les agents du système. Le tiroir permet de rendre une session privée. Les grants explicites restent disponibles pour limiter un accès aux éléments et aux actions sélectionnés ; ils expirent après 15 minutes et sont révocables. Le mode privé global coupe le partage par défaut. Préparer un prompt dans Agent Studio n’exécute pas automatiquement une mission.
 
 Méthodes disponibles via `window.unkernelOS.call`, `osctl` et MCP :
 
 - `horizon.status` : mode, disposition et placements.
-- `horizon.sessions` : cibles, capacités et révisions, sans contenu des tiroirs.
-- `horizon.session.read` avec `windowId` et `grantId` : uniquement les éléments et l’état accordés.
-- `horizon.session.action` avec `windowId`, `grantId`, `action`, `expectedRevision`, `requestId`, `args` : action autorisée et révision vérifiée ; un même requestId est dédupliqué.
+- `horizon.sessions` : cibles, capacités, schémas des paramètres, état du partage et révisions.
+- `horizon.session.read` avec `windowId` : état et tiroir de la session partagée. `grantId` optionnel applique un périmètre explicite.
+- `horizon.session.action` avec `windowId`, `action`, `expectedRevision`, `requestId`, `args` : action publiée et révision vérifiée ; un même requestId est dédupliqué. `grantId` est optionnel pour un périmètre explicite.
 
 Les nouveaux grants complètent le pare-feu OS existant ; ils ne remplacent pas ses permissions globales pour les anciennes méthodes. La révocation interdit les nouvelles commandes, mais ne promet pas d’annuler une opération déjà engagée lorsque l’application n’a pas de mécanisme d’annulation.
 
@@ -97,3 +97,5 @@ bun run test:horizon-browser
 Les captures et le rapport sont générés dans `.cache/horizon-qa/`. Les tests vérifient les vraies fenêtres, les gestes via le pointeur, la sélection, les tiroirs, la persistance, les fichiers Linux et les permissions. Les gestes tactiles sur matériel réel, les lecteurs d’écran et toutes les variantes de pilotes Wayland/GPU nécessitent une validation dédiée ; le profil émulé ne certifie pas ces appareils.
 
 La projection des pointeurs du terminal, de GL et de l’adaptateur d’entrée Wayland utilise les coordonnées locales du plan transformé. Les menus de shell et de l’explorateur sont rendus dans le repère écran. Les popups natifs complexes des clients Wayland dépendent aussi du comportement du compositor wland et doivent être vérifiés client par client.
+
+Le SDK des applications et ses exemples Bun/Node/Rust sont documentés dans [app-sdk.md](app-sdk.md). Le lecteur intégré est décrit dans [sonora.md](sonora.md).

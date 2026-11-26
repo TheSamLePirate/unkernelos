@@ -1,0 +1,16 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><style>body{background:#141a16;color:#e1f3bd;font:16px system-ui;margin:0;display:grid;place-content:center;min-height:100vh;text-align:center}button{background:#d9eeae;color:#172016;border:0;border-radius:14px;padding:15px;margin:8px;font:inherit}strong{font-size:72px;font-weight:400}</style></head><body><p>Mon application unkernelOS</p><strong id="value">0</strong><div><button id="minus">−</button><button id="plus">+</button><button id="reset">Réinitialiser</button></div><script>
+let value=0;
+const render=()=>document.querySelector('#value').textContent=value;
+const app=unkernelOS.app.define({
+ title:'Compteur · App SDK',document:'counter:main',
+ getState:()=>({value}),
+ getDock:()=>({label:'Incrémenter le compteur',value:String(value),glyph:'activity',primaryAction:'increment'}),
+ actions:{
+  increment:{label:'Ajouter un',run:()=>{value++;render();return {value}}},
+  decrement:{label:'Retirer un',run:()=>{value--;render();return {value}}},
+  reset:{label:'Réinitialiser',run:()=>{value=0;render();return {value}}},
+  set:{label:'Définir la valeur',paramsSchema:{type:'object',properties:{value:{type:'number'}},required:['value']},run:args=>{if(!Number.isFinite(args.value))throw Error('Valeur invalide');value=args.value;render();return {value}}}
+ }
+});
+document.querySelector('#plus').onclick=()=>app.invoke('increment');document.querySelector('#minus').onclick=()=>app.invoke('decrement');document.querySelector('#reset').onclick=()=>app.invoke('reset');
+</script></body></html>

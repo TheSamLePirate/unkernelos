@@ -100,9 +100,9 @@ export interface AgentApiCallRecord {
 
 export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
   {method:"horizon.status",category:"wm",summary:"Read Horizon desktop mode, layout and placements. Does not expose drawer content.",paramsSchema:{type:"object",properties:{}},example:{}},
-  {method:"horizon.sessions",category:"wm",summary:"Discover session capabilities and current revisions. Read content only with a user-issued grant.",paramsSchema:{type:"object",properties:{}},example:{}},
-  {method:"horizon.session.read",category:"wm",summary:"Read only the chosen session state/items allowed by a user-issued, expiring grant.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"}},required:["windowId","grantId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant"}},
-  {method:"horizon.session.action",category:"wm",summary:"Invoke an explicitly granted app action at the expected revision. Replayed requestIds are deduplicated.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"},action:{type:"string"},expectedRevision:{type:"string"},requestId:{type:"string"},args:{type:"object"}},required:["windowId","grantId","action","expectedRevision","requestId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant",action:"save",expectedRevision:"3",requestId:"unique-action-id",args:{}}},
+  {method:"horizon.sessions",category:"wm",summary:"Discover session capabilities and current revisions. Context and published actions are shared by default; private sessions require an explicit grant.",paramsSchema:{type:"object",properties:{}},example:{}},
+  {method:"horizon.session.read",category:"wm",summary:"Read the shared session state and context. An optional grantId restricts access to a user-selected scope.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"}},required:["windowId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant"}},
+  {method:"horizon.session.action",category:"wm",summary:"Invoke any published action in a shared session, or a restricted action via optional grantId, at the expected revision. Replayed requestIds are deduplicated.",paramsSchema:{type:"object",properties:{windowId:{type:"string"},grantId:{type:"string"},action:{type:"string"},expectedRevision:{type:"string"},requestId:{type:"string"},args:{type:"object"}},required:["windowId","action","expectedRevision","requestId"]},example:{windowId:"notes-abc",grantId:"user-issued-grant",action:"save",expectedRevision:"3",requestId:"unique-action-id",args:{}}},
 
   // ─── SYSTEM ──────────────────────────────────────────────────────────
   {
@@ -687,6 +687,7 @@ export const AGENT_OS_SCHEMA: readonly OsApiMethodDef[] = [
     },
     example: { path: "/home/user/workspace/demo.pdf" },
   },
+  {method:"app.sdk",category:"wm",summary:"Read the framework-neutral unkernelOS app SDK contract, shared context defaults and example.",paramsSchema:{type:"object",properties:{}},example:{}},
   // ─── SELF-EXTENDING APP SDK & WORKFLOWS ──────────────────────────────
   {
     method: "app.list",
@@ -1359,6 +1360,7 @@ const READ_ONLY_METHODS = new Set([
   "services.list",
   "mount.list",
   "app.list",
+  "app.sdk",
   "workflow.list",
   "swarm.status",
 ]);
@@ -2108,6 +2110,7 @@ async function dispatchOsAction(method: string, p: Record<string, unknown>): Pro
       return { openedInMedia: filePath };
     }
 
+    case "app.sdk": return {version:1,install:"app.install with inline html or Linux guestPath",frontend:"HTML/JavaScript, with optional WebAssembly. Generate or build it using Bun, Node, Rust or another toolchain.",sharedByDefault:true,discovery:"horizon.sessions",read:"horizon.session.read {windowId}",action:"horizon.session.action {windowId,action,expectedRevision,requestId,args}",controls:["ui.activate","ui.input","ui.scroll"],contract:{define:"unkernelOS.app.define({title,document,getState,getDock,getStatus,actions})",publish:"app.publish() after external state changes",invoke:"app.invoke(name,args) for every UI command",action:"{label,paramsSchema,run:async args=>result}",dock:"{label,glyph,value,detail,progress,primaryAction}",privacy:"Shared by default; the user can make a session private in its drawer."},example:"let playing=false; const app=unkernelOS.app.define({title:'My app',getState:()=>({playing}),getDock:()=>({label:playing?'Pause':'Play',glyph:playing?'pause':'play',primaryAction:'toggle'}),actions:{toggle:{label:'Toggle',run:()=>{playing=!playing;return{playing}}}}}); document.querySelector('button').onclick=()=>app.invoke('toggle');"};
     case "app.list": {
       return { apps: dynamicAppsStore.getSnapshot() };
     }
@@ -3025,6 +3028,9 @@ Beyond standard Linux commands, you have **direct, zero-latency programmatic con
 - \`osctl call <method> '<json>'\` — Invoke any OS API method and receive JSON on stdout.
 - \`osctl preview <port> [path]\` — Open the live Web Preview window for a server you just started.
 - \`osctl edit <filePath>\` — Open any file directly inside Code IDE for the user.
+- Apps unkernelOS : installer un HTML avec \`osctl call app.install '{"id":"my-app","title":"Mon app","guestPath":"/tmp/app.html","open":true}'\`. Bun, Node, Rust ou tout langage peut produire ce frontend HTML/JS (ou WASM). Le bridge est injecté automatiquement.
+- Dans le frontend, \`const app = unkernelOS.app.define({title, document, getState:()=>state, getDock:()=>({label:"Lire",glyph:"play",primaryAction:"play"}), actions:{play:{label:"Lire",paramsSchema:{type:"object"},run:async args=>{/* même commande que le bouton */}}}})\`. Tous les boutons de l’app doivent appeler \`app.invoke(name,args)\` ; chaque fonctionnalité doit avoir une action. Appeler \`app.publish()\` après les changements externes (réseau, timers, backend). Publier uniquement l’état utile, jamais des tokens.
+- Le contexte et toutes les actions sont partagés par défaut. Découvrir avec \`horizon.sessions\`, lire \`horizon.session.read {windowId}\`, agir via \`horizon.session.action {windowId,action,expectedRevision,requestId,args}\`. Relire la révision avant d’agir. Une session peut être rendue privée depuis son tiroir. Les iframes externes et clients Wayland sans bridge ne publient pas automatiquement leur état interne.
 - \`osctl workspace [dir]\` — Get or set the global active working directory across all OS apps.
 - \`osctl open <appId>\` / \`osctl tile focus-ide-preview\` — Open and arrange desktop windows automatically.
 - \`osctl notify "<title>" "<message>" [info|success|warn|error]\` — Send a native OS notification.

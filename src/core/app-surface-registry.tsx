@@ -27,6 +27,7 @@ export interface SurfaceAdapter {
     string,
     {
       label: string;
+      paramsSchema?: Record<string, unknown>;
       run: (args: Record<string, unknown>) => unknown | Promise<unknown>;
     }
   >;
@@ -44,6 +45,9 @@ export interface SurfaceGrant {
 }
 class SurfaceRegistry {
   private adapters = new Map<string, SurfaceAdapter>();
+  private uiAdapters = new Map<string, SurfaceAdapter>();
+  private sharing = new Map<string, boolean>();
+  private sharingEpoch = new Map<string, number>();
   private grants = new Map<string, SurfaceGrant>();
   private listeners = new Set<() => void>();
   private version = 0;
@@ -68,12 +72,40 @@ class SurfaceRegistry {
       }
     };
   }
-  peek(id: string) {
-    return this.adapters.get(id);
+  registerUi(id: string, adapter: SurfaceAdapter) {
+    this.uiAdapters.set(id, adapter);
+    this.emit();
+    return () => {
+      if (this.uiAdapters.get(id) === adapter) {
+        this.uiAdapters.delete(id);
+        this.emit();
+      }
+    };
+  }
+  isShared(id: string) {
+    return (
+      this.sharing.get(id) !== false && !contextStore.getSnapshot().privateMode
+    );
+  }
+  setSharing(id: string, shared: boolean) {
+    this.sharing.set(id, shared);
+    this.sharingEpoch.set(id, (this.sharingEpoch.get(id) ?? 0) + 1);
+    this.emit();
+  }
+  peek(id: string): SurfaceAdapter | undefined {
+    const a = this.adapters.get(id),
+      ui = this.uiAdapters.get(id);
+    if (!ui) return a;
+    if (!a) return ui;
+    return {
+      ...a,
+      state: { ...a.state, ui: ui.state },
+      actions: { ...ui.actions, ...a.actions },
+    };
   }
   list() {
     return wmStore.getSnapshot().windows.map((w) => {
-      const a = this.adapters.get(w.id);
+      const a = this.peek(w.id);
       return {
         windowId: w.id,
         sessionId: w.sessionId,
@@ -81,10 +113,13 @@ class SurfaceRegistry {
         title: a?.title ?? w.title,
         document: a?.document,
         revision: a?.revision ?? null,
+        shared: this.isShared(w.id),
+        dock: a?.dock,
         status: a?.status ?? "opaque",
         actions: Object.entries(a?.actions ?? {}).map(([name, x]) => ({
           name,
           label: x.label,
+          paramsSchema: x.paramsSchema ?? { type: "object", properties: {} },
         })),
       };
     });
@@ -116,9 +151,34 @@ class SurfaceRegistry {
   activeGrants() {
     return [...this.grants.values()].filter((g) => g.expiresAt > Date.now());
   }
-  private requireGrant(windowId: string, id: string) {
-    const g = this.grants.get(id);
+  private requireGrant(windowId: string, id?: string): SurfaceGrant {
     const w = wmStore.getSnapshot().windows.find((w) => w.id === windowId);
+    if (!id) {
+      const a = this.peek(windowId);
+      if (!w || !a || !this.isShared(windowId))
+        throw new Error(
+          "Cette session est privée ou ne publie pas de capacités.",
+        );
+      return {
+        id:
+          "shared:" +
+          windowId +
+          ":" +
+          w.contextId +
+          ":" +
+          (this.sharingEpoch.get(windowId) ?? 0),
+        windowId,
+        contextId: w.contextId ?? w.id,
+        itemIds: contextStore
+          .getSnapshot()
+          .entries.filter((e) => e.contextId === w.contextId)
+          .map((e) => e.id),
+        actions: Object.keys(a.actions ?? {}),
+        readState: true,
+        expiresAt: Number.MAX_SAFE_INTEGER,
+      };
+    }
+    const g = this.grants.get(id);
     if (
       !g ||
       g.expiresAt < Date.now() ||
@@ -128,9 +188,9 @@ class SurfaceRegistry {
       throw new Error("Accès absent, expiré ou révoqué.");
     return g;
   }
-  read(windowId: string, grantId: string) {
+  read(windowId: string, grantId?: string) {
     const g = this.requireGrant(windowId, grantId),
-      a = this.adapters.get(windowId);
+      a = this.peek(windowId);
     return {
       windowId,
       revision: a?.revision ?? null,
@@ -146,7 +206,7 @@ class SurfaceRegistry {
   private pending = new Map<string, Promise<unknown>>();
   async act(input: {
     windowId: string;
-    grantId: string;
+    grantId?: string;
     action: string;
     expectedRevision: string;
     requestId: string;
@@ -158,7 +218,7 @@ class SurfaceRegistry {
     const key = g.id + ":" + input.requestId;
     const existing = this.pending.get(key);
     if (existing) return existing;
-    const a = this.adapters.get(input.windowId);
+    const a = this.peek(input.windowId);
     if (!a || a.revision !== input.expectedRevision)
       throw new Error("REVISION_CONFLICT : relisez la session avant d’agir.");
     const action = a.actions?.[input.action];
@@ -166,9 +226,7 @@ class SurfaceRegistry {
     const promise = Promise.resolve()
       .then(() => {
         this.requireGrant(input.windowId, input.grantId);
-        if (
-          this.adapters.get(input.windowId)?.revision !== input.expectedRevision
-        )
+        if (this.peek(input.windowId)?.revision !== input.expectedRevision)
           throw new Error("REVISION_CONFLICT");
         return action.run(input.args);
       })
@@ -181,7 +239,7 @@ class SurfaceRegistry {
         return {
           status: "completed",
           result,
-          revision: this.adapters.get(input.windowId)?.revision,
+          revision: this.peek(input.windowId)?.revision,
         };
       })
       .catch((error) => {
@@ -225,6 +283,7 @@ export function useAppSurface(adapter: SurfaceAdapter, enabled = true) {
               name,
               {
                 label: a.label,
+                paramsSchema: a.paramsSchema,
                 run: (args: Record<string, unknown>) =>
                   latest.current.actions?.[name]?.run(args),
               },

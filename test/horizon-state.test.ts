@@ -175,3 +175,34 @@ describe("independent window drawers and spatial persistence", () => {
     expect(w.horizonSpatial).toEqual({ depth: 1, y: 1, anchor: 0 });
   });
 });
+
+describe("default app sharing", () => {
+  test("publishes state and actions without a grant, with revision and replay checks", async () => {
+    const id = wmStore.openApp("music");
+    let count = 0;
+    const cleanup = surfaceRegistry.register(id, {
+      state: { track: "Actual audio" },
+      revision: "1",
+      actions: { play: { label: "Play", run: () => ++count } },
+    });
+    expect(surfaceRegistry.read(id).state?.track).toBe("Actual audio");
+    const input = {
+      windowId: id,
+      action: "play",
+      expectedRevision: "1",
+      requestId: "default-once",
+      args: {},
+    };
+    await surfaceRegistry.act(input);
+    await surfaceRegistry.act(input);
+    expect(count).toBe(1);
+    surfaceRegistry.setSharing(id, false);
+    expect(() => surfaceRegistry.read(id)).toThrow();
+    await expect(
+      surfaceRegistry.act({ ...input, requestId: "private" }),
+    ).rejects.toThrow();
+    surfaceRegistry.setSharing(id, true);
+    expect(surfaceRegistry.read(id).state?.track).toBe("Actual audio");
+    cleanup();
+  });
+});

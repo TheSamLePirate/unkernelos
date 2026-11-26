@@ -41,6 +41,7 @@ import {
   wmStore,
   type WindowInstance,
 } from "../../wm/wm-store.ts";
+import { attachWindowAutomation } from "../../core/window-automation.ts";
 import { screenToElement } from "../../core/spatial-pointer.ts";
 interface Props {
   win: WindowInstance;
@@ -71,6 +72,9 @@ export function HorizonWindowFrame({ win, focused, visible, children }: Props) {
     frame = useRef<HTMLDivElement>(null),
     gesture = useRef<Gesture | null>(null),
     cleanup = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (frame.current) return attachWindowAutomation(win.id, frame.current);
+  }, [win.id]);
   const [docking, setDocking] = useState(false);
   const [moving, setMoving] = useState(false),
     [destination, setDestination] = useState<HorizonPlacement | null>(null),

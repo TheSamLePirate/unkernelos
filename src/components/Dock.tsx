@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import {
+  Music2,
   Activity,
   AppWindow,
   BookOpen,
@@ -61,6 +62,7 @@ const APP_ICONS: Record<AppId, React.ComponentType<{ className?: string; style?:
   "custom-app": Sparkles,
   notes: FileText,
   whiteboard: PenTool,
+  music: Music2,
   "media-studio": Film,
   "dev-utils": Wrench,
   processes: Cpu,

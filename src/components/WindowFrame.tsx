@@ -1,3 +1,4 @@
+import { WindowSessionContext } from "../core/app-surface-registry.tsx";
 import { HorizonWindowFrame } from "./horizon/HorizonWindowFrame.tsx";
 import {
   ChevronDown,
@@ -1296,6 +1297,8 @@ export const WindowFrame: React.FC<WindowFrameProps> = (props) => {
   return horizonEnabled ? (
     <HorizonWindowFrame {...props} />
   ) : (
-    <LegacyWindowFrame {...props} />
+    <WindowSessionContext.Provider value={props.win}>
+      <LegacyWindowFrame {...props} />
+    </WindowSessionContext.Provider>
   );
 };

@@ -1,4 +1,5 @@
 import {
+  Music2,
   Activity,
   AppWindow,
   BookOpen,
@@ -61,6 +62,7 @@ const APP_META: Record<
   "custom-app": { icon: Sparkles, category: "creative" },
   notes: { icon: FileText, category: "creative" },
   whiteboard: { icon: PenTool, category: "creative" },
+  music: { icon: Music2, category: "creative" },
   "media-studio": { icon: Film, category: "creative" },
   "dev-utils": { icon: Wrench, category: "dev" },
   processes: { icon: Cpu, category: "system" },

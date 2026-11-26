@@ -1,4 +1,5 @@
 import {
+  Music2,
   Activity,
   AppWindow,
   ArrowDownLeft,
@@ -55,6 +56,7 @@ const apps: readonly {
   { id: "terminal", icon: Terminal, label: "Terminal", color: "graphite" },
   { id: "ide", icon: Code2, label: "Éditeur", color: "violet" },
   { id: "preview", icon: Globe, label: "Navigateur", color: "cyan" },
+  { id: "music", icon: Music2, label: "Musique", color: "mint" },
   { id: "notes", icon: FileText, label: "Notes", color: "amber" },
   { id: "git", icon: GitBranch, label: "Git", color: "coral" },
   { id: "agent-studio", icon: Bot, label: "Agents", color: "mint" },

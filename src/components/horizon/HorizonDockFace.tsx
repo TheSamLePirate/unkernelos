@@ -1,4 +1,5 @@
 import {
+  Music2,
   Activity,
   AppWindow,
   ArrowUpRight,
@@ -32,6 +33,7 @@ const glyphs = {
   activity: Activity,
 };
 const icons: Record<string, typeof AppWindow> = {
+  music: Music2,
   notes: FileText,
   terminal: Terminal,
   explorer: FolderOpen,
